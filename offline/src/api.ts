@@ -3,19 +3,24 @@
  * ──────────────────────────────────────────────────────────────────────────────
  * Typed API service layer for all FastAPI prediction endpoints.
  *
- * Architecture:
- *   Browser  →  /fastapi/*  →  Express proxy (server.ts)  →  http://127.0.0.1:8000/api/*
+ * URL resolution strategy:
  *
- * The Express dev-server (server.ts) proxies /fastapi/* to the FastAPI backend,
- * eliminating all CORS issues. The VITE_FASTAPI_URL env var is kept for
- * direct use in production builds that skip the proxy.
+ *   Development  (npm run dev / Vite dev server):
+ *     BASE = "/fastapi"
+ *     Requests to /fastapi/* are caught by the Express proxy in server.ts and
+ *     forwarded to the local FastAPI process, eliminating CORS issues.
  *
- * Endpoints proxied:
- *   POST /fastapi/predict          → POST  /api/predict
- *   GET  /fastapi/teams            → GET   /api/teams
- *   GET  /fastapi/team/:name       → GET   /api/team/:name
- *   GET  /fastapi/fixtures         → GET   /api/fixtures
- *   GET  /fastapi/health           → GET   /api/health
+ *   Production   (npm run build → Vercel static hosting):
+ *     BASE = import.meta.env.VITE_API_URL  (e.g. https://…railway.app/api)
+ *     The browser calls the Railway backend directly — no proxy layer exists.
+ *     Set VITE_API_URL in Vercel → Project Settings → Environment Variables.
+ *
+ * Endpoints (relative to BASE):
+ *   POST /predict          → POST  /api/predict
+ *   GET  /teams            → GET   /api/teams
+ *   GET  /team/:name       → GET   /api/team/:name
+ *   GET  /fixtures         → GET   /api/fixtures
+ *   GET  /health           → GET   /api/health
  */
 
 import type {
@@ -29,9 +34,24 @@ import type {
 import { MOCK_MATCHES } from "./data";
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
-// In dev: requests hit /fastapi/* which the Express proxy forwards to FastAPI.
-// Override with VITE_FASTAPI_URL for standalone production deploys.
-const BASE = "/fastapi";
+// Development  → "/fastapi"  (Express proxy in server.ts rewrites to /api/*)
+// Production   → VITE_API_URL  (direct Railway backend; set in Vercel env vars)
+//
+// import.meta.env.PROD is injected by Vite at build time:
+//   true  when running `vite build`  (Vercel deploy)
+//   false when running `vite dev`    (local Express proxy)
+export const API_BASE: string = import.meta.env.PROD
+  ? (import.meta.env.VITE_API_URL as string) ?? ""
+  : "/fastapi";
+
+// Log the resolved API base so it is visible in the browser console on first load.
+console.info(
+  `[api] Resolved API base: "${API_BASE}" ` +
+  `(${import.meta.env.PROD ? "production → Railway" : "development → Express proxy"})`
+);
+
+/** @internal – used by every apiFetch call below */
+const BASE = API_BASE;
 
 // ── Backend response shapes ───────────────────────────────────────────────────
 

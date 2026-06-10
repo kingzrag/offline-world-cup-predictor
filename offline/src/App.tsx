@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getPredictions } from './api';
+import { getPredictions, API_BASE } from './api';
 import { MatchPrediction, TrophyProbability, IntelligenceInsight } from './types';
 import {
   MOCK_MATCHES,
@@ -1056,7 +1056,7 @@ export default function App() {
                     <span className="text-[10px] font-mono tracking-[0.2em] text-red-400 uppercase block font-bold">Prediction Engine Offline</span>
                     <h4 className="text-xl font-serif text-white tracking-tight uppercase">Connection Failed</h4>
                     <p className="text-zinc-400 text-xs max-w-lg leading-relaxed font-sans">
-                      The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">http://127.0.0.1:8000</code>. Live predictions have been disabled to prevent displaying fallback/mock data. Please verify your backend server is running and reload.
+                      The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Live predictions have been disabled to prevent displaying fallback/mock data. Please verify your backend server is running and reload.
                     </p>
                     <button
                       onClick={() => window.location.reload()}
@@ -1241,7 +1241,7 @@ export default function App() {
                     <h3 className="text-2xl font-serif text-white uppercase tracking-tight font-light">Failed to connect to FastAPI Backend</h3>
                   </div>
                   <p className="text-zinc-400 text-sm max-w-lg leading-relaxed font-sans">
-                    The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">http://127.0.0.1:8000</code>. Offline/fallback predictions have been disabled to prevent displaying inaccurate or mock information. Please ensure the backend server is running and reload.
+                    The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Offline/fallback predictions have been disabled to prevent displaying inaccurate or mock information. Please ensure the backend server is running and reload.
                   </p>
                   <button 
                     onClick={() => window.location.reload()}
@@ -1864,7 +1864,7 @@ export default function App() {
                     <h3 className="text-2xl font-serif text-white uppercase tracking-tight font-light">Intelligence Hub Disabled</h3>
                   </div>
                   <p className="text-zinc-400 text-sm max-w-lg leading-relaxed font-sans">
-                    The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">http://127.0.0.1:8000</code>. Since all strategic insights, confidence picks, and goal forecasts are calculated dynamically from the active predictions feed, the Intelligence Hub is offline until a backend connection is established.
+                    The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Since all strategic insights, confidence picks, and goal forecasts are calculated dynamically from the active predictions feed, the Intelligence Hub is offline until a backend connection is established.
                   </p>
                   <button 
                     onClick={() => window.location.reload()}
