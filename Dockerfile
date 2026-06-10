@@ -45,5 +45,5 @@ USER appuser
 
 EXPOSE 8000
 
-# Run FastAPI using production-ready uvicorn configurations
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run FastAPI using production-ready uvicorn configurations, dynamically binding to the port set by Railway.
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

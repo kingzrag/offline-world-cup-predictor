@@ -39,6 +39,12 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
+        env_url = os.environ.get("DATABASE_URL")
+        if env_url:
+            # Handle standard postgresql:// vs postgres:// URL scheme (Python's psycopg2 expects postgresql://)
+            if env_url.startswith("postgres://"):
+                env_url = env_url.replace("postgres://", "postgresql://", 1)
+            return env_url
         if self.DATABASE_PASSWORD:
             return f"postgresql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
         # macOS local trust auth — no password segment
