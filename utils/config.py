@@ -1,0 +1,52 @@
+import os
+import getpass
+from pydantic_settings import BaseSettings
+from pydantic import Field
+
+def is_running_in_docker() -> bool:
+    return os.path.exists('/.dockerenv')
+
+def _default_db_user() -> str:
+    """Return the appropriate database user.
+    Inside Docker the postgres image creates a 'postgres' superuser.
+    Locally on macOS, Homebrew PostgreSQL uses the current OS username.
+    """
+    if is_running_in_docker():
+        return "postgres"
+    return getpass.getuser()
+
+def _default_db_password() -> str:
+    """Docker needs an explicit password; local macOS uses trust auth."""
+    if is_running_in_docker():
+        return "postgres"
+    return ""
+
+class Settings(BaseSettings):
+    # --- API Keys (only the four supported providers) ---
+    FOOTBALL_DATA_API_KEY: str = Field(default="mock_football_data_key", env="FOOTBALL_DATA_API_KEY")
+    SPORTSDB_API_KEY: str = Field(default="mock_sportsdb_key", env="SPORTSDB_API_KEY")
+    ODDS_API_KEY: str = Field(default="", env="ODDS_API_KEY")
+
+    # --- Database ---
+    DATABASE_HOST: str = Field(default_factory=lambda: "db" if is_running_in_docker() else "localhost", env="DATABASE_HOST")
+    DATABASE_PORT: str = Field(default="5432", env="DATABASE_PORT")
+    DATABASE_USER: str = Field(default_factory=_default_db_user, env="DATABASE_USER")
+    DATABASE_PASSWORD: str = Field(default_factory=_default_db_password, env="DATABASE_PASSWORD")
+    DATABASE_NAME: str = Field(default="prediction_db", env="DATABASE_NAME")
+
+    # --- Runtime ---
+    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
+
+    @property
+    def DATABASE_URL(self) -> str:
+        if self.DATABASE_PASSWORD:
+            return f"postgresql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+        # macOS local trust auth — no password segment
+        return f"postgresql://{self.DATABASE_USER}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        extra = "ignore"
+
+settings = Settings()

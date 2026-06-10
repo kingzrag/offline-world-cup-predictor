@@ -1,0 +1,6 @@
+{
+  "name": "OFFLINE",
+  "description": "Premium football intelligence publication providing predictions, probabilities, analysis, and tournament insights for the FIFA World Cup 2026.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
