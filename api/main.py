@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from database.base import Base
 from database.connection import engine
-from api.routes import matches, teams, players, injuries, predictions
+from api.routes import matches, teams, players, injuries, predictions, tournament
 from api.routes import predict as predict_router
 from services.model_service import model_service
 from utils.logger import logger
@@ -88,6 +88,9 @@ app.include_router(predictions.router, prefix="/api/v1")
 
 # ── New ML prediction API (ModelService-backed) ───────────────────────────────
 app.include_router(predict_router.router)
+
+# ── Tournament Progression Routing ──────────────────────────────────────────
+app.include_router(tournament.router)
 
 
 async def run_daily_scheduler():

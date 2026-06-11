@@ -44,6 +44,7 @@ export interface MatchPrediction {
   probD: number; // probability of draw (0-100)
   probB: number; // probability of teamB win (0-100)
   venue: string;
+  winner?: 'HOME_TEAM' | 'AWAY_TEAM' | 'DRAW' | null;
 
   // Tactical ratings (0-99 scale)
   attackA: number;
@@ -122,6 +123,19 @@ export interface MatchPrediction {
 
   /** Set to true when this record was enriched by the live FastAPI model */
   isLiveData?: boolean;
+
+  /** Raw ISO-8601 UTC kickoff time — used for local-timezone rendering */
+  kickoffTime?: string | null;
+
+  /**
+   * Current or final score from football-data.org.
+   * Populated for IN_PLAY, PAUSED, and FINISHED matches.
+   * null for SCHEDULED / TIMED matches.
+   */
+  liveScore?: { home: number; away: number; is_live: boolean } | null;
+
+  /** Match minute (if available from the API in future, currently null) */
+  minute?: number | null;
 }
 
 export interface TrophyProbability {

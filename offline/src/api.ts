@@ -187,6 +187,12 @@ export interface BackendFixture {
   away_team: BackendFixtureTeam | null;
   live_score: BackendFixtureLiveScore | null;  // populated for IN_PLAY, PAUSED, FINISHED
   winner: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null;
+  prediction?: {
+    predicted_outcome: "HOME_WIN" | "AWAY_WIN" | "DRAW";
+    home_probability: number;
+    away_probability: number;
+    draw_probability: number;
+  } | null;
 }
 
 export interface BackendHealth {
@@ -281,6 +287,8 @@ export async function getFixtures(
     date_to?: string;         // YYYY-MM-DD
     competition_code?: string;
     limit?: number;
+    year?: number;
+    show_historical?: boolean;
   } = {}
 ): Promise<{ status: string; competition: string; count: number; fixtures: BackendFixture[] }> {
   const qs = new URLSearchParams();
@@ -291,6 +299,8 @@ export async function getFixtures(
   if (params.date_to)          qs.set("date_to",          params.date_to);
   if (params.competition_code) qs.set("competition_code", params.competition_code);
   if (params.limit != null)    qs.set("limit",            String(params.limit));
+  if (params.year != null)     qs.set("year",             String(params.year));
+  if (params.show_historical !== undefined) qs.set("show_historical", String(params.show_historical));
   return apiFetch(`/fixtures?${qs.toString()}`);
 }
 
@@ -361,21 +371,144 @@ export function mapBackendPrediction(
 
 // ── Primary consumer: load all predictions ────────────────────────────────────
 
+function formatKickoffDate(isoStr: string | null): string {
+  if (!isoStr) return "Unknown Date";
+  try {
+    const d = new Date(isoStr);
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric"
+    });
+  } catch {
+    return "Unknown Date";
+  }
+}
+
+export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
+  const teamA = f.home_team?.name ?? "Unknown";
+  const teamB = f.away_team?.name ?? "Unknown";
+  const teamACode = f.home_team?.tla || f.home_team?.short_name || teamA.substring(0, 3).toUpperCase();
+  const teamBCode = f.away_team?.tla || f.away_team?.short_name || teamB.substring(0, 3).toUpperCase();
+
+  let stageLabel = "";
+  if (f.stage === "GROUP_STAGE" && f.group) {
+    const groupName = f.group.replace("GROUP_", "Group ");
+    stageLabel = `Group Stage • ${groupName}`;
+  } else if (f.stage) {
+    stageLabel = f.stage.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  } else {
+    stageLabel = "Group Stage";
+  }
+
+  let statusMapped: "LIVE" | "UPCOMING" | "COMPLETED" = "UPCOMING";
+  if (f.status === "IN_PLAY" || f.status === "PAUSED") {
+    statusMapped = "LIVE";
+  } else if (f.status === "FINISHED") {
+    statusMapped = "COMPLETED";
+  }
+
+  // Baseline outcome fields
+  let predictionLabel = "Draw / Even Lean";
+  let confidence: "High" | "Medium" | "Low" = "Medium";
+  let probA = 33;
+  let probD = 34;
+  let probB = 33;
+
+  if (f.prediction) {
+    const p = f.prediction;
+    probA = Math.round(p.home_probability * 100);
+    probD = Math.round(p.draw_probability * 100);
+    probB = Math.round(p.away_probability * 100);
+    predictionLabel = p.predicted_outcome === "HOME_WIN" ? `${teamA} Win` :
+                      p.predicted_outcome === "AWAY_WIN" ? `${teamB} Win` : "Draw";
+    confidence = (p.home_probability >= 0.60 || p.away_probability >= 0.60) ? "High" : 
+                 (p.home_probability >= 0.45 || p.away_probability >= 0.45) ? "Medium" : "Low";
+  } else if (statusMapped === "COMPLETED") {
+    if (f.winner === "HOME_TEAM") {
+      predictionLabel = `${teamA} Win`;
+      probA = 100; probD = 0; probB = 0;
+    } else if (f.winner === "AWAY_TEAM") {
+      predictionLabel = `${teamB} Win`;
+      probA = 0; probD = 0; probB = 100;
+    } else {
+      predictionLabel = "Draw";
+      probA = 0; probD = 100; probB = 0;
+    }
+    confidence = "High";
+  }
+
+  return {
+    id: String(f.id),
+    teamA,
+    teamB,
+    teamACode,
+    teamBCode,
+    date: formatKickoffDate(f.kickoff_time),
+    kickoffTime: f.kickoff_time,
+    stage: stageLabel,
+    status: statusMapped,
+    prediction: predictionLabel,
+    confidence,
+    probA,
+    probD,
+    probB,
+    venue: f.venue || "TBD Stadium",
+    liveScore: f.live_score ?? null,
+    winner: f.winner,
+
+    // Default placeholders for tactical ratings that get loaded dynamically or mapped
+    attackA: 80, attackB: 80,
+    defenceA: 80, defenceB: 80,
+    midfieldA: 80, midfieldB: 80,
+    xGA: f.live_score?.home ?? 1.5, xGB: f.live_score?.away ?? 1.5,
+    xGAA: 1.0, xGAB: 1.0,
+    possessionA: 50, possessionB: 50,
+    shotsA: 12.0, shotsB: 12.0,
+    shotsAllowedA: 10.0, shotsAllowedB: 10.0,
+    cleanSheetA: 30, cleanSheetB: 30,
+    bttsRateA: 50, bttsRateB: 50,
+    recentFormA: ["D", "D", "D", "D", "D"],
+    recentFormB: ["D", "D", "D", "D", "D"],
+    fifaRankA: 15, fifaRankB: 15,
+    eloRankA: 15, eloRankB: 15,
+    squadValueA: "€250M", squadValueB: "€250M",
+    restDaysA: 4, restDaysB: 4,
+    fatigueA: 20, fatigueB: 20,
+    injuriesA: [], injuriesB: [],
+    suspensionsA: [], suspensionsB: [],
+    missingKeyPlayersA: [], missingKeyPlayersB: [],
+    impactRatingA: "Minimal", impactRatingB: "Minimal",
+    h2hPreviousMeetings: 5,
+    h2hWinsA: 2, h2hWinsB: 2, h2hDraws: 1,
+    h2hGoalsA: 7, h2hGoalsB: 7,
+    aiSummary: "The ML analytical pipeline is ready to simulate transition profiles. Click 'View Full Report' to dynamically generate expected goal distributions and ELO metrics.",
+    
+    // If completed, add btts and correct scoreline indicators
+    ...(statusMapped === "COMPLETED" && {
+      overUnder: {
+        "1.5": { over: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 1.5 ? 1 : 0, under: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 1.5 ? 0 : 1 },
+        "2.5": { over: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 2.5 ? 1 : 0, under: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 2.5 ? 0 : 1 },
+        "3.5": { over: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 3.5 ? 1 : 0, under: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 3.5 ? 0 : 1 },
+      },
+      bttsMarket: {
+        yes: (f.live_score?.home ?? 0) > 0 && (f.live_score?.away ?? 0) > 0 ? 1 : 0,
+        no: (f.live_score?.home ?? 0) > 0 && (f.live_score?.away ?? 0) > 0 ? 0 : 1
+      },
+      mostLikelyScore: `${f.live_score?.home ?? 0}-${f.live_score?.away ?? 0}`,
+      top5Scorelines: [
+        { score: `${f.live_score?.home ?? 0}-${f.live_score?.away ?? 0}`, probability: 1.0 }
+      ]
+    })
+  };
+}
+
 /**
  * getPredictions()
  *
- * Strategy:
- *   1. Check health — if models not loaded, bail out early.
- *   2. Use the MOCK_MATCHES fixture list as the canonical schedule.
- *      For each match, fire POST /api/predict with the real team names.
- *   3. Merge the live prediction into the mock record via mapBackendPrediction.
- *   4. Return enriched records. Failures on individual matches are silent —
- *      that match keeps its mock values.
- *
- * This gives us real ML output for every match in the schedule without
- * needing a dedicated "list all predictions" endpoint on the backend.
+ * Sourced dynamically from GET /api/fixtures, and enriched using ML predictions.
  */
-export async function getPredictions(): Promise<MatchPrediction[]> {
+export async function getPredictions(year?: number, showHistorical?: boolean): Promise<MatchPrediction[]> {
   // 1. Verify backend is reachable and models are loaded
   let health: BackendHealth;
   try {
@@ -388,28 +521,157 @@ export async function getPredictions(): Promise<MatchPrediction[]> {
     throw new Error("ML models are still loading on the backend");
   }
 
-  // 2. Run predictions for every mock match in parallel (with concurrency cap)
-  const CONCURRENCY = 4;
-  const results: MatchPrediction[] = [...MOCK_MATCHES];
+  // 2. Load all World Cup fixtures from the database
+  const fixturesResponse = await getFixtures({ competition_code: "WC", limit: 500, year, show_historical: showHistorical });
+  const fixtures = fixturesResponse.fixtures || [];
 
-  // Process in batches to avoid hammering the server
-  for (let i = 0; i < MOCK_MATCHES.length; i += CONCURRENCY) {
-    const batch = MOCK_MATCHES.slice(i, i + CONCURRENCY);
+  // Map to baseline predictions
+  const results: MatchPrediction[] = fixtures.map(mapFixtureToPrediction);
+
+  // 3. Batch-predict live and upcoming matches to enrich with ML outcomes (max 4 concurrent)
+  const activeMatches = results.filter(m => m.status === "LIVE" || m.status === "UPCOMING");
+  
+  const CONCURRENCY = 4;
+  for (let i = 0; i < activeMatches.length; i += CONCURRENCY) {
+    const batch = activeMatches.slice(i, i + CONCURRENCY);
     const settled = await Promise.allSettled(
-      batch.map(async (mockMatch) => {
-        const resp = await predictMatch(mockMatch.teamA, mockMatch.teamB, "WC");
-        return { index: i + batch.indexOf(mockMatch), enriched: mapBackendPrediction(mockMatch, resp.prediction) };
+      batch.map(async (match) => {
+        const resp = await predictMatch(match.teamA, match.teamB, "WC");
+        return { id: match.id, enriched: mapBackendPrediction(match, resp.prediction) };
       })
     );
 
-    // Merge successful predictions back into results array
     for (const outcome of settled) {
       if (outcome.status === "fulfilled") {
-        results[outcome.value.index] = outcome.value.enriched;
+        const idx = results.findIndex(r => r.id === outcome.value.id);
+        if (idx !== -1) {
+          results[idx] = outcome.value.enriched;
+        }
       }
-      // On rejection: keep the mock value at that index (silent fallback)
     }
   }
 
   return results;
 }
+
+/**
+ * getLiveFixtures()
+ *
+ * Lightweight poll — fetches only IN_PLAY and PAUSED fixtures from the DB.
+ * Used by the 60-second frontend refresh interval.
+ * Does NOT re-run ML batch predictions (score/status sync only).
+ */
+export async function getLiveFixtures(): Promise<MatchPrediction[]> {
+  const [inPlay, paused] = await Promise.all([
+    getFixtures({ status: "IN_PLAY",  competition_code: "WC", limit: 50 }),
+    getFixtures({ status: "PAUSED",   competition_code: "WC", limit: 50 }),
+  ]);
+  const fixtures = [...(inPlay.fixtures || []), ...(paused.fixtures || [])];
+  return fixtures.map(mapFixtureToPrediction);
+}
+
+// ── Tournament progression types & API functions ─────────────────────────────
+
+export interface GroupStandingTeam {
+  id: number;
+  name: string;
+  tla: string | null;
+  crest_url: string | null;
+  played_games: number;
+  won: number;
+  draw: number;
+  lost: number;
+  points: number;
+  goals_for: number;
+  goals_against: number;
+  goals_difference: number;
+  group: string;
+  position: number;
+}
+
+export type GroupStandings = Record<string, GroupStandingTeam[]>;
+
+export interface BracketTeam {
+  id: number | null;
+  name: string;
+  tla: string;
+  crest_url: string | null;
+}
+
+export interface BracketMatch {
+  id: number;
+  stage: string;
+  utc_date: string;
+  status: string;
+  home_team: BracketTeam;
+  away_team: BracketTeam;
+  home_score: number | null;
+  away_score: number | null;
+  winner: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null;
+}
+
+export type BracketData = Record<string, BracketMatch[]>;
+
+export interface ScoreUpdateResponse {
+  status: string;
+  match_id: number;
+  winner: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null;
+  status_code: string;
+}
+
+export interface HistoricalProgressionEntry {
+  fixture: number;
+  accuracy: number;
+}
+
+export interface ModelPerformanceStats {
+  total_fixtures: number;
+  completed_fixtures: number;
+  correct_predictions: number;
+  overall_accuracy: number;
+  high_confidence_accuracy: number;
+  last_updated: string;
+  model_status: string;
+  historical_progression: HistoricalProgressionEntry[];
+}
+
+/**
+ * GET /fastapi/tournament/standings
+ */
+export async function getStandings(): Promise<GroupStandings> {
+  return apiFetch<GroupStandings>("/tournament/standings");
+}
+
+/**
+ * GET /fastapi/tournament/bracket
+ */
+export async function getBracket(): Promise<BracketData> {
+  return apiFetch<BracketData>("/tournament/bracket");
+}
+
+/**
+ * PUT /fastapi/tournament/fixtures/{matchId}/score
+ */
+export async function updateMatchScore(
+  matchId: number,
+  homeScore: number,
+  awayScore: number,
+  status: string
+): Promise<ScoreUpdateResponse> {
+  return apiFetch<ScoreUpdateResponse>(`/tournament/fixtures/${matchId}/score`, {
+    method: "PUT",
+    body: JSON.stringify({
+      home_score: homeScore,
+      away_score: awayScore,
+      status: status,
+    }),
+  });
+}
+
+/**
+ * GET /fastapi/tournament/model-performance
+ */
+export async function getModelPerformance(): Promise<ModelPerformanceStats> {
+  return apiFetch<ModelPerformanceStats>("/tournament/model-performance");
+}
+

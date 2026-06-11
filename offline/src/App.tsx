@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { getPredictions, API_BASE } from './api';
+import { 
+  getPredictions, 
+  API_BASE,
+  getStandings,
+  getBracket,
+  updateMatchScore,
+  getModelPerformance,
+  type GroupStandingTeam,
+  type GroupStandings,
+  type BracketMatch,
+  type BracketData
+} from './api';
 import { MatchPrediction, TrophyProbability, IntelligenceInsight } from './types';
 import {
   MOCK_MATCHES,
@@ -36,15 +47,124 @@ import {
 } from 'lucide-react';
 
 
+
+function formatSmartKickoff(isoStr: string | null | undefined): string {
+  if (!isoStr) return "TBD";
+  try {
+    const d = new Date(isoStr);
+    const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
+    const day = d.toLocaleDateString("en-US", { day: "numeric" });
+    const month = d.toLocaleDateString("en-US", { month: "short" });
+    
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    
+    let tz = '';
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(d);
+      const tzPart = parts.find(p => p.type === 'timeZoneName');
+      if (tzPart) tz = tzPart.value;
+    } catch {}
+    
+    return `${weekday} ${day} ${month} · ${hours}:${minutes} ${tz}`.trim();
+  } catch {
+    return "TBD";
+  }
+}
+
+function MatchTimeDisplay({ match }: { match: MatchPrediction }) {
+  if (match.status === 'LIVE') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+        </span>
+        <span className="text-red-500 font-extrabold tracking-widest uppercase">LIVE</span>
+      </div>
+    );
+  }
+  
+  if (match.status === 'COMPLETED') {
+    return <span className="text-zinc-550 font-bold uppercase tracking-wider">FINAL</span>;
+  }
+  
+  return <span className="text-zinc-450">{formatSmartKickoff(match.kickoffTime) || match.date}</span>;
+}
+
+const getYear = (match: MatchPrediction) => {
+  if (match.kickoffTime) {
+    return new Date(match.kickoffTime).getFullYear();
+  }
+  try {
+    const parts = match.date.split(', ');
+    if (parts.length > 1) {
+      const parsed = parseInt(parts[1]);
+      if (!isNaN(parsed)) return parsed;
+    }
+  } catch {}
+  return 2026;
+};
+
+const sortSourceMatches = (matches: MatchPrediction[]) => {
+  const getSortPriority = (match: MatchPrediction) => {
+    const year = getYear(match);
+    const is2026 = year >= 2026;
+    
+    if (match.status === 'LIVE') {
+      return 1; // Live matches always at the very top
+    }
+    
+    if (is2026) {
+      if (match.status === 'UPCOMING') {
+        return 2; // Scheduled 2026 fixtures
+      } else {
+        return 3; // Finished 2026 matches
+      }
+    } else {
+      return 4; // Historical matches (all finished)
+    }
+  };
+
+  const getTimestampValue = (dateStr: string) => {
+    try {
+      return new Date(dateStr).getTime();
+    } catch (e) {
+      return 0;
+    }
+  };
+
+  return [...matches].sort((a, b) => {
+    const pA = getSortPriority(a);
+    const pB = getSortPriority(b);
+    
+    if (pA !== pB) {
+      return pA - pB;
+    }
+    
+    const tA = getTimestampValue(a.kickoffTime || a.date);
+    const tB = getTimestampValue(b.kickoffTime || b.date);
+    
+    // Finished matches (2026 finished or historical finished) sorted latest first (descending)
+    if (pA === 3 || pA === 4) {
+      return tB - tA;
+    }
+    
+    // Live and Upcoming matches sorted chronological (ascending)
+    return tA - tB;
+  });
+};
+
 export default function App() {
   // Tab Navigation State synced with actual URL pathnames
-  const [activeTab, setActiveTab] = useState<'home' | 'predictions' | 'favorites' | 'intelligence' | 'model'>(() => {
+  const [activeTab, setActiveTab] = useState<'home' | 'predictions' | 'favorites' | 'intelligence' | 'model' | 'tournament'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
       if (path === '/predictions') return 'predictions';
       if (path === '/favorites') return 'favorites';
       if (path === '/intelligence') return 'intelligence';
       if (path === '/model') return 'model';
+      if (path === '/tournament') return 'tournament';
     }
     return 'home';
   });
@@ -53,15 +173,16 @@ export default function App() {
   const [sourceMatches, setSourceMatches] = useState<MatchPrediction[]>([]);
   const [isLoadingMatches, setIsLoadingMatches] = useState<boolean>(true);
   const [matchError, setMatchError] = useState<string | null>(null);
+  const [showHistorical, setShowHistorical] = useState<boolean>(false);
 
   useEffect(() => {
     let active = true;
     async function load() {
       try {
         setIsLoadingMatches(true);
-        const data = await getPredictions();
+        const data = await getPredictions(undefined, showHistorical);
         if (active) {
-          setSourceMatches(data);
+          setSourceMatches(sortSourceMatches(data));
           setMatchError(null);
         }
       } catch (err: any) {
@@ -79,10 +200,10 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [showHistorical]);
 
   // Safe navigation function ensuring a uniform, instant scroll reset to top
-  const navigateTo = (tab: 'home' | 'predictions' | 'favorites' | 'intelligence' | 'model') => {
+  const navigateTo = (tab: 'home' | 'predictions' | 'favorites' | 'intelligence' | 'model' | 'tournament') => {
     setActiveTab(tab);
     
     // Sync browser URL route path
@@ -110,6 +231,7 @@ export default function App() {
       else if (path === '/favorites') setActiveTab('favorites');
       else if (path === '/intelligence') setActiveTab('intelligence');
       else if (path === '/model') setActiveTab('model');
+      else if (path === '/tournament') setActiveTab('tournament');
       else setActiveTab('home');
       
       try {
@@ -200,6 +322,59 @@ export default function App() {
       { fixture: 47, accuracy: 72.3 }
     ]
   });
+  // Tournament progression state variables
+  const [standings, setStandings] = useState<GroupStandings>({});
+  const [bracket, setBracket] = useState<BracketData>({});
+  const [loadingTournament, setLoadingTournament] = useState<boolean>(true);
+  const [tournamentError, setTournamentError] = useState<string | null>(null);
+  const [tournamentSubTab, setTournamentSubTab] = useState<'bracket' | 'standings'>('bracket');
+
+  // Score editing modal state variables
+  const [editingMatch, setEditingMatch] = useState<MatchPrediction | null>(null);
+  const [simHomeScore, setSimHomeScore] = useState<number>(0);
+  const [simAwayScore, setSimAwayScore] = useState<number>(0);
+  const [simStatus, setSimStatus] = useState<string>('FINISHED');
+
+  const loadTournamentData = async () => {
+    try {
+      setLoadingTournament(true);
+      const [standingsData, bracketData] = await Promise.all([
+        getStandings(),
+        getBracket()
+      ]);
+      setStandings(standingsData);
+      setBracket(bracketData);
+      setTournamentError(null);
+    } catch (err) {
+      console.error("Failed to load tournament standings or bracket:", err);
+      setTournamentError("Could not fetch tournament progression data.");
+    } finally {
+      setLoadingTournament(false);
+    }
+  };
+
+  const openSetScoreModal = (match: MatchPrediction) => {
+    setEditingMatch(match);
+    setSimHomeScore(match.liveScore?.home ?? 0);
+    setSimAwayScore(match.liveScore?.away ?? 0);
+    setSimStatus(match.status === 'COMPLETED' ? 'FINISHED' : match.status === 'LIVE' ? 'IN_PLAY' : 'FINISHED');
+  };
+
+  const submitMatchScore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMatch) return;
+    
+    try {
+      await updateMatchScore(Number(editingMatch.id), simHomeScore, simAwayScore, simStatus);
+      const updatedFixtures = await getPredictions(undefined, showHistorical);
+      setSourceMatches(sortSourceMatches(updatedFixtures));
+      await loadTournamentData();
+      setEditingMatch(null);
+    } catch (err) {
+      console.error("Failed to update match score:", err);
+      alert("Error updating match score. Please verify database connection.");
+    }
+  };
 
   const [perfLoading, setPerfLoading] = useState(false);
 
@@ -207,17 +382,20 @@ export default function App() {
   const fetchPerformanceData = async () => {
     try {
       setPerfLoading(true);
-      const res = await fetch("/api/model-performance");
-      if (res.ok) {
-        const data = await res.json();
-        setPerformanceData(data);
-      }
+      const data = await getModelPerformance();
+      setPerformanceData(data);
     } catch (err) {
       console.error("Failed to connect to backend prediction performance endpoint:", err);
     } finally {
       setPerfLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'tournament') {
+      loadTournamentData();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab === 'model') {
@@ -424,9 +602,15 @@ export default function App() {
     return "📓 Scheduled Matches";
   };
 
+
   // Sorting and filtering matches for dedicated predictions feed
   const getSortedAndFilteredMatches = () => {
     let list = [...sourceMatches];
+    
+    // Filter out historical matches if the toggle is OFF
+    if (!showHistorical) {
+      list = list.filter(m => getYear(m) >= 2026);
+    }
     
     if (selectedFilter === 'Live') {
       list = list.filter(m => m.status === 'LIVE');
@@ -456,21 +640,23 @@ export default function App() {
       list = list.filter(m => favoriteMatchIds.includes(m.id));
     }
 
-    const getPriority = (match: MatchPrediction) => {
-      if (match.status === 'LIVE') return 1;
-      if (match.date.includes('June 09') || match.date.includes('June 9')) return 2;
-      if (match.date.includes('June 10')) return 3;
-      const day = parseInt(match.date.replace(/\D/g, ''));
-      if (match.date.includes('June') && day >= 11 && day <= 16) return 4;
+    const getSortPriority = (match: MatchPrediction) => {
+      const year = getYear(match);
+      const is2026 = year >= 2026;
       
-      const stg = match.stage.toLowerCase();
-      if (stg.includes('group stage')) return 5;
-      if (stg.includes('round of 32')) return 6;
-      if (stg.includes('round of 16')) return 7;
-      if (stg.includes('quarter final')) return 8;
-      if (stg.includes('semi final')) return 9;
-      if (stg.includes('final')) return 10;
-      return 11;
+      if (match.status === 'LIVE') {
+        return 1; // Live matches always at the very top
+      }
+      
+      if (is2026) {
+        if (match.status === 'UPCOMING') {
+          return 2; // Scheduled 2026 fixtures
+        } else {
+          return 3; // Finished 2026 matches
+        }
+      } else {
+        return 4; // Historical matches (all finished)
+      }
     };
 
     const getTimestampValue = (dateStr: string) => {
@@ -482,10 +668,23 @@ export default function App() {
     };
 
     return list.sort((a, b) => {
-      const pA = getPriority(a);
-      const pB = getPriority(b);
-      if (pA !== pB) return pA - pB;
-      return getTimestampValue(a.date) - getTimestampValue(b.date);
+      const pA = getSortPriority(a);
+      const pB = getSortPriority(b);
+      
+      if (pA !== pB) {
+        return pA - pB;
+      }
+      
+      const tA = getTimestampValue(a.kickoffTime || a.date);
+      const tB = getTimestampValue(b.kickoffTime || b.date);
+      
+      // Finished matches (2026 finished or historical finished) sorted latest first (descending)
+      if (pA === 3 || pA === 4) {
+        return tB - tA;
+      }
+      
+      // Live and Upcoming matches sorted chronological (ascending)
+      return tA - tB;
     });
   };
 
@@ -707,6 +906,12 @@ export default function App() {
             className={`hover:text-white transition-all py-1 border-b-2 ${activeTab === 'intelligence' ? 'text-white border-green-accent' : 'border-transparent'}`}
           >
             Intelligence
+          </button>
+          <button
+            onClick={() => navigateTo('tournament')}
+            className={`hover:text-white transition-all py-1 border-b-2 ${activeTab === 'tournament' ? 'text-white border-green-accent' : 'border-transparent'}`}
+          >
+            Tournament
           </button>
           <button
             onClick={() => navigateTo('model')}
@@ -1084,7 +1289,7 @@ export default function App() {
                               <span className="text-zinc-500 text-[8px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase">LOCAL</span>
                             )}
                           </div>
-                          <span className="text-zinc-450">{match.date}</span>
+                          <MatchTimeDisplay match={match} />
                         </div>
 
                         {/* Large prominent matchup title */}
@@ -1101,13 +1306,47 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Assessment / Prediction tagline */}
-                          <div className="mt-5 space-y-1">
-                            <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-600 block">Assessment</span>
-                            <span className="text-white text-[15px] font-medium tracking-normal leading-snug block">
-                              {match.prediction}
-                            </span>
-                          </div>
+                          {/* Assessment / Score scoreboard */}
+                          {match.status === 'LIVE' ? (
+                            <div className="mt-5 flex flex-col justify-center items-start gap-1">
+                              <span className="text-[9px] font-mono uppercase tracking-widest text-red-500 block animate-pulse font-bold">Live Score</span>
+                              <div className="flex items-center gap-3 text-3xl font-black text-white tracking-wider">
+                                <span>{match.liveScore?.home ?? 0}</span>
+                                <span className="text-zinc-700 font-light">—</span>
+                                <span>{match.liveScore?.away ?? 0}</span>
+                              </div>
+                            </div>
+                          ) : match.status === 'COMPLETED' ? (
+                            (() => {
+                              const isCorrect = (match.prediction === `${match.teamA} Win` && match.winner === "HOME_TEAM") ||
+                                                (match.prediction === `${match.teamB} Win` && match.winner === "AWAY_TEAM") ||
+                                                (match.prediction === "Draw" && match.winner === "DRAW");
+                              return (
+                                <div className="mt-5 flex flex-col justify-center items-start gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 block font-bold">Final Score</span>
+                                    <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase ${
+                                      isCorrect ? 'text-green-accent bg-green-accent/15 border border-green-accent/25' : 'text-red-400 bg-red-950/20 border border-red-900/20'
+                                    }`}>
+                                      {isCorrect ? '✓ Correct' : '✕ Miss'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-3xl font-black text-white tracking-wider">
+                                    <span>{match.liveScore?.home ?? 0}</span>
+                                    <span className="text-zinc-700 font-light">—</span>
+                                    <span>{match.liveScore?.away ?? 0}</span>
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            <div className="mt-5 space-y-1">
+                              <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-600 block">Assessment</span>
+                              <span className="text-white text-[15px] font-medium tracking-normal leading-snug block">
+                                {match.prediction}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Probabilities split tracker */}
@@ -1255,37 +1494,58 @@ export default function App() {
               <>
                 {/* STICKY FILTER BAR */}
                 <div className="sticky top-[80px] z-20 bg-black/95 backdrop-blur-md border-b border-zinc-900 py-3 mt-1 px-6 md:px-12 w-full">
-                  <div className="max-w-7xl mx-auto flex items-center overflow-x-auto gap-2.5 scrollbar-none py-1 text-zinc-400 select-none">
-                    {[
-                      'All Matches',
-                      'Live',
-                      'Today',
-                      'Tomorrow',
-                      'This Week',
-                      'Group Stage',
-                      'Round of 32',
-                      'Round of 16',
-                      'Quarter Final',
-                      'Semi Final',
-                      'Final',
-                      'Favorites'
-                    ].map((item) => {
-                      const countLabel = item === 'Favorites' ? favoriteMatchIds.length : null;
-                      const active = selectedFilter === item;
-                      return (
-                        <button
-                          key={item}
-                          onClick={() => setSelectedFilter(item)}
-                          className={`whitespace-nowrap px-4 py-2.5 text-xs font-mono uppercase tracking-widest rounded transition-all duration-200 cursor-pointer shrink-0 border ${
-                            active 
-                              ? 'bg-white border-white text-black font-semibold' 
-                              : 'bg-zinc-950 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-700 text-zinc-400 hover:text-white'
+                  <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4 py-1 text-zinc-400 select-none">
+                    <div className="flex items-center overflow-x-auto gap-2.5 scrollbar-none flex-1">
+                      {[
+                        'All Matches',
+                        'Live',
+                        'Today',
+                        'Tomorrow',
+                        'This Week',
+                        'Group Stage',
+                        'Round of 32',
+                        'Round of 16',
+                        'Quarter Final',
+                        'Semi Final',
+                        'Final',
+                        'Favorites'
+                      ].map((item) => {
+                        const liveMatchesCount = sourceMatches.filter(m => m.status === 'LIVE').length;
+                        const countLabel = item === 'Favorites' ? favoriteMatchIds.length : null;
+                        const active = selectedFilter === item;
+                        return (
+                          <button
+                            key={item}
+                            onClick={() => setSelectedFilter(item)}
+                            className={`whitespace-nowrap px-4 py-2.5 text-xs font-mono uppercase tracking-widest rounded transition-all duration-200 cursor-pointer shrink-0 border ${
+                              active 
+                                ? 'bg-white border-white text-black font-semibold' 
+                                : 'bg-zinc-950 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-700 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            {item === 'Live' ? `🔴 LIVE (${liveMatchesCount})` : item} {countLabel !== null && `(${countLabel})`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Toggle Switch */}
+                    <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0 bg-zinc-950/60 border border-zinc-900 rounded px-4 py-2 hover:border-zinc-800 transition duration-300">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                        Show Historical Matches
+                      </span>
+                      <button
+                        onClick={() => setShowHistorical(!showHistorical)}
+                        className={`w-9 h-5 rounded-full transition-colors duration-200 relative outline-none cursor-pointer ${
+                          showHistorical ? 'bg-green-accent' : 'bg-zinc-800'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 bg-zinc-100 w-4 h-4 rounded-full transition-transform duration-200 ${
+                            showHistorical ? 'translate-x-4' : 'translate-x-0'
                           }`}
-                        >
-                          {item === 'Live' ? '🔴 LIVE' : item} {countLabel !== null && `(${countLabel})`}
-                        </button>
-                      );
-                    })}
+                        />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1443,18 +1703,24 @@ export default function App() {
                                     <div className="text-[14px] font-bold text-white uppercase tracking-normal flex flex-wrap items-center gap-1.5">
                                       <span className="flex items-center gap-1 text-base select-none">{flagA}</span>
                                       <span>{match.teamA}</span>
-                                      <span className="text-zinc-600 font-medium font-mono text-[10px] mx-1">V</span>
+                                      {match.liveScore ? (
+                                        <span className="text-[#1cdb5e] font-black font-mono text-[13px] mx-2 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800">
+                                          {match.liveScore.home} — {match.liveScore.away}
+                                        </span>
+                                      ) : (
+                                        <span className="text-zinc-600 font-medium font-mono text-[10px] mx-1">V</span>
+                                      )}
                                       <span className="flex items-center gap-1 text-base select-none">{flagB}</span>
                                       <span>{match.teamB}</span>
                                     </div>
                                     <div className="flex items-center space-x-2.5 text-[9.5px] font-mono uppercase text-zinc-500">
                                       <span>{match.stage}</span>
                                       <span>•</span>
-                                      <span className="text-zinc-450 font-semibold">{match.date}</span>
+                                      <MatchTimeDisplay match={match} />
                                       {match.status === 'LIVE' && (
                                         <>
                                           <span>•</span>
-                                          <span className="text-[#1cdb5e] font-extrabold animate-pulse">🔴 LIVE IN PROGRESS</span>
+                                          <span className="text-[#1cdb5e] font-extrabold animate-pulse">IN PROGRESS</span>
                                         </>
                                       )}
                                       <span>•</span>
@@ -1469,7 +1735,21 @@ export default function App() {
 
                                 {/* Middle component: Prediction assessment / Confidence block */}
                                 <div className="flex flex-col justify-center items-start lg:w-1/4">
-                                  <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-zinc-650 block mb-1">Model Assessment</span>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-zinc-650 block">Model Assessment</span>
+                                    {match.status === 'COMPLETED' && (() => {
+                                      const isCorrect = (match.prediction === `${match.teamA} Win` && match.winner === "HOME_TEAM") ||
+                                                        (match.prediction === `${match.teamB} Win` && match.winner === "AWAY_TEAM") ||
+                                                        (match.prediction === "Draw" && match.winner === "DRAW");
+                                      return (
+                                        <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase ${
+                                          isCorrect ? 'text-green-accent bg-green-accent/10 border border-green-accent/20' : 'text-red-400 bg-red-950/10 border border-red-900/20'
+                                        }`}>
+                                          {isCorrect ? '✓ Correct' : '✕ Miss'}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
                                   <div className="text-white text-sm font-medium tracking-normal">
                                     {match.prediction}
                                   </div>
@@ -1494,12 +1774,18 @@ export default function App() {
                                 </div>
 
                                 {/* Action key link at far right */}
-                                <div className="flex items-center justify-end lg:w-36">
+                                <div className="flex flex-col sm:flex-row lg:flex-col items-center justify-end lg:w-36 gap-2 w-full lg:w-auto">
                                   <button
                                     onClick={() => openMatchAnalysis(match)}
-                                    className="w-full lg:w-auto px-5 py-2.5 bg-zinc-900 hover:bg-zinc-850 hover:text-green-accent border border-zinc-800 hover:border-zinc-700 rounded text-xs font-mono font-bold tracking-widest text-[#1cdb5e] uppercase transition duration-300 flex items-center justify-center gap-2 select-none cursor-pointer"
+                                    className="w-full lg:w-auto px-5 py-2 bg-zinc-900 hover:bg-zinc-850 hover:text-green-accent border border-zinc-800 hover:border-zinc-700 rounded text-xs font-mono font-bold tracking-widest text-[#1cdb5e] uppercase transition duration-300 flex items-center justify-center gap-2 select-none cursor-pointer"
                                   >
                                     View Analysis <ArrowRight className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => openSetScoreModal(match)}
+                                    className="w-full lg:w-auto px-5 py-2 bg-zinc-950 hover:bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-900 hover:border-zinc-800 rounded text-xs font-mono uppercase tracking-widest transition duration-305 flex items-center justify-center gap-2 cursor-pointer select-none"
+                                  >
+                                    Set Score
                                   </button>
                                 </div>
 
@@ -2992,6 +3278,251 @@ export default function App() {
           </div>
         )}
 
+        {/* TOURNAMENT PROGRESSION VIEW */}
+        {activeTab === 'tournament' && (
+          <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-10 md:py-16">
+            <div className="space-y-8 animate-fade-in">
+              
+              {/* Header section */}
+              <div className="border-b border-zinc-900 pb-5 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                <div>
+                  <span className="mono-label text-green-accent text-[9px] block mb-2 uppercase tracking-widest font-mono">Real-Time Progression state machine</span>
+                  <h2 className="text-4xl font-serif italic text-white mb-2">Tournament Progression</h2>
+                  <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
+                    Explore dynamic standings and projected knockout brackets generated from actual match outcomes. Set match scores to simulate tournament progression from the group stage through to the Grand Final.
+                  </p>
+                </div>
+                {tournamentError && (
+                  <div className="text-xs font-mono text-red-400 bg-red-950/20 border border-red-900/40 p-3 rounded">
+                    {tournamentError}
+                  </div>
+                )}
+              </div>
+
+              {/* Subtabs for standings or bracket */}
+              <div className="flex border-b border-zinc-900 pb-3 gap-2">
+                <button
+                  onClick={() => setTournamentSubTab('bracket')}
+                  className={`px-5 py-2 font-mono text-xs uppercase tracking-widest border-b-2 transition-all ${
+                    tournamentSubTab === 'bracket' ? 'text-white border-green-accent font-bold' : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                  }`}
+                >
+                  Knockout Bracket
+                </button>
+                <button
+                  onClick={() => setTournamentSubTab('standings')}
+                  className={`px-5 py-2 font-mono text-xs uppercase tracking-widest border-b-2 transition-all ${
+                    tournamentSubTab === 'standings' ? 'text-white border-green-accent font-bold' : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                  }`}
+                >
+                  Group Standings
+                </button>
+              </div>
+
+              {/* Loader */}
+              {loadingTournament ? (
+                <div className="py-24 flex flex-col items-center justify-center space-y-4">
+                  <Loader2 className="w-8 h-8 text-green-accent animate-spin" />
+                  <span className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Recalculating tournament nodes...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Standings View */}
+                  {tournamentSubTab === 'standings' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
+                      {Object.keys(standings).sort().map((groupKey) => (
+                        <div key={groupKey} className="bg-zinc-950/60 border border-zinc-900 hover:border-zinc-800 rounded p-4 space-y-4 transition-all duration-300">
+                          <div className="border-b border-zinc-900 pb-2 flex justify-between items-center">
+                            <h3 className="font-serif italic text-white text-base">
+                              {groupKey.replace("GROUP_", "Group ")}
+                            </h3>
+                            <span className="text-[9px] font-mono text-green-accent uppercase tracking-wider font-semibold">Active</span>
+                          </div>
+                          
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="border-b border-zinc-900 text-[9px] font-mono uppercase text-zinc-550">
+                                  <th className="py-1.5 text-center w-6 font-bold">#</th>
+                                  <th className="py-1.5 font-bold">Team</th>
+                                  <th className="py-1.5 text-center w-6 font-bold">P</th>
+                                  <th className="py-1.5 text-center w-8 font-bold">GD</th>
+                                  <th className="py-1.5 text-center w-8 font-bold">Pts</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-900/40 text-[11px] font-sans text-zinc-300">
+                                {standings[groupKey]?.map((team) => {
+                                  const flag = FLAG_MAP[team.name] || "🏳️";
+                                  return (
+                                    <tr key={team.id} className="hover:bg-zinc-900/20 transition-colors">
+                                      <td className="py-2 text-center font-mono font-bold text-zinc-500">
+                                        {team.position}
+                                      </td>
+                                      <td className="py-2 font-medium text-white flex items-center gap-1.5 truncate max-w-[120px]">
+                                        <span className="select-none text-sm">{flag}</span>
+                                        <span className="truncate" title={team.name}>{team.tla || team.name}</span>
+                                      </td>
+                                      <td className="py-2 text-center font-mono">{team.played_games}</td>
+                                      <td className={`py-2 text-center font-mono font-semibold ${
+                                        team.goals_difference > 0 ? 'text-green-400' : team.goals_difference < 0 ? 'text-red-400' : 'text-zinc-550'
+                                      }`}>
+                                        {team.goals_difference > 0 ? `+${team.goals_difference}` : team.goals_difference}
+                                      </td>
+                                      <td className="py-2 text-center font-mono font-bold text-white">{team.points}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Bracket View */}
+                  {tournamentSubTab === 'bracket' && (
+                    <div className="w-full overflow-x-auto pb-8 pt-4 custom-scrollbar select-none">
+                      <div className="flex gap-8 min-w-[1500px] items-stretch">
+                        {[
+                          { key: 'ROUND_OF_32', label: 'Round of 32', count: 16 },
+                          { key: 'ROUND_OF_16', label: 'Round of 16', count: 8 },
+                          { key: 'QUARTER_FINALS', label: 'Quarter Finals', count: 4 },
+                          { key: 'SEMI_FINALS', label: 'Semi Finals', count: 2 },
+                          { key: 'FINAL', label: 'Finals & Playoffs', count: 2 }
+                        ].map((stage) => {
+                          let matches: BracketMatch[] = bracket[stage.key] || [];
+                          if (stage.key === 'FINAL') {
+                            const thirdPlace = bracket['THIRD_PLACE'] || [];
+                            matches = [...matches, ...thirdPlace];
+                          }
+                          
+                          return (
+                            <div key={stage.key} className="flex-shrink-0 w-80 flex flex-col space-y-4">
+                              <div className="border-b border-zinc-900 pb-2">
+                                <span className="text-green-accent text-[9px] font-mono uppercase tracking-widest block mb-0.5 font-bold">Stage Column</span>
+                                <h4 className="text-xs font-mono uppercase tracking-[0.1em] text-white font-bold">
+                                  {stage.label} <span className="text-zinc-550 font-normal">({matches.length})</span>
+                                </h4>
+                              </div>
+                              
+                              <div className="flex-1 flex flex-col justify-around py-4 gap-4 overflow-y-auto max-h-[72vh] pr-1">
+                                {matches.length === 0 ? (
+                                  <div className="py-12 text-center border border-dashed border-zinc-900 rounded bg-zinc-950/20 text-zinc-600 text-[10px] uppercase font-mono tracking-wider">
+                                    Awaiting progression
+                                  </div>
+                                ) : (
+                                  matches.map((m) => {
+                                    const flagHome = FLAG_MAP[m.home_team.name] || "🏳️";
+                                    const flagAway = FLAG_MAP[m.away_team.name] || "🏳️";
+                                    const isFinished = m.status === 'FINISHED';
+                                    const homeWinner = isFinished && m.winner === 'HOME_TEAM';
+                                    const awayWinner = isFinished && m.winner === 'AWAY_TEAM';
+                                    
+                                    return (
+                                      <div 
+                                        key={m.id} 
+                                        className="bg-zinc-950/80 border border-zinc-900 hover:border-zinc-800 rounded p-3.5 space-y-3 transition duration-200 shadow-md flex flex-col justify-between"
+                                      >
+                                        <div className="flex justify-between items-center text-[9px] font-mono text-zinc-550 uppercase">
+                                          <span>Match #{m.id}</span>
+                                          {m.stage === 'THIRD_PLACE' ? (
+                                            <span className="text-yellow-600 font-bold tracking-wider">3rd Place Match</span>
+                                          ) : (
+                                            <span className={m.status === 'IN_PLAY' || m.status === 'PAUSED' ? 'text-red-500 font-extrabold animate-pulse' : ''}>
+                                              {m.status}
+                                            </span>
+                                          )}
+                                        </div>
+                                        
+                                        <div className="space-y-2">
+                                          {/* Home team */}
+                                          <div className="flex justify-between items-center text-xs">
+                                            <div className="flex items-center gap-2 font-medium truncate max-w-[190px]">
+                                              <span className="select-none text-base">{flagHome}</span>
+                                              <span className={homeWinner ? 'text-green-accent font-bold' : m.home_team.name === 'TBD' ? 'text-zinc-650' : 'text-zinc-300'}>
+                                                {m.home_team.tla || m.home_team.name}
+                                              </span>
+                                            </div>
+                                            <span className={`font-mono text-xs font-extrabold ${homeWinner ? 'text-green-accent' : 'text-zinc-500'}`}>
+                                              {m.home_score !== null ? m.home_score : '-'}
+                                            </span>
+                                          </div>
+
+                                          {/* Away team */}
+                                          <div className="flex justify-between items-center text-xs">
+                                            <div className="flex items-center gap-2 font-medium truncate max-w-[190px]">
+                                              <span className="select-none text-base">{flagAway}</span>
+                                              <span className={awayWinner ? 'text-green-accent font-bold' : m.away_team.name === 'TBD' ? 'text-zinc-655' : 'text-zinc-300'}>
+                                                {m.away_team.tla || m.away_team.name}
+                                              </span>
+                                            </div>
+                                            <span className={`font-mono text-xs font-extrabold ${awayWinner ? 'text-green-accent' : 'text-zinc-500'}`}>
+                                              {m.away_score !== null ? m.away_score : '-'}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        {/* Action buttons */}
+                                        {(m.home_team.name !== 'TBD' && m.away_team.name !== 'TBD') && (
+                                          <div className="pt-2.5 border-t border-zinc-900/60 flex justify-between items-center gap-2">
+                                            <span className="text-[8.5px] font-mono uppercase text-zinc-600">
+                                              {m.stage === 'GROUP_STAGE' ? 'Group Stage' : m.stage.replace(/_/g, ' ')}
+                                            </span>
+                                            <button
+                                              onClick={() => {
+                                                const mappedMatch: MatchPrediction = {
+                                                  id: String(m.id),
+                                                  teamA: m.home_team.name,
+                                                  teamB: m.away_team.name,
+                                                  teamACode: m.home_team.tla || m.home_team.name.substring(0, 3).toUpperCase(),
+                                                  teamBCode: m.away_team.tla || m.away_team.name.substring(0, 3).toUpperCase(),
+                                                  date: m.utc_date,
+                                                  kickoffTime: m.utc_date,
+                                                  stage: m.stage,
+                                                  status: m.status === 'FINISHED' ? 'COMPLETED' : m.status === 'IN_PLAY' || m.status === 'PAUSED' ? 'LIVE' : 'UPCOMING',
+                                                  prediction: m.winner === 'HOME_TEAM' ? `${m.home_team.name} Win` : m.winner === 'AWAY_TEAM' ? `${m.away_team.name} Win` : 'Draw',
+                                                  confidence: 'High',
+                                                  probA: m.winner === 'HOME_TEAM' ? 100 : 0,
+                                                  probD: m.winner === 'DRAW' ? 100 : 0,
+                                                  probB: m.winner === 'AWAY_TEAM' ? 100 : 0,
+                                                  venue: 'TBD Stadium',
+                                                  liveScore: m.home_score !== null && m.away_score !== null ? { home: m.home_score, away: m.away_score, is_live: m.status !== 'FINISHED' } : null,
+                                                  winner: m.winner,
+                                                  attackA: 80, attackB: 80, defenceA: 80, defenceB: 80, midfieldA: 80, midfieldB: 80,
+                                                  xGA: 1.5, xGB: 1.5, xGAA: 1.0, xGAB: 1.0, possessionA: 50, possessionB: 50, shotsA: 12.0, shotsB: 12.0,
+                                                  shotsAllowedA: 10.0, shotsAllowedB: 10.0, cleanSheetA: 30, cleanSheetB: 30, bttsRateA: 50, bttsRateB: 50,
+                                                  recentFormA: [], recentFormB: [], fifaRankA: 10, fifaRankB: 10, eloRankA: 10, eloRankB: 10,
+                                                  squadValueA: '€100M', squadValueB: '€100M', restDaysA: 4, restDaysB: 4, fatigueA: 20, fatigueB: 20,
+                                                  injuriesA: [], injuriesB: [], suspensionsA: [], suspensionsB: [], missingKeyPlayersA: [], missingKeyPlayersB: [],
+                                                  impactRatingA: 'Minimal', impactRatingB: 'Minimal', h2hPreviousMeetings: 0, h2hWinsA: 0, h2hWinsB: 0, h2hDraws: 0,
+                                                  h2hGoalsA: 0, h2hGoalsB: 0, aiSummary: ''
+                                                };
+                                                openSetScoreModal(mappedMatch);
+                                              }}
+                                              className="px-3 py-1 bg-zinc-900 hover:bg-zinc-800 text-green-accent text-[9px] font-mono uppercase rounded transition cursor-pointer select-none"
+                                            >
+                                              Set Score
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         </div>
       </main>
 
@@ -3037,6 +3568,7 @@ export default function App() {
               <span onClick={() => navigateTo('predictions')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Predictions</span>
               <span onClick={() => navigateTo('favorites')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Favorites</span>
               <span onClick={() => navigateTo('intelligence')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Intelligence Hub</span>
+              <span onClick={() => navigateTo('tournament')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Tournament</span>
               <span onClick={() => navigateTo('model')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">The Model</span>
             </div>
           </div>
@@ -3929,6 +4461,108 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* SCORE SIMULATION / EDITING MODAL */}
+      {editingMatch && (() => {
+        const flagA = FLAG_MAP[editingMatch.teamA] || "🏳️";
+        const flagB = FLAG_MAP[editingMatch.teamB] || "🏳️";
+        return (
+          <div id="set-score-overlay" className="fixed inset-0 z-50 overflow-y-auto bg-black/95 backdrop-blur-md flex items-center justify-center p-4 select-none">
+            <div 
+              className="bg-zinc-950 border border-zinc-900 rounded w-full max-w-md overflow-hidden shadow-2xl animate-fade-in text-left"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal header */}
+              <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center bg-zinc-950">
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-mono uppercase tracking-widest text-green-accent font-bold">Simulator Panel</span>
+                  <h4 className="text-sm font-mono uppercase tracking-[0.1em] text-white font-bold">Simulate Match Score</h4>
+                </div>
+                <button
+                  onClick={() => setEditingMatch(null)}
+                  className="p-1 px-2.5 hover:bg-zinc-900 border border-zinc-900 rounded text-[10px] font-mono uppercase text-zinc-400 hover:text-white cursor-pointer select-none"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Form content */}
+              <form onSubmit={submitMatchScore} className="p-6 space-y-6">
+                <div className="text-[11px] text-zinc-400 leading-relaxed text-center font-sans">
+                  Update score/status for <span className="text-white font-bold">{editingMatch.teamA}</span> vs <span className="text-white font-bold">{editingMatch.teamB}</span>.
+                  This will instantly trigger group standings updates and advance teams in the knockout stages.
+                </div>
+
+                <div className="grid grid-cols-7 gap-4 items-center">
+                  {/* Home team */}
+                  <div className="col-span-3 text-center space-y-2">
+                    <span className="text-2xl select-none block">{flagA}</span>
+                    <span className="text-xs font-bold text-white uppercase block truncate">{editingMatch.teamA}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={simHomeScore}
+                      onChange={(e) => setSimHomeScore(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-16 h-12 bg-zinc-900 border border-zinc-800 rounded font-mono text-xl text-center text-white focus:outline-none focus:border-green-accent mx-auto"
+                    />
+                  </div>
+
+                  {/* VS separator */}
+                  <div className="col-span-1 text-center text-zinc-650 font-mono text-xs font-bold">
+                    VS
+                  </div>
+
+                  {/* Away team */}
+                  <div className="col-span-3 text-center space-y-2">
+                    <span className="text-2xl select-none block">{flagB}</span>
+                    <span className="text-xs font-bold text-white uppercase block truncate">{editingMatch.teamB}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={simAwayScore}
+                      onChange={(e) => setSimAwayScore(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-16 h-12 bg-zinc-900 border border-zinc-800 rounded font-mono text-xl text-center text-white focus:outline-none focus:border-green-accent mx-auto"
+                    />
+                  </div>
+                </div>
+
+                {/* Match Status Select */}
+                <div className="flex flex-col space-y-2">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Match Status</label>
+                  <select
+                    value={simStatus}
+                    onChange={(e) => setSimStatus(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded p-2.5 text-xs text-white focus:outline-none focus:border-green-accent cursor-pointer"
+                  >
+                    <option value="FINISHED">FINISHED (Official / Completed)</option>
+                    <option value="IN_PLAY">IN PLAY (Live)</option>
+                    <option value="SCHEDULED">SCHEDULED (Upcoming / Reset)</option>
+                  </select>
+                </div>
+
+                {/* Submit button */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingMatch(null)}
+                    className="flex-1 py-3 bg-transparent border border-zinc-900 hover:border-zinc-800 text-zinc-400 hover:text-white rounded text-xs font-mono font-bold tracking-widest uppercase transition duration-200 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-green-accent hover:bg-green-600 text-black rounded text-xs font-mono font-bold tracking-widest uppercase transition duration-200 cursor-pointer font-bold"
+                  >
+                    Confirm Score
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

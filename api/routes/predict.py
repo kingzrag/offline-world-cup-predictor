@@ -208,6 +208,38 @@ def get_team_profile(
             "result":   result,
         })
 
+    # Calculate ELO rank
+    elo_rank = 15
+    if elo_rating is not None:
+        elo_rank = db.query(TeamElo).filter(TeamElo.elo_rating > elo_rating).count() + 1
+
+    # Format squad market value
+    val_m = team.squad_market_value or team.market_value or 0
+    if val_m >= 1000:
+        val_str = f"€{val_m/1000:.2f}B"
+    elif val_m > 0:
+        val_str = f"€{val_m:.1f}M"
+    else:
+        val_str = "€250M"
+
+    # Compile injuries
+    injuries_list = []
+    if hasattr(team, "national_team_injuries"):
+        for inj in (team.national_team_injuries or []):
+            injuries_list.append(f"{inj.player_name} ({inj.injury_description or inj.injury_status or 'Injured'})")
+    if hasattr(team, "injuries"):
+        for inj in (team.injuries or []):
+            injuries_list.append(f"{inj.player_name} ({inj.reason or 'Injured'})")
+
+    # Compile suspensions
+    suspensions_list = []
+    if hasattr(team, "national_team_suspensions"):
+        for susp in (team.national_team_suspensions or []):
+            suspensions_list.append(f"{susp.player_name} ({susp.suspension_reason or 'Suspended'})")
+    if hasattr(team, "suspensions"):
+        for susp in (team.suspensions or []):
+            suspensions_list.append(f"{susp.player_name} ({susp.reason or 'Suspended'})")
+
     return {
         "status": "success",
         "team": {
@@ -219,6 +251,11 @@ def get_team_profile(
             "founded":     team.founded,
             "venue":       team.venue,
             "elo_rating":  elo_rating,
+            "elo_rank":    elo_rank,
+            "fifa_rank":   team.fifa_ranking or 15,
+            "squad_value": val_str,
+            "injuries":    injuries_list,
+            "suspensions": suspensions_list,
             "squad_size":  len(team.players) if hasattr(team, "players") else None,
             "recent_form": form,
         },
@@ -250,6 +287,14 @@ def get_fixtures(
     date_to:          Optional[date] = Query(
         None,
         description="Return only matches on or before this date (YYYY-MM-DD, UTC).",
+    ),
+    year:             Optional[int]  = Query(
+        None,
+        description="Filter matches by kickoff year, e.g. 2026.",
+    ),
+    show_historical:  bool           = Query(
+        False,
+        description="Whether to include historical matches (year < 2026).",
     ),
     competition_code: str            = Query(
         "WC",
@@ -311,7 +356,47 @@ def get_fixtures(
     if date_to:
         query = query.filter(Match.utc_date <= datetime.combine(date_to, datetime.max.time()))
 
-    matches = query.order_by(asc(Match.utc_date)).limit(limit).all()
+    from sqlalchemy import extract
+    if year:
+        query = query.filter(extract('year', Match.utc_date) == year)
+    elif not show_historical:
+        # Default to only showing 2026 World Cup fixtures
+        query = query.filter(extract('year', Match.utc_date) >= 2026)
+
+    # Fetch all matching results to sort properly in Python (to avoid LIMIT truncating 2026 matches)
+    matches = query.all()
+
+    # ── Sort matches in Python ────────────────────────────────────────────────
+    # Priority rules:
+    # 1. LIVE matches first (status IN_PLAY, PAUSED).
+    # 2. Upcoming matches (status TIMED, SCHEDULED, POSTPONED, etc.) from 2026, sorted ascending by utc_date.
+    # 3. Finished matches from 2026, sorted descending by utc_date.
+    # 4. Historical matches (< 2026), sorted descending by utc_date.
+    def match_sort_key(m):
+        m_year = m.utc_date.year if m.utc_date else 2026
+        is_2026 = m_year >= 2026
+        
+        # Sort priority tier
+        if m.status in {"IN_PLAY", "PAUSED"}:
+            tier = 0  # Live matches
+        elif is_2026:
+            if m.status != "FINISHED":
+                tier = 1  # Upcoming 2026 matches
+            else:
+                tier = 2  # Finished 2026 matches
+        else:
+            tier = 3  # Historical matches
+            
+        ts = m.utc_date.timestamp() if m.utc_date else 0
+        if tier in (0, 1):
+            date_val = ts
+        else:
+            date_val = -ts
+            
+        return (tier, date_val)
+
+    matches.sort(key=match_sort_key)
+    matches = matches[:limit]
 
     # ── Serialise helpers ─────────────────────────────────────────────────────
     live_statuses  = {"IN_PLAY", "PAUSED"}
@@ -338,6 +423,17 @@ def get_fixtures(
             }
         return None
 
+    def _prediction(m):
+        pred = m.predictions[0] if m.predictions else None
+        if not pred:
+            return None
+        return {
+            "predicted_outcome": pred.predicted_outcome,
+            "home_probability": pred.home_probability,
+            "away_probability": pred.away_probability,
+            "draw_probability": pred.draw_probability,
+        }
+
     fixtures_out = [
         {
             "id":           m.id,
@@ -351,6 +447,7 @@ def get_fixtures(
             "away_team":    _team(m.away_team),
             "live_score":   _live_score(m),
             "winner":       m.winner,
+            "prediction":   _prediction(m),
         }
         for m in matches
     ]
