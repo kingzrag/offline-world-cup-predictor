@@ -6,14 +6,15 @@ Production-ready prediction endpoints.
     POST  /api/predict              → Full prediction (1X2 + goals + all markets)
     GET   /api/teams                → All teams (searchable)
     GET   /api/team/{team_name}     → Team profile + stats
-    GET   /api/fixtures             → Upcoming scheduled matches
+    GET   /api/fixtures             → Scheduled & Live World Cup matches
     GET   /api/health               → Model health check
 
 All ML inference goes through the ModelService singleton.
 """
 
 import time
-from typing import Optional
+from datetime import date, datetime
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -224,50 +225,146 @@ def get_team_profile(
     }
 
 
-@router.get("/fixtures", summary="Upcoming scheduled fixtures")
+@router.get("/fixtures", summary="FIFA World Cup fixtures — all statuses with live scores")
 def get_fixtures(
-    limit:          int           = Query(20, ge=1, le=100, description="Number of fixtures to return"),
-    competition_id: Optional[int] = Query(None, description="Filter by competition ID"),
+    status:           Optional[str]  = Query(
+        None,
+        description=(
+            "Filter by match status. "
+            "Values: TIMED, SCHEDULED, IN_PLAY, PAUSED, FINISHED, POSTPONED. "
+            "Omit to return all matches."
+        ),
+    ),
+    stage:            Optional[str]  = Query(
+        None,
+        description="Filter by tournament stage, e.g. GROUP_STAGE, ROUND_OF_16, QUARTER_FINALS, SEMI_FINALS, FINAL.",
+    ),
+    group:            Optional[str]  = Query(
+        None,
+        description="Filter by group name, e.g. GROUP_A, GROUP_B … GROUP_L.",
+    ),
+    date_from:        Optional[date] = Query(
+        None,
+        description="Return only matches on or after this date (YYYY-MM-DD, UTC).",
+    ),
+    date_to:          Optional[date] = Query(
+        None,
+        description="Return only matches on or before this date (YYYY-MM-DD, UTC).",
+    ),
+    competition_code: str            = Query(
+        "WC",
+        description="Competition code to query. Defaults to WC (FIFA World Cup).",
+    ),
+    limit:            int            = Query(
+        200, ge=1, le=500,
+        description="Maximum number of fixtures to return.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    Returns upcoming SCHEDULED matches ordered by kick-off date.
-    Each fixture includes home/away team details and competition name.
+    Returns FIFA World Cup fixtures sourced directly from the database
+    populated via football-data.org.
+
+    **Fields per fixture:**
+    - `home_team` / `away_team` — id, name, short_name, tla, crest_url
+    - `kickoff_time` — ISO-8601 UTC string
+    - `status` — TIMED | SCHEDULED | IN_PLAY | PAUSED | FINISHED | POSTPONED
+    - `stage` — tournament round (GROUP_STAGE, ROUND_OF_16 …)
+    - `group` — group letter (GROUP_A … GROUP_L), null for knockout rounds
+    - `venue` — stadium name from the home team record
+    - `live_score` — `{home, away, is_live}` when IN_PLAY or PAUSED;
+                     actual final score when FINISHED; null otherwise
+    - `winner` — HOME_TEAM | AWAY_TEAM | DRAW | null
+
+    Results are ordered by kick-off time ascending.
     """
-    from models import Match
+    from models import Match, Competition
     from sqlalchemy import asc
 
-    query = (
-        db.query(Match)
-        .filter(Match.status == "SCHEDULED")
-    )
-    if competition_id:
-        query = query.filter(Match.competition_id == competition_id)
+    # ── Resolve competition ───────────────────────────────────────────────────
+    comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
+    if not comp:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Competition '{competition_code}' not found in the database. "
+                "Run the data collection pipeline first: "
+                "POST /api/v1/predictions/collect?competition_code=WC"
+            ),
+        )
 
-    fixtures = query.order_by(asc(Match.utc_date)).limit(limit).all()
+    # ── Build query ───────────────────────────────────────────────────────────
+    query = db.query(Match).filter(Match.competition_id == comp.id)
+
+    if status:
+        query = query.filter(Match.status == status.upper())
+
+    if stage:
+        query = query.filter(Match.stage == stage.upper())
+
+    if group:
+        query = query.filter(Match.group == group.upper())
+
+    if date_from:
+        query = query.filter(Match.utc_date >= datetime.combine(date_from, datetime.min.time()))
+
+    if date_to:
+        query = query.filter(Match.utc_date <= datetime.combine(date_to, datetime.max.time()))
+
+    matches = query.order_by(asc(Match.utc_date)).limit(limit).all()
+
+    # ── Serialise helpers ─────────────────────────────────────────────────────
+    live_statuses  = {"IN_PLAY", "PAUSED"}
+    score_statuses = live_statuses | {"FINISHED"}
+
+    def _team(t):
+        if not t:
+            return None
+        return {
+            "id":         t.id,
+            "name":       t.name,
+            "short_name": t.short_name,
+            "tla":        t.tla,
+            "crest_url":  t.crest_url,
+        }
+
+    def _live_score(m):
+        """Return score dict when data is available, else None."""
+        if m.status in score_statuses and m.home_score is not None and m.away_score is not None:
+            return {
+                "home":    m.home_score,
+                "away":    m.away_score,
+                "is_live": m.status in live_statuses,
+            }
+        return None
+
+    fixtures_out = [
+        {
+            "id":           m.id,
+            "kickoff_time": m.utc_date.isoformat() if m.utc_date else None,
+            "status":       m.status,
+            "stage":        m.stage,
+            "group":        m.group,
+            "venue":        m.home_team.venue if m.home_team else None,
+            "competition":  comp.name,
+            "home_team":    _team(m.home_team),
+            "away_team":    _team(m.away_team),
+            "live_score":   _live_score(m),
+            "winner":       m.winner,
+        }
+        for m in matches
+    ]
+
+    logger.info(
+        f"GET /api/fixtures [{competition_code}] status={status} stage={stage} "
+        f"group={group} → {len(fixtures_out)} fixtures"
+    )
 
     return {
-        "status": "success",
-        "count":  len(fixtures),
-        "fixtures": [
-            {
-                "id":          f.id,
-                "utc_date":    f.utc_date.isoformat() if f.utc_date else None,
-                "status":      f.status,
-                "competition": f.competition.name if f.competition else None,
-                "home_team": {
-                    "id":       f.home_team.id,
-                    "name":     f.home_team.name,
-                    "crest_url": f.home_team.crest_url,
-                } if f.home_team else None,
-                "away_team": {
-                    "id":       f.away_team.id,
-                    "name":     f.away_team.name,
-                    "crest_url": f.away_team.crest_url,
-                } if f.away_team else None,
-            }
-            for f in fixtures
-        ],
+        "status":      "success",
+        "competition": comp.name,
+        "count":       len(fixtures_out),
+        "fixtures":    fixtures_out,
     }
 
 

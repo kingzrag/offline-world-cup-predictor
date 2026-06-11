@@ -164,16 +164,29 @@ export interface BackendTeamProfile {
 export interface BackendFixtureTeam {
   id: number;
   name: string;
+  short_name: string | null;
+  tla: string | null;
   crest_url: string | null;
+}
+
+export interface BackendFixtureLiveScore {
+  home: number;
+  away: number;
+  is_live: boolean;   // true when IN_PLAY or PAUSED, false when FINISHED
 }
 
 export interface BackendFixture {
   id: number;
-  utc_date: string | null;
-  status: string;
+  kickoff_time: string | null;         // ISO-8601 UTC
+  status: string;                       // TIMED | SCHEDULED | IN_PLAY | PAUSED | FINISHED | POSTPONED
+  stage: string | null;                 // GROUP_STAGE | ROUND_OF_16 | QUARTER_FINALS …
+  group: string | null;                 // GROUP_A … GROUP_L, null for knockouts
+  venue: string | null;                 // home team's stadium
   competition: string | null;
   home_team: BackendFixtureTeam | null;
   away_team: BackendFixtureTeam | null;
+  live_score: BackendFixtureLiveScore | null;  // populated for IN_PLAY, PAUSED, FINISHED
+  winner: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null;
 }
 
 export interface BackendHealth {
@@ -254,15 +267,31 @@ export async function getTeamProfile(
 }
 
 /**
- * GET /fastapi/fixtures?limit=&competition_id=
+ * GET /fastapi/fixtures?status=&stage=&group=&date_from=&date_to=&limit=&competition_code=
+ *
+ * Defaults: competition_code=WC, limit=200
+ * All parameters are optional.
  */
 export async function getFixtures(
-  limit = 20,
-  competitionId?: number
-): Promise<{ status: string; count: number; fixtures: BackendFixture[] }> {
-  const params = new URLSearchParams({ limit: String(limit) });
-  if (competitionId != null) params.set("competition_id", String(competitionId));
-  return apiFetch(`/fixtures?${params.toString()}`);
+  params: {
+    status?: string;
+    stage?: string;
+    group?: string;
+    date_from?: string;       // YYYY-MM-DD
+    date_to?: string;         // YYYY-MM-DD
+    competition_code?: string;
+    limit?: number;
+  } = {}
+): Promise<{ status: string; competition: string; count: number; fixtures: BackendFixture[] }> {
+  const qs = new URLSearchParams();
+  if (params.status)           qs.set("status",           params.status);
+  if (params.stage)            qs.set("stage",            params.stage);
+  if (params.group)            qs.set("group",            params.group);
+  if (params.date_from)        qs.set("date_from",        params.date_from);
+  if (params.date_to)          qs.set("date_to",          params.date_to);
+  if (params.competition_code) qs.set("competition_code", params.competition_code);
+  if (params.limit != null)    qs.set("limit",            String(params.limit));
+  return apiFetch(`/fixtures?${qs.toString()}`);
 }
 
 /**

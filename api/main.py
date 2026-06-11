@@ -115,7 +115,7 @@ async def run_daily_scheduler():
             db = SessionLocal()
             try:
                 service = CollectionService()
-                await service.ingest_football_data(db, "PL")
+                await service.ingest_football_data(db, "WC")
                 logger.info("Scheduler: Daily collection job completed successfully.")
                 
                 # --- New: Automatic ELO Refresh Pipeline ---

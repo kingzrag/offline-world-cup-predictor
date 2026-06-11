@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 from typing import Dict, Any, Optional
 from utils.logger import logger
@@ -25,21 +26,31 @@ class BaseCollector:
     ) -> Dict[str, Any]:
         """
         Executes HTTP GET requests, returning json. Raises Exception on non-200.
+        Retries up to 3 times on 429 Rate Limit responses with exponential backoff.
         """
         url = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         req_headers = self._get_headers()
         if headers:
             req_headers.update(headers)
             
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
-                response = await client.get(url, params=params, headers=req_headers)
-                logger.info(f"API Request: {response.request.method} {response.url} - Status: {response.status_code}")
-                response.raise_for_status()
-                return response.json()
-            except httpx.HTTPStatusError as e:
-                logger.error(f"HTTP Error for endpoint {endpoint}: {e.response.status_code} - {e.response.text}")
-                raise
-            except httpx.RequestError as e:
-                logger.error(f"Network error accessing {url}: {str(e)}")
-                raise
+        max_retries = 3
+        backoff = 1.0
+        
+        for attempt in range(max_retries + 1):
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                try:
+                    response = await client.get(url, params=params, headers=req_headers)
+                    logger.info(f"API Request: {response.request.method} {response.url} - Status: {response.status_code}")
+                    response.raise_for_status()
+                    return response.json()
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429 and attempt < max_retries:
+                        sleep_time = backoff * (2 ** attempt)
+                        logger.warning(f"Rate limited (429) on {url}. Retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})...")
+                        await asyncio.sleep(sleep_time)
+                        continue
+                    logger.error(f"HTTP Error for endpoint {endpoint}: {e.response.status_code} - {e.response.text}")
+                    raise
+                except httpx.RequestError as e:
+                    logger.error(f"Network error accessing {url}: {str(e)}")
+                    raise

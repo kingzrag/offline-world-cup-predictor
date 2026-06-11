@@ -8,28 +8,41 @@ from sqlalchemy.orm import Session
 from utils.logger import logger
 from models import Competition, Team, Standing, Injury, Suspension
 
-# Static mapping for Premier League teams to automatically populate empty URLs
-PREMIER_LEAGUE_URLS = {
-    "Arsenal FC": "https://www.transfermarkt.com/arsenal-fc/sperrenundverletzungen/verein/11",
-    "Manchester City FC": "https://www.transfermarkt.com/manchester-city/sperrenundverletzungen/verein/281",
-    "Manchester United FC": "https://www.transfermarkt.com/manchester-united/sperrenundverletzungen/verein/985",
-    "Aston Villa FC": "https://www.transfermarkt.com/aston-villa/sperrenundverletzungen/verein/405",
-    "Liverpool FC": "https://www.transfermarkt.com/fc-liverpool/sperrenundverletzungen/verein/31",
-    "AFC Bournemouth": "https://www.transfermarkt.com/afc-bournemouth/sperrenundverletzungen/verein/1010",
-    "Sunderland AFC": "https://www.transfermarkt.com/sunderland-afc/sperrenundverletzungen/verein/289",
-    "Brighton & Hove Albion FC": "https://www.transfermarkt.com/brighton-amp-hove-albion/sperrenundverletzungen/verein/1237",
-    "Brentford FC": "https://www.transfermarkt.com/brentford-fc/sperrenundverletzungen/verein/1148",
-    "Chelsea FC": "https://www.transfermarkt.com/chelsea-fc/sperrenundverletzungen/verein/631",
-    "Fulham FC": "https://www.transfermarkt.com/fulham-fc/sperrenundverletzungen/verein/931",
-    "Newcastle United FC": "https://www.transfermarkt.com/newcastle-united/sperrenundverletzungen/verein/762",
-    "Everton FC": "https://www.transfermarkt.com/everton-fc/sperrenundverletzungen/verein/29",
-    "Leeds United FC": "https://www.transfermarkt.com/leeds-united/sperrenundverletzungen/verein/399",
-    "Crystal Palace FC": "https://www.transfermarkt.com/crystal-palace/sperrenundverletzungen/verein/873",
-    "Nottingham Forest FC": "https://www.transfermarkt.com/nottingham-forest/sperrenundverletzungen/verein/703",
-    "Tottenham Hotspur FC": "https://www.transfermarkt.com/tottenham-hotspur/sperrenundverletzungen/verein/148",
-    "West Ham United FC": "https://www.transfermarkt.com/west-ham-united/sperrenundverletzungen/verein/379",
-    "Burnley FC": "https://www.transfermarkt.com/burnley-fc/sperrenundverletzungen/verein/1132",
-    "Wolverhampton Wanderers FC": "https://www.transfermarkt.com/wolverhampton-wanderers/sperrenundverletzungen/verein/543",
+# Static mapping for National Teams to automatically populate empty URLs
+NATIONAL_TEAM_TRANSFERMARKT_URLS = {
+    "Argentina": "https://www.transfermarkt.com/argentinien/sperrenundverletzungen/verein/3437",
+    "Brazil": "https://www.transfermarkt.com/brasilien/sperrenundverletzungen/verein/3439",
+    "France": "https://www.transfermarkt.com/frankreich/sperrenundverletzungen/verein/3377",
+    "England": "https://www.transfermarkt.com/england/sperrenundverletzungen/verein/3299",
+    "Spain": "https://www.transfermarkt.com/spanien/sperrenundverletzungen/verein/3375",
+    "Portugal": "https://www.transfermarkt.com/portugal/sperrenundverletzungen/verein/3300",
+    "Germany": "https://www.transfermarkt.com/deutschland/sperrenundverletzungen/verein/3262",
+    "Netherlands": "https://www.transfermarkt.com/niederlande/sperrenundverletzungen/verein/3379",
+    "Italy": "https://www.transfermarkt.com/italien/sperrenundverletzungen/verein/3376",
+    "Belgium": "https://www.transfermarkt.com/belgien/sperrenundverletzungen/verein/3382",
+    "Croatia": "https://www.transfermarkt.com/kroatien/sperrenundverletzungen/verein/3556",
+    "Uruguay": "https://www.transfermarkt.com/uruguay/sperrenundverletzungen/verein/3449",
+    "United States": "https://www.transfermarkt.com/vereinigte-staaten/sperrenundverletzungen/verein/3505",
+    "USA": "https://www.transfermarkt.com/vereinigte-staaten/sperrenundverletzungen/verein/3505",
+    "Mexico": "https://www.transfermarkt.com/mexiko/sperrenundverletzungen/verein/6303",
+    "Japan": "https://www.transfermarkt.com/japan/sperrenundverletzungen/verein/3435",
+    "Morocco": "https://www.transfermarkt.com/marokko/sperrenundverletzungen/verein/3575",
+    "Switzerland": "https://www.transfermarkt.com/schweiz/sperrenundverletzungen/verein/3384",
+    "Denmark": "https://www.transfermarkt.com/danemark/sperrenundverletzungen/verein/3436",
+    "Colombia": "https://www.transfermarkt.com/kolumbien/sperrenundverletzungen/verein/3816",
+    "Senegal": "https://www.transfermarkt.com/senegal/sperrenundverletzungen/verein/3495",
+    "South Korea": "https://www.transfermarkt.com/sudkorea/sperrenundverletzungen/verein/3589",
+    "Canada": "https://www.transfermarkt.com/kanada/sperrenundverletzungen/verein/3510",
+    "Ukraine": "https://www.transfermarkt.com/ukraine/sperrenundverletzungen/verein/3699",
+    "Poland": "https://www.transfermarkt.com/polen/sperrenundverletzungen/verein/3442",
+    "Turkey": "https://www.transfermarkt.com/turkei/sperrenundverletzungen/verein/3381",
+    "Sweden": "https://www.transfermarkt.com/schweden/sperrenundverletzungen/verein/3557",
+    "Ecuador": "https://www.transfermarkt.com/ecuador/sperrenundverletzungen/verein/5750",
+    "Cameroon": "https://www.transfermarkt.com/kamerun/sperrenundverletzungen/verein/3434",
+    "Ghana": "https://www.transfermarkt.com/ghana/sperrenundverletzungen/verein/3703",
+    "Australia": "https://www.transfermarkt.com/australien/sperrenundverletzungen/verein/3433",
+    "Saudi Arabia": "https://www.transfermarkt.com/saudi-arabien/sperrenundverletzungen/verein/3807",
+    "Qatar": "https://www.transfermarkt.com/katar/sperrenundverletzungen/verein/14162"
 }
 
 class TransfermarktService:
@@ -177,7 +190,7 @@ class TransfermarktService:
         team_name = team.name
         matched_url = None
         clean_db_name = team_name.lower().replace("fc", "").replace("&", "and").strip()
-        for name, url in PREMIER_LEAGUE_URLS.items():
+        for name, url in NATIONAL_TEAM_TRANSFERMARKT_URLS.items():
             clean_map_name = name.lower().replace("fc", "").replace("&", "and").strip()
             if clean_db_name in clean_map_name or clean_map_name in clean_db_name:
                 matched_url = url
@@ -191,7 +204,7 @@ class TransfermarktService:
 
         return None
 
-    def ingest_injuries(self, db: Session, competition_code: str = "PL") -> Dict[str, Any]:
+    def ingest_injuries(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         """
         Scrapes and ingests active injuries for all teams in the given competition.
         """
@@ -241,7 +254,7 @@ class TransfermarktService:
             logger.error(f"Error during Transfermarkt injuries ingestion: {str(e)}")
             raise e
 
-    def ingest_suspensions(self, db: Session, competition_code: str = "PL") -> Dict[str, Any]:
+    def ingest_suspensions(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         """
         Scrapes and ingests active suspensions for all teams in the given competition.
         """

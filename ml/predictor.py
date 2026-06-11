@@ -42,7 +42,7 @@ class FootballPredictor:
             "h2h_factor",
         ]
 
-    def predict_outcome(self, db, home_team_id: int, away_team_id: int, match_date, competition_code: str = "PL") -> Dict[str, Any]:
+    def predict_outcome(self, db, home_team_id: int, away_team_id: int, match_date, competition_code: str = "WC") -> Dict[str, Any]:
         """Compute outcome probabilities for a specific match.
 
         Args:
@@ -50,7 +50,7 @@ class FootballPredictor:
             home_team_id: ID of the home team.
             away_team_id: ID of the away team.
             match_date: Date of the match (datetime).
-            competition_code: Competition identifier (default "PL").
+            competition_code: Competition identifier (default "WC").
 
         Returns:
             Dictionary containing probabilities for HOME_WIN, AWAY_WIN, DRAW,

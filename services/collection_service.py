@@ -22,7 +22,7 @@ class CollectionService:
         self.fd_collector = FootballDataCollector(settings.FOOTBALL_DATA_API_KEY)
         self.tsdb_collector = TheSportsDBCollector(settings.SPORTSDB_API_KEY)
 
-    async def ingest_teams(self, db: Session, competition_code: str = "PL") -> Dict[str, Any]:
+    async def ingest_teams(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         logger.info(f"Starting teams ingestion for competition: {competition_code}")
         summary = {"competitions": 0, "teams": 0, "standings": 0}
         
@@ -122,7 +122,7 @@ class CollectionService:
             logger.error(f"Error during Teams Ingestion: {str(e)}")
             raise e
 
-    async def ingest_players(self, db: Session, competition_code: str = "PL") -> Dict[str, Any]:
+    async def ingest_players(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         logger.info(f"Starting players ingestion for competition: {competition_code}")
         summary = {"players": 0}
         
@@ -175,7 +175,7 @@ class CollectionService:
             logger.error(f"Error during Players Ingestion: {str(e)}")
             raise e
 
-    async def ingest_injuries(self, db: Session, competition_code: str = "PL") -> Dict[str, Any]:
+    async def ingest_injuries(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         """
         Injury ingestion using Transfermarkt as the data source.
         """
@@ -184,7 +184,7 @@ class CollectionService:
         tm_service = TransfermarktService()
         return tm_service.ingest_injuries(db, competition_code)
 
-    async def ingest_suspensions(self, db: Session, competition_code: str = "PL") -> Dict[str, Any]:
+    async def ingest_suspensions(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         """
         Suspension ingestion using Transfermarkt as the data source.
         """
@@ -193,7 +193,7 @@ class CollectionService:
         tm_service = TransfermarktService()
         return tm_service.ingest_suspensions(db, competition_code)
 
-    async def ingest_matches(self, db: Session, competition_code: str = "PL") -> Dict[str, Any]:
+    async def ingest_matches(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         logger.info(f"Starting matches ingestion for competition: {competition_code}")
         summary = {"matches": 0}
 
@@ -258,7 +258,7 @@ class CollectionService:
             logger.error(f"Error during Matches Ingestion: {str(e)}")
             raise e
 
-    async def ingest_football_data(self, db: Session, competition_code: str = "PL") -> Dict[str, Any]:
+    async def ingest_football_data(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         """
         Orchestrates the entire ingestion pipeline:
         1. Teams

@@ -30,7 +30,7 @@ class TheSportsDBCollector(BaseCollector):
             return None
         except Exception as e:
             logger.error(f"TheSportsDBCollector team details fetch error: {e}")
-            raise
+            return None
 
     async def fetch_players_by_team(
         self, 

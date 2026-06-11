@@ -4,7 +4,7 @@ from utils.config import settings
 # Static database seeding data for FIFA rankings (national teams) and Market Values (clubs & nations)
 # Market values are represented in Millions of Euros
 SEED_DATA = {
-    # Premier League Clubs
+    # Premier League Clubs & World Cup Nations
     "Arsenal FC": {"fifa_ranking": None, "market_value": 1120.0},
     "Manchester City FC": {"fifa_ranking": None, "market_value": 1260.0},
     "Manchester United FC": {"fifa_ranking": None, "market_value": 730.0},

@@ -285,7 +285,7 @@ def get_btts_rate(db, team_id: int, match_date) -> float:
 
     return btts_count / len(matches) if matches else 0.0
 
-def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, competition_code: str = "PL", match_stage: str = None) -> dict:
+def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, competition_code: str = "WC", match_stage: str = None) -> dict:
     """
     Generates all predictive match features for the home and away team pair, now including Phase 2 player‑intelligence features.
     """

@@ -27,7 +27,7 @@ def build_dataset():
         # Prepare headers based on extract_ml_features keys plus the target label
         sample_match = matches[0]
         comp = db.query(Competition).filter_by(id=sample_match.competition_id).first()
-        comp_code = comp.code if comp else "PL"
+        comp_code = comp.code if comp else "WC"
         
         sample_features = extract_ml_features(db, sample_match.home_team_id, sample_match.away_team_id, sample_match.utc_date, comp_code)
         headers = list(sample_features.keys()) + ["target"]
@@ -43,7 +43,7 @@ def build_dataset():
                     
                 # Determine competition code
                 comp = db.query(Competition).filter_by(id=m.competition_id).first()
-                comp_code = comp.code if comp else "PL"
+                comp_code = comp.code if comp else "WC"
                 
                 try:
                     # 1. Extract ML features

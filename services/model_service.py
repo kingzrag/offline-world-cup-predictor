@@ -219,7 +219,7 @@ class ModelService:
 
         Raises ValueError if either team is not found in the database.
         """
-        from models import Team
+        from models import Team, Match, Competition
 
         # Resolve team name aliases for United States
         aliases = {
@@ -248,7 +248,133 @@ class ModelService:
         if not away:
             raise ValueError(f"Team not found: '{away_team_name}'")
 
+        target_comp = db.query(Competition).filter_by(code=competition_code).first()
+        match_record = None
+        if target_comp:
+            match_record = db.query(Match).filter(
+                Match.home_team_id == home.id,
+                Match.away_team_id == away.id,
+                Match.competition_id == target_comp.id
+            ).order_by(Match.utc_date.desc()).first()
+
         now = datetime.now(timezone.utc)
+
+        if match_record and match_record.status == "FINISHED":
+            # Override with real results
+            home_score = match_record.home_score if match_record.home_score is not None else 0
+            away_score = match_record.away_score if match_record.away_score is not None else 0
+            winner = match_record.winner or "DRAW"
+            
+            if winner == "HOME_TEAM":
+                predicted_result = "HOME_WIN"
+                prob_home, prob_draw, prob_away = 1.0, 0.0, 0.0
+            elif winner == "AWAY_TEAM":
+                predicted_result = "AWAY_WIN"
+                prob_home, prob_draw, prob_away = 0.0, 0.0, 1.0
+            else:
+                predicted_result = "DRAW"
+                prob_home, prob_draw, prob_away = 0.0, 1.0, 0.0
+
+            total_goals = home_score + away_score
+            
+            # Correct Score top_5_scorelines
+            most_likely_score = f"{home_score}-{away_score}"
+            top_5_scorelines = [{"score": most_likely_score, "probability": 1.0}]
+            dummy_scores = ["0-0", "1-1", "1-0", "0-1", "2-1", "1-2"]
+            for ds in dummy_scores:
+                if ds != most_likely_score and len(top_5_scorelines) < 5:
+                    top_5_scorelines.append({"score": ds, "probability": 0.0})
+
+            # Over / Under
+            over_under = {
+                "1.5": {"over": 1.0 if total_goals > 1.5 else 0.0, "under": 0.0 if total_goals > 1.5 else 1.0},
+                "2.5": {"over": 1.0 if total_goals > 2.5 else 0.0, "under": 0.0 if total_goals > 2.5 else 1.0},
+                "3.5": {"over": 1.0 if total_goals > 3.5 else 0.0, "under": 0.0 if total_goals > 3.5 else 1.0},
+            }
+
+            # BTTS
+            btts_yes = 1.0 if home_score > 0 and away_score > 0 else 0.0
+            btts_no = 1.0 - btts_yes
+            btts = {"yes": btts_yes, "no": btts_no}
+
+            # Asian handicap calculation based on actual score difference
+            diff = home_score - away_score
+            is_home_fav = diff >= 0
+            prefix = "Home" if is_home_fav else "Away"
+            goal_diff = abs(diff)
+            lines = [-0.25, -0.5, -0.75, -1.0]
+            suggested_lines = {}
+            for line in lines:
+                val = 0.0
+                if line == -0.25:
+                    val = 1.0 if goal_diff >= 1 else (0.5 if goal_diff == 0 else 0.0)
+                elif line == -0.5:
+                    val = 1.0 if goal_diff >= 1 else 0.0
+                elif line == -0.75:
+                    val = 1.0 if goal_diff >= 2 else (0.5 if goal_diff == 1 else 0.0)
+                elif line == -1.0:
+                    val = 1.0 if goal_diff >= 2 else 0.0
+                suggested_lines[f"{prefix} {line}"] = val
+
+            asian_handicap = {
+                "label": f"{prefix} -0.5" if goal_diff > 0 else "Level (0)",
+                "lines": suggested_lines,
+                "favored_team": prefix,
+            }
+
+            # Team goals
+            team_goals = {
+                "home": {
+                    "over_0_5": 1.0 if home_score > 0.5 else 0.0,
+                    "over_1_5": 1.0 if home_score > 1.5 else 0.0,
+                    "over_2_5": 1.0 if home_score > 2.5 else 0.0
+                },
+                "away": {
+                    "over_0_5": 1.0 if away_score > 0.5 else 0.0,
+                    "over_1_5": 1.0 if away_score > 1.5 else 0.0,
+                    "over_2_5": 1.0 if away_score > 2.5 else 0.0
+                }
+            }
+
+            requested_scores = [
+                "0-0", "1-0", "1-1", "2-0", "2-1", "2-2", "3-0", "3-1", "3-2", "3-3", "4-0", "4-1", "4-2", "4-3", "4-4"
+            ]
+            prob_matrix = {score: (1.0 if score == most_likely_score else 0.0) for score in requested_scores}
+
+            return {
+                "home_team":  home.name,
+                "away_team":  away.name,
+                "generated_at": now.isoformat(),
+                "is_actual_result": True,
+                # 1X2
+                "outcome": {
+                    "home_win_probability": prob_home,
+                    "draw_probability":     prob_draw,
+                    "away_win_probability": prob_away,
+                    "predicted_result":     predicted_result,
+                    "confidence":           1.0,
+                },
+                # Goals
+                "goals": {
+                    "expected_home_goals":  float(home_score),
+                    "expected_away_goals":  float(away_score),
+                    "total_expected_goals": float(total_goals),
+                },
+                # Markets
+                "markets": {
+                    "over_under":          over_under,
+                    "btts":                btts,
+                    "most_likely_score":   most_likely_score,
+                    "top_5_scorelines":    top_5_scorelines,
+                    "asian_handicap":      asian_handicap,
+                    "team_goals":          team_goals,
+                    "probability_matrix":  prob_matrix,
+                },
+                "model_versions": {
+                    "wc_model":   "actual_result_override",
+                    "goal_model": "actual_result_override",
+                },
+            }
 
         result_1x2   = self.predict_1x2(db, home.id, away.id, now, competition_code)
         result_goals = self.predict_goals(db, home.id, away.id, now, competition_code)

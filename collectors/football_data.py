@@ -36,7 +36,7 @@ class FootballDataCollector(BaseCollector):
             logger.error(f"FootballDataCollector error in fetch_competitions: {e}")
             raise
 
-    async def fetch_standings(self, competition_code: str = "PL") -> List[Dict[str, Any]]:
+    async def fetch_standings(self, competition_code: str = "WC") -> List[Dict[str, Any]]:
         """
         Retrieves league standings for a specific competition.
         """
@@ -70,7 +70,7 @@ class FootballDataCollector(BaseCollector):
             logger.error(f"FootballDataCollector standings fetch error: {e}")
             raise
 
-    async def fetch_matches(self, competition_code: str = "PL") -> List[Dict[str, Any]]:
+    async def fetch_matches(self, competition_code: str = "WC") -> List[Dict[str, Any]]:
         """
         Retrieves recent and scheduled matches.
         """

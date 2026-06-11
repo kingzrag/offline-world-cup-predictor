@@ -29,8 +29,29 @@ def read_predictions(
 
     predictions = query.order_by(Prediction.created_at.desc()).all()
 
-    return [
-        {
+    results = []
+    for pred in predictions:
+        is_finished = pred.match.status == "FINISHED"
+        if is_finished:
+            winner = pred.match.winner or "DRAW"
+            if winner == "HOME_TEAM":
+                pred_outcome = "HOME_WIN"
+                pred_winner = pred.match.home_team.name
+                home_p, draw_p, away_p = 1.0, 0.0, 0.0
+            elif winner == "AWAY_TEAM":
+                pred_outcome = "AWAY_WIN"
+                pred_winner = pred.match.away_team.name
+                home_p, draw_p, away_p = 0.0, 0.0, 1.0
+            else:
+                pred_outcome = "DRAW"
+                pred_winner = "DRAW"
+                home_p, draw_p, away_p = 0.0, 1.0, 0.0
+        else:
+            pred_outcome = pred.predicted_outcome
+            pred_winner = pred.predicted_winner.name if pred.predicted_winner else "DRAW"
+            home_p, draw_p, away_p = pred.home_probability, pred.draw_probability, pred.away_probability
+
+        results.append({
             "id": pred.id,
             "match": {
                 "id": pred.match.id,
@@ -39,18 +60,18 @@ def read_predictions(
                 "away_team": pred.match.away_team.name,
                 "status": pred.match.status
             },
-            "predicted_outcome": pred.predicted_outcome,
-            "predicted_winner": pred.predicted_winner.name if pred.predicted_winner else "DRAW",
+            "predicted_outcome": pred_outcome,
+            "predicted_winner": pred_winner,
             "probabilities": {
-                "home_win": pred.home_probability,
-                "away_win": pred.away_probability,
-                "draw": pred.draw_probability
+                "home_win": home_p,
+                "away_win": away_p,
+                "draw": draw_p
             },
-            "model_version": pred.model_version,
+            "model_version": "actual_result_override" if is_finished else pred.model_version,
             "calculated_at": pred.updated_at.isoformat()
-        }
-        for pred in predictions
-    ]
+        })
+
+    return results
 
 @router.post("/trigger")
 def trigger_predictions(
@@ -73,7 +94,7 @@ def trigger_predictions(
 
 @router.post("/collect")
 async def trigger_collection(
-    competition_code: str = Query("PL", description="League code to sync (default: PL for Premier League)"),
+    competition_code: str = Query("WC", description="League code to sync (default: WC for World Cup)"),
     db: Session = Depends(get_db)
 ):
     """

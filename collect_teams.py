@@ -8,7 +8,7 @@ from utils.logger import logger
 
 async def main():
     parser = argparse.ArgumentParser(description="Collect Teams Data")
-    parser.add_argument("--competition", type=str, default="PL", help="Competition code (e.g. PL, PD, SA)")
+    parser.add_argument("--competition", type=str, default="WC", help="Competition code (e.g. PL, PD, SA)")
     args = parser.parse_args()
 
     db = SessionLocal()
