@@ -219,38 +219,41 @@ class TransfermarktService:
 
             standings = db.query(Standing).filter_by(competition_id=target_comp.id).all()
             for standing in standings:
-                team_db = standing.team
-                url = self._resolve_team_url(db, team_db)
-                if not url:
-                    logger.warning(f"No Transfermarkt URL available for team {team_db.name}, skipping.")
-                    continue
+                try:
+                    team_db = standing.team
+                    url = self._resolve_team_url(db, team_db)
+                    if not url:
+                        logger.warning(f"No Transfermarkt URL available for team {team_db.name}, skipping.")
+                        continue
 
-                logger.info(f"Fetching injury data for team: {team_db.name}...")
-                injuries_list, _ = self._scrape_team_data(url)
-                
-                # Delete existing injury records for this team to prevent stale data
-                db.query(Injury).filter_by(team_id=team_db.id).delete()
-                
-                for inj in injuries_list:
-                    injury_record = Injury(
-                        player_name=inj["player_name"],
-                        team_id=team_db.id,
-                        team_name=team_db.name,
-                        injury_type=inj["injury_type"],
-                        expected_return_date=inj["expected_return_date"],
-                        days_out=inj["days_out"]
-                    )
-                    db.add(injury_record)
-                    summary["injuries"] += 1
-                
-                db.commit()
-                summary["teams_processed"] += 1
+                    logger.info(f"Fetching injury data for team: {team_db.name}...")
+                    injuries_list, _ = self._scrape_team_data(url)
+                    
+                    # Delete existing injury records for this team to prevent stale data
+                    db.query(Injury).filter_by(team_id=team_db.id).delete()
+                    
+                    for inj in injuries_list:
+                        injury_record = Injury(
+                            player_name=inj["player_name"],
+                            team_id=team_db.id,
+                            team_name=team_db.name,
+                            injury_type=inj["injury_type"],
+                            expected_return_date=inj["expected_return_date"],
+                            days_out=inj["days_out"]
+                        )
+                        db.add(injury_record)
+                        summary["injuries"] += 1
+                    
+                    db.commit()
+                    summary["teams_processed"] += 1
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Failed to ingest Transfermarkt injuries for team {standing.team.name}: {e}. Continuing with next team...")
 
             logger.info(f"Transfermarkt injuries ingestion completed: {summary}")
             return summary
 
         except Exception as e:
-            db.rollback()
             logger.error(f"Error during Transfermarkt injuries ingestion: {str(e)}")
             raise e
 
@@ -269,36 +272,39 @@ class TransfermarktService:
 
             standings = db.query(Standing).filter_by(competition_id=target_comp.id).all()
             for standing in standings:
-                team_db = standing.team
-                url = self._resolve_team_url(db, team_db)
-                if not url:
-                    logger.warning(f"No Transfermarkt URL available for team {team_db.name}, skipping.")
-                    continue
+                try:
+                    team_db = standing.team
+                    url = self._resolve_team_url(db, team_db)
+                    if not url:
+                        logger.warning(f"No Transfermarkt URL available for team {team_db.name}, skipping.")
+                        continue
 
-                logger.info(f"Fetching suspension data for team: {team_db.name}...")
-                _, suspensions_list = self._scrape_team_data(url)
-                
-                # Delete existing suspension records for this team to prevent stale data
-                db.query(Suspension).filter_by(team_id=team_db.id).delete()
-                
-                for susp in suspensions_list:
-                    suspension_record = Suspension(
-                        player_name=susp["player_name"],
-                        team_id=team_db.id,
-                        team_name=team_db.name,
-                        suspension_reason=susp["suspension_reason"],
-                        matches_remaining=susp["matches_remaining"]
-                    )
-                    db.add(suspension_record)
-                    summary["suspensions"] += 1
-                
-                db.commit()
-                summary["teams_processed"] += 1
+                    logger.info(f"Fetching suspension data for team: {team_db.name}...")
+                    _, suspensions_list = self._scrape_team_data(url)
+                    
+                    # Delete existing suspension records for this team to prevent stale data
+                    db.query(Suspension).filter_by(team_id=team_db.id).delete()
+                    
+                    for susp in suspensions_list:
+                        suspension_record = Suspension(
+                            player_name=susp["player_name"],
+                            team_id=team_db.id,
+                            team_name=team_db.name,
+                            suspension_reason=susp["suspension_reason"],
+                            matches_remaining=susp["matches_remaining"]
+                        )
+                        db.add(suspension_record)
+                        summary["suspensions"] += 1
+                    
+                    db.commit()
+                    summary["teams_processed"] += 1
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Failed to ingest Transfermarkt suspensions for team {standing.team.name}: {e}. Continuing with next team...")
 
             logger.info(f"Transfermarkt suspensions ingestion completed: {summary}")
             return summary
 
         except Exception as e:
-            db.rollback()
             logger.error(f"Error during Transfermarkt suspensions ingestion: {str(e)}")
             raise e

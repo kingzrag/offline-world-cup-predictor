@@ -22,9 +22,8 @@ def _default_db_password() -> str:
     return ""
 
 class Settings(BaseSettings):
-    # --- API Keys (only the four supported providers) ---
+    # --- API Keys ---
     FOOTBALL_DATA_API_KEY: str = Field(default="mock_football_data_key", env="FOOTBALL_DATA_API_KEY")
-    SPORTSDB_API_KEY: str = Field(default="mock_sportsdb_key", env="SPORTSDB_API_KEY")
     ODDS_API_KEY: str = Field(default="", env="ODDS_API_KEY")
 
     # --- Database ---

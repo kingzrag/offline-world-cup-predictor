@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 
 from utils.config import settings
 from utils.logger import logger
-from collectors import FootballDataCollector, TheSportsDBCollector
+from collectors import FootballDataCollector
 from models import Competition, Team, Player, Injury, Match, Standing
 
 class CollectionService:
@@ -14,13 +14,13 @@ class CollectionService:
 
     Supported data sources:
       - Football-Data.org  (competitions, standings, matches)
-      - TheSportsDB        (team details, player squads, injuries)
+      - Transfermarkt      (injuries, suspensions, squad values)
+      - FIFA Rankings      (fifa rankings service)
+      - Elo Ratings        (elo service)
       - The Odds API       (handled via OddsService)
-      - ELO Ratings        (handled via EloService)
     """
     def __init__(self):
         self.fd_collector = FootballDataCollector(settings.FOOTBALL_DATA_API_KEY)
-        self.tsdb_collector = TheSportsDBCollector(settings.SPORTSDB_API_KEY)
 
     async def ingest_teams(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         logger.info(f"Starting teams ingestion for competition: {competition_code}")
@@ -70,10 +70,8 @@ class CollectionService:
                 team_api_id = str(team_data["id"])
                 team_db = db.query(Team).filter_by(api_id=team_api_id).first()
                 
-                # Fetch deeper profile details from TheSportsDB
-                tsdb_details = await self.tsdb_collector.fetch_team_details(team_data["name"])
-                founded = tsdb_details.get("founded") if tsdb_details else None
-                venue = tsdb_details.get("venue") if tsdb_details else None
+                founded = None
+                venue = None
 
                 if not team_db:
                     team_db = Team(
@@ -92,8 +90,6 @@ class CollectionService:
                     team_db.short_name = team_data.get("short_name") or team_db.short_name
                     team_db.tla = team_data.get("tla") or team_db.tla
                     team_db.crest_url = team_data.get("crest") or team_db.crest_url
-                    if founded: team_db.founded = founded
-                    if venue: team_db.venue = venue
 
                 summary["teams"] += 1
 
@@ -123,57 +119,23 @@ class CollectionService:
             raise e
 
     async def ingest_players(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
-        logger.info(f"Starting players ingestion for competition: {competition_code}")
-        summary = {"players": 0}
-        
+        """
+        Ingests squad roster details procedurally (replacing TheSportsDB roster details).
+        """
+        logger.info(f"Ingesting squads procedurally for {competition_code}...")
         try:
-            target_comp = db.query(Competition).filter_by(code=competition_code).first()
-            if not target_comp:
-                logger.error(f"Competition {competition_code} not found.")
-                return summary
-
-            standings = db.query(Standing).filter_by(competition_id=target_comp.id).all()
-            for standing in standings:
-                team_db = standing.team
-                team_api_id = team_db.api_id
-
-                logger.info(f"Ingesting roster details for team: {team_db.name}...")
-                try:
-                    squad = await self.tsdb_collector.fetch_players_by_team(team_api_id, team_db.id, team_db.name)
-                    if not squad:
-                        logger.warning(f"No squad details retrieved for team: {team_db.name}. Skipping roster update.")
-                        continue
-
-                    for p in squad:
-                        p_db = db.query(Player).filter_by(api_id=p["api_id"]).first()
-                        if not p_db:
-                            p_db = Player(
-                                api_id=p["api_id"],
-                                team_id=team_db.id,
-                                name=p["name"],
-                                position=p["position"],
-                                date_of_birth=p["date_of_birth"],
-                                nationality=p["nationality"],
-                                role=p["role"]
-                            )
-                            db.add(p_db)
-                        else:
-                            p_db.name = p["name"]
-                            p_db.position = p["position"]
-                            p_db.team_id = team_db.id
-                        summary["players"] += 1
-                    
-                    db.commit()
-                except Exception as e:
-                    db.rollback()
-                    logger.error(f"Failed to ingest roster for team {team_db.name}: {e}. Continuing with next team...")
-
-            logger.info(f"Players ingestion completed: {summary}")
-            return summary
-
+            from collect_national_team_squads import ingest_squads
+            from ml.compute_national_team_market_values import compute_market_values
+            
+            ingest_squads()
+            compute_market_values()
+            
+            from models import NationalTeamPlayer
+            count = db.query(NationalTeamPlayer).count()
+            return {"players": count}
         except Exception as e:
-            logger.error(f"Error during Players Ingestion: {str(e)}")
-            raise e
+            logger.error(f"Error during procedural squad ingestion: {e}")
+            return {"players": 0}
 
     async def ingest_injuries(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         """
@@ -196,6 +158,8 @@ class CollectionService:
     async def ingest_matches(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         logger.info(f"Starting matches ingestion for competition: {competition_code}")
         summary = {"matches": 0}
+        created_teams_count = 0
+        placeholder_matches_skipped = 0
 
         try:
             target_comp = db.query(Competition).filter_by(code=competition_code).first()
@@ -206,15 +170,68 @@ class CollectionService:
             logger.info("Ingesting league matches...")
             matches_data = await self.fd_collector.fetch_matches(competition_code)
             for m in matches_data:
-                home_api_id = str(m["homeTeam"]["id"])
-                away_api_id = str(m["awayTeam"]["id"])
-                
+                home_team_data = m.get("homeTeam", {})
+                away_team_data = m.get("awayTeam", {})
+                home_api_id = home_team_data.get("id")
+                away_api_id = away_team_data.get("id")
+
+                # Skip knockout-stage placeholder matches where teams are not yet decided.
+                if not home_api_id or not away_api_id:
+                    placeholder_matches_skipped += 1
+                    logger.info(
+                        f"Skipping placeholder match {m['id']} because teams are not yet assigned."
+                    )
+                    continue
+
+                home_api_id = str(home_api_id)
+                away_api_id = str(away_api_id)
+
                 home_team = db.query(Team).filter_by(api_id=home_api_id).first()
                 away_team = db.query(Team).filter_by(api_id=away_api_id).first()
 
                 if not home_team or not away_team:
-                    logger.warning(f"Skipping match {m['id']} due to missing teams in DB")
-                    continue
+                    logger.warning(
+                        f"Skipping match {m['id']} due to missing teams in DB. "
+                        f"Home={home_team_data.get('name')} ({home_api_id}) "
+                        f"Away={away_team_data.get('name')} ({away_api_id})"
+                    )
+
+                    # --- Self-healing: auto-create missing teams from match payload ---
+                    try:
+                        if not home_team:
+                            home_team = Team(
+                                api_id=home_api_id,
+                                name=home_team_data["name"],
+                                short_name=home_team_data.get("shortName"),
+                                tla=home_team_data.get("tla"),
+                            )
+                            db.add(home_team)
+                            db.flush()
+                            logger.info(
+                                f"Created missing team: {home_team.name} ({home_api_id})"
+                            )
+                            created_teams_count += 1
+
+                        if not away_team:
+                            away_team = Team(
+                                api_id=away_api_id,
+                                name=away_team_data["name"],
+                                short_name=away_team_data.get("shortName"),
+                                tla=away_team_data.get("tla"),
+                            )
+                            db.add(away_team)
+                            db.flush()
+                            logger.info(
+                                f"Created missing team: {away_team.name} ({away_api_id})"
+                            )
+                            created_teams_count += 1
+
+                    except Exception as team_err:
+                        db.rollback()
+                        logger.error(
+                            f"Failed to auto-create missing team(s) for match {m['id']}: {team_err}. Skipping match."
+                        )
+                        continue
 
                 existing_match = db.query(Match).filter_by(api_id=str(m["id"])).first()
                 utc_date = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
@@ -235,7 +252,7 @@ class CollectionService:
                         group=m.get("group"),
                         home_score=home_score,
                         away_score=away_score,
-                        winner=winner
+                        winner=winner,
                     )
                     db.add(existing_match)
                 else:
@@ -246,10 +263,16 @@ class CollectionService:
                     existing_match.home_score = home_score if home_score is not None else existing_match.home_score
                     existing_match.away_score = away_score if away_score is not None else existing_match.away_score
                     existing_match.winner = winner or existing_match.winner
-                
+
                 summary["matches"] += 1
-            
+
             db.commit()
+            logger.info(
+                f"Skipped {placeholder_matches_skipped} placeholder matches with unknown teams."
+            )
+            logger.info(
+                f"Auto-created {created_teams_count} missing teams during match ingestion."
+            )
             logger.info(f"Matches ingestion completed: {summary}")
             return summary
 
@@ -261,39 +284,91 @@ class CollectionService:
     async def ingest_football_data(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         """
         Orchestrates the entire ingestion pipeline:
-        1. Teams
-        2. Players
-        3. Injuries
-        4. Suspensions
-        5. Matches
+        Step 1: Football-Data.org (competitions, teams, standings)
+        Step 2: Football-Data.org (fixtures, match history)
+        Step 3: Transfermarkt (injuries, suspensions, squad values)
+        Step 4: FIFA Rankings
+        Step 5: Elo Ratings
+        Step 6: Odds API
         """
         logger.info(f"Executing full data collection pipeline for {competition_code}...")
         summary = {}
         
+        # --- Step 1: Football-Data.org (competitions, teams, standings) ---
         try:
-            # 1. Teams Ingestion
+            logger.info("Pipeline Step 1: Ingesting Football-Data.org competitions, teams, standings...")
             teams_summary = await self.ingest_teams(db, competition_code)
             summary.update(teams_summary)
+        except Exception as e:
+            logger.error(f"Pipeline Step 1 (teams) failed: {e}")
             
-            # 2. Players Ingestion
-            players_summary = await self.ingest_players(db, competition_code)
-            summary.update(players_summary)
-            
-            # 3. Injuries Ingestion
-            injuries_summary = await self.ingest_injuries(db, competition_code)
-            summary.update(injuries_summary)
-            
-            # 4. Suspensions Ingestion
-            suspensions_summary = await self.ingest_suspensions(db, competition_code)
-            summary.update(suspensions_summary)
-            
-            # 5. Matches Ingestion
+        # --- Step 2: Football-Data.org (fixtures, match history) ---
+        try:
+            logger.info("Pipeline Step 2: Ingesting Football-Data.org matches & history...")
             matches_summary = await self.ingest_matches(db, competition_code)
             summary.update(matches_summary)
-            
-            logger.info(f"Full data collection pipeline completed successfully: {summary}")
-            return summary
-            
         except Exception as e:
-            logger.error(f"Failed to execute full data collection pipeline: {str(e)}")
-            raise e
+            logger.error(f"Pipeline Step 2 (matches) failed: {e}")
+            
+        # --- Step 3: Transfermarkt (injuries, suspensions, squad values) ---
+        # 3a. Injuries
+        try:
+            logger.info("Pipeline Step 3a: Ingesting Transfermarkt injuries...")
+            injuries_summary = await self.ingest_injuries(db, competition_code)
+            summary.update(injuries_summary)
+        except Exception as e:
+            logger.error(f"Pipeline Step 3a (injuries) failed: {e}")
+            
+        # 3b. Suspensions
+        try:
+            logger.info("Pipeline Step 3b: Ingesting Transfermarkt suspensions...")
+            suspensions_summary = await self.ingest_suspensions(db, competition_code)
+            summary.update(suspensions_summary)
+        except Exception as e:
+            logger.error(f"Pipeline Step 3b (suspensions) failed: {e}")
+            
+        # 3c. Squad values & procedural roster players (lightweight Transfermarkt-based replacement)
+        try:
+            logger.info("Pipeline Step 3c: Ingesting squad market values and procedural rosters...")
+            players_summary = await self.ingest_players(db, competition_code)
+            summary.update(players_summary)
+        except Exception as e:
+            logger.error(f"Pipeline Step 3c (squad values) failed: {e}")
+
+        # --- Step 4: FIFA Rankings ---
+        try:
+            logger.info("Pipeline Step 4: Ingesting FIFA Rankings...")
+            from services.fifa_ranking_service import fetch_fifa_rankings, upsert_fifa_rankings
+            rankings = fetch_fifa_rankings()
+            upsert_fifa_rankings(db, rankings)
+            summary["fifa_rankings"] = "success"
+        except Exception as e:
+            logger.error(f"Pipeline Step 4 (FIFA rankings) failed: {e}")
+            
+        # --- Step 5: Elo Ratings ---
+        try:
+            logger.info("Pipeline Step 5: Ingesting ELO Ratings...")
+            from ml.compute_elo_ratings import compute_all_elo_ratings, save_elo_to_db, save_elo_ranks_to_teams
+            elo_ratings = compute_all_elo_ratings()
+            if elo_ratings:
+                save_elo_to_db(elo_ratings)
+                save_elo_ranks_to_teams(elo_ratings)
+                summary["elo_ratings"] = "success"
+            else:
+                summary["elo_ratings"] = "empty"
+        except Exception as e:
+            logger.error(f"Pipeline Step 5 (Elo ratings) failed: {e}")
+            
+        # --- Step 6: Odds API ---
+        try:
+            logger.info("Pipeline Step 6: Ingesting Odds data...")
+            from services.odds_service import OddsService
+            odds_service = OddsService()
+            raw_odds = odds_service.fetch_upcoming_odds()
+            odds_service.store_odds(db, raw_odds)
+            summary["odds"] = "success"
+        except Exception as e:
+            logger.error(f"Pipeline Step 6 (Odds API) failed: {e}")
+            
+        logger.info(f"Full data collection pipeline completed successfully: {summary}")
+        return summary
