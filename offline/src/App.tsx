@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import football2 from './assets/images/football2.png';
 import { 
   getPredictions, 
   API_BASE,
@@ -991,7 +992,7 @@ export default function App() {
               {/* Crisp, high-detail stadium background spanning full width */}
               <div className="absolute inset-0 z-0 pointer-events-none">
                 <img 
-                  src="/src/assets/images/football2.png"
+                  src={football2}
                   alt="Stadium Hero Background"
                   className="w-full h-full object-cover scale-100 transition-all duration-300"
                   style={{
