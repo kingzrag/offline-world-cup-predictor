@@ -103,17 +103,37 @@ class ModelService:
             raise RuntimeError("ModelService not initialised – call load_models() first.")
 
         match_date = match_date or datetime.now(timezone.utc)
+
+        # ── Resolve team names for logging ───────────────────────────────────
+        from models import Team as _Team
+        _home = db.query(_Team).filter_by(id=home_team_id).first()
+        _away = db.query(_Team).filter_by(id=away_team_id).first()
+        _home_name = _home.name if _home else str(home_team_id)
+        _away_name = _away.name if _away else str(away_team_id)
+        logger.info(f"[predict_1x2] {_home_name} vs {_away_name} [{competition_code}]")
+
         features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code)
 
         wc_features: list = self._wc_bundle.get("features", [])
         model: xgb.XGBClassifier = self._wc_bundle["model"]
 
         feature_vec = [features.get(f, 0.0) for f in wc_features]
+
+        # ── Log full feature dict and final vector ────────────────────────────
+        logger.info(f"[predict_1x2] Extracted features for {_home_name} vs {_away_name}:")
+        for k, v in features.items():
+            logger.info(f"  {k:<40} = {v}")
+        logger.info(f"[predict_1x2] Feature vector ({len(feature_vec)} values): {[round(v, 4) for v in feature_vec]}")
+
         df_input    = __import__("pandas").DataFrame([feature_vec], columns=wc_features)
 
         probs = model.predict_proba(df_input)[0]
         # Training label mapping: 0 = Away Win, 1 = Draw, 2 = Home Win
         prob_away, prob_draw, prob_home = float(probs[0]), float(probs[1]), float(probs[2])
+        logger.info(
+            f"[predict_1x2] Raw model probs for {_home_name} vs {_away_name}: "
+            f"home={prob_home:.4f}  draw={prob_draw:.4f}  away={prob_away:.4f}"
+        )
         prob_home = round(prob_home, 4)
         prob_away = round(prob_away, 4)
         prob_draw = round(prob_draw, 4)

@@ -180,15 +180,24 @@ export default function App() {
     async function load() {
       try {
         setIsLoadingMatches(true);
+        console.log("[App] load() → calling getPredictions...");
         const data = await getPredictions(undefined, showHistorical);
+        console.log(`[App] getPredictions returned ${data.length} matches.`);
         if (active) {
           setSourceMatches(sortSourceMatches(data));
           setMatchError(null);
         }
       } catch (err: any) {
-        console.error("Failed to load live predictions from FastAPI:", err);
+        // Only health check or fixtures fetch failing will reach here.
+        // Individual prediction enrichment failures are handled inside getPredictions
+        // via Promise.allSettled and never propagate to this catch block.
+        console.error("[App] Critical load failure (health or fixtures unreachable):", err?.message ?? err);
         if (active) {
-          setMatchError("Could not connect to live prediction engine. Viewing fallback data.");
+          setMatchError(
+            err?.message?.includes("unreachable")
+              ? "Backend is unreachable. Please check your connection and reload."
+              : "Could not load fixtures from the prediction engine. Please reload."
+          );
         }
       } finally {
         if (active) {

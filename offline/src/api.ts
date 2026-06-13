@@ -207,7 +207,7 @@ export interface BackendHealth {
 async function apiFetch<T>(
   path: string,
   options?: RequestInit,
-  timeoutMs = 8000
+  timeoutMs = 30000
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -241,14 +241,17 @@ export async function predictMatch(
   awayTeam: string,
   competitionCode = "WC"
 ): Promise<BackendPredictResponse> {
-  return apiFetch<BackendPredictResponse>("/predict", {
+  console.log(`[api] predictMatch → ${homeTeam} vs ${awayTeam} (${competitionCode})`);
+  const result = await apiFetch<BackendPredictResponse>("/predict", {
     method: "POST",
     body: JSON.stringify({
       home_team: homeTeam,
       away_team: awayTeam,
       competition_code: competitionCode,
     }),
-  });
+  }, 45000);  // 45s timeout — ML inference on Render can take 10–15s on cold start
+  console.log(`[api] predictMatch ← ${homeTeam} vs ${awayTeam}:`, result.prediction?.outcome);
+  return result;
 }
 
 /**
@@ -512,8 +515,11 @@ export async function getPredictions(year?: number, showHistorical?: boolean): P
   // 1. Verify backend is reachable and models are loaded
   let health: BackendHealth;
   try {
+    console.log("[api] getPredictions → checking health...");
     health = await checkHealth();
-  } catch {
+    console.log("[api] Health Check Result:", health);
+  } catch (err) {
+    console.error("[api] Health check failed:", err);
     throw new Error("FastAPI backend unreachable");
   }
 
@@ -522,14 +528,19 @@ export async function getPredictions(year?: number, showHistorical?: boolean): P
   }
 
   // 2. Load all World Cup fixtures from the database
+  console.log("[api] getPredictions → fetching fixtures...");
   const fixturesResponse = await getFixtures({ competition_code: "WC", limit: 500, year, show_historical: showHistorical });
   const fixtures = fixturesResponse.fixtures || [];
+  console.log(`[api] Fixtures Loaded: ${fixtures.length}`);
 
   // Map to baseline predictions
   const results: MatchPrediction[] = fixtures.map(mapFixtureToPrediction);
 
   // 3. Batch-predict live and upcoming matches to enrich with ML outcomes (max 4 concurrent)
+  // Individual prediction failures are caught per-match and do NOT propagate to the caller.
+  // The app will still render all fixtures; failed predictions show baseline probabilities.
   const activeMatches = results.filter(m => m.status === "LIVE" || m.status === "UPCOMING");
+  console.log(`[api] Enriching ${activeMatches.length} active matches with ML predictions...`);
   
   const CONCURRENCY = 4;
   for (let i = 0; i < activeMatches.length; i += CONCURRENCY) {
@@ -547,6 +558,9 @@ export async function getPredictions(year?: number, showHistorical?: boolean): P
         if (idx !== -1) {
           results[idx] = outcome.value.enriched;
         }
+        console.log(`[api] Prediction Success: ${outcome.value.enriched.teamA} vs ${outcome.value.enriched.teamB}`);
+      } else {
+        console.error("[api] Prediction Failure (gracefully skipped):", outcome.reason);
       }
     }
   }
