@@ -22,6 +22,75 @@ class CollectionService:
     def __init__(self):
         self.fd_collector = FootballDataCollector(settings.FOOTBALL_DATA_API_KEY)
 
+    def _get_or_create_team(self, db: Session, api_id: str, name: str, short_name: str = None, tla: str = None, crest_url: str = None) -> Team:
+        """
+        Looks up a team by api_id, then falls back to case-insensitive name/alias matching
+        to merge historical and API records instead of creating duplicates.
+        """
+        # 1. Exact lookup by api_id
+        team = db.query(Team).filter_by(api_id=api_id).first()
+        if team:
+            # Sync metadata fields if they were missing
+            updated = False
+            if not team.short_name and short_name:
+                team.short_name = short_name
+                updated = True
+            if not team.tla and tla:
+                team.tla = tla
+                updated = True
+            if not team.crest_url and crest_url:
+                team.crest_url = crest_url
+                updated = True
+            if updated:
+                db.flush()
+            return team
+
+        # 2. Case-insensitive / alias-based name matching
+        def clean_name(n):
+            n = n.lower().strip()
+            n = n.replace("-", " ")
+            n = n.replace("&", "and")
+            aliases = {
+                "usa": "united states",
+                "us": "united states",
+                "united states of america": "united states",
+                "czechia": "czech republic",
+                "congo dr": "dr congo",
+                "republic of ireland": "ireland",
+                "côte d'ivoire": "ivory coast",
+                "cote d'ivoire": "ivory coast",
+            }
+            return aliases.get(n, n)
+
+        target_clean = clean_name(name)
+
+        # Retrieve all teams to perform flexible name mapping
+        all_teams = db.query(Team).all()
+        for t in all_teams:
+            if clean_name(t.name) == target_clean:
+                logger.info(f"Merging team '{name}' with existing team ID {t.id} ('{t.name}') by setting api_id to {api_id}")
+                t.api_id = api_id
+                if short_name:
+                    t.short_name = short_name
+                if tla:
+                    t.tla = tla
+                if crest_url:
+                    t.crest_url = crest_url
+                db.flush()
+                return t
+
+        # 3. Create a brand new team record
+        team = Team(
+            api_id=api_id,
+            name=name,
+            short_name=short_name,
+            tla=tla,
+            crest_url=crest_url
+        )
+        db.add(team)
+        db.flush()
+        return team
+
     async def ingest_teams(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         logger.info(f"Starting teams ingestion for competition: {competition_code}")
         summary = {"competitions": 0, "teams": 0, "standings": 0}
@@ -68,28 +137,14 @@ class CollectionService:
             for row in standings_data:
                 team_data = row["team"]
                 team_api_id = str(team_data["id"])
-                team_db = db.query(Team).filter_by(api_id=team_api_id).first()
-                
-                founded = None
-                venue = None
-
-                if not team_db:
-                    team_db = Team(
-                        api_id=team_api_id,
-                        name=team_data["name"],
-                        short_name=team_data.get("short_name"),
-                        tla=team_data.get("tla"),
-                        crest_url=team_data.get("crest"),
-                        founded=founded,
-                        venue=venue
-                    )
-                    db.add(team_db)
-                    db.flush()
-                else:
-                    team_db.name = team_data["name"]
-                    team_db.short_name = team_data.get("short_name") or team_db.short_name
-                    team_db.tla = team_data.get("tla") or team_db.tla
-                    team_db.crest_url = team_data.get("crest") or team_db.crest_url
+                team_db = self._get_or_create_team(
+                    db,
+                    api_id=team_api_id,
+                    name=team_data["name"],
+                    short_name=team_data.get("short_name"),
+                    tla=team_data.get("tla"),
+                    crest_url=team_data.get("crest")
+                )
 
                 summary["teams"] += 1
 
@@ -186,52 +241,20 @@ class CollectionService:
                 home_api_id = str(home_api_id)
                 away_api_id = str(away_api_id)
 
-                home_team = db.query(Team).filter_by(api_id=home_api_id).first()
-                away_team = db.query(Team).filter_by(api_id=away_api_id).first()
-
-                if not home_team or not away_team:
-                    logger.warning(
-                        f"Skipping match {m['id']} due to missing teams in DB. "
-                        f"Home={home_team_data.get('name')} ({home_api_id}) "
-                        f"Away={away_team_data.get('name')} ({away_api_id})"
-                    )
-
-                    # --- Self-healing: auto-create missing teams from match payload ---
-                    try:
-                        if not home_team:
-                            home_team = Team(
-                                api_id=home_api_id,
-                                name=home_team_data["name"],
-                                short_name=home_team_data.get("shortName"),
-                                tla=home_team_data.get("tla"),
-                            )
-                            db.add(home_team)
-                            db.flush()
-                            logger.info(
-                                f"Created missing team: {home_team.name} ({home_api_id})"
-                            )
-                            created_teams_count += 1
-
-                        if not away_team:
-                            away_team = Team(
-                                api_id=away_api_id,
-                                name=away_team_data["name"],
-                                short_name=away_team_data.get("shortName"),
-                                tla=away_team_data.get("tla"),
-                            )
-                            db.add(away_team)
-                            db.flush()
-                            logger.info(
-                                f"Created missing team: {away_team.name} ({away_api_id})"
-                            )
-                            created_teams_count += 1
-
-                    except Exception as team_err:
-                        db.rollback()
-                        logger.error(
-                            f"Failed to auto-create missing team(s) for match {m['id']}: {team_err}. Skipping match."
-                        )
-                        continue
+                home_team = self._get_or_create_team(
+                    db,
+                    api_id=home_api_id,
+                    name=home_team_data["name"],
+                    short_name=home_team_data.get("shortName"),
+                    tla=home_team_data.get("tla")
+                )
+                away_team = self._get_or_create_team(
+                    db,
+                    api_id=away_api_id,
+                    name=away_team_data["name"],
+                    short_name=away_team_data.get("shortName"),
+                    tla=away_team_data.get("tla")
+                )
 
                 existing_match = db.query(Match).filter_by(api_id=str(m["id"])).first()
                 utc_date = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))

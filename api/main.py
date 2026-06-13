@@ -92,6 +92,10 @@ app.include_router(predict_router.router)
 # ── Tournament Progression Routing ──────────────────────────────────────────
 app.include_router(tournament.router)
 
+# ── Admin endpoints (match seeding, ELO recompute, DB stats) ───────────────
+from api.routes.admin import router as admin_router
+app.include_router(admin_router)
+
 
 async def run_daily_scheduler():
     """
