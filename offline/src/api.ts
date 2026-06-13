@@ -558,7 +558,12 @@ export async function getPredictions(year?: number, showHistorical?: boolean): P
         if (idx !== -1) {
           results[idx] = outcome.value.enriched;
         }
-        console.log(`[api] Prediction Success: ${outcome.value.enriched.teamA} vs ${outcome.value.enriched.teamB}`);
+        const e = outcome.value.enriched;
+        // Per-prediction diagnostic log in requested format
+        console.log(
+          `\nMATCH:\n${e.teamA} vs ${e.teamB}\n\nRESULT:\nHome ${e.probA}%\nDraw ${e.probD}%\nAway ${e.probB}%\n`
+        );
+        console.log(`[api] Prediction Success: ${e.teamA} vs ${e.teamB}`);
       } else {
         console.error("[api] Prediction Failure (gracefully skipped):", outcome.reason);
       }

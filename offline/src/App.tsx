@@ -624,14 +624,22 @@ export default function App() {
     if (selectedFilter === 'Live') {
       list = list.filter(m => m.status === 'LIVE');
     } else if (selectedFilter === "Today") {
-      list = list.filter(m => m.date.includes('June 09') || m.date.includes('June 9'));
+      // Use real current date — compare against ISO kickoffTime field
+      const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      list = list.filter(m => m.kickoffTime?.startsWith(todayStr));
     } else if (selectedFilter === "Tomorrow") {
-      list = list.filter(m => m.date.includes('June 10'));
+      const tmrw = new Date();
+      tmrw.setDate(tmrw.getDate() + 1);
+      const tmrwStr = tmrw.toISOString().slice(0, 10);
+      list = list.filter(m => m.kickoffTime?.startsWith(tmrwStr));
     } else if (selectedFilter === "This Week") {
+      const now = new Date();
+      const weekEnd = new Date();
+      weekEnd.setDate(now.getDate() + 7);
       list = list.filter(m => {
-        if (m.date.includes('June 09') || m.date.includes('June 9') || m.date.includes('June 10')) return true;
-        const day = parseInt(m.date.replace(/\D/g, ''));
-        return m.date.includes('June') && day >= 11 && day <= 16;
+        if (!m.kickoffTime) return false;
+        const ko = new Date(m.kickoffTime);
+        return ko >= now && ko <= weekEnd;
       });
     } else if (selectedFilter === "Group Stage") {
       list = list.filter(m => m.stage.toLowerCase().includes('group stage'));
@@ -1562,7 +1570,27 @@ export default function App() {
                 <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-10 space-y-12">
                   
                   {/* TOP INTUITIVE INSIGHT PANEL: Highest Confidence Prediction Today */}
-                  {selectedFilter === 'All Matches' && (
+                  {selectedFilter === 'All Matches' && (() => {
+                    // Dynamically pick the highest-confidence upcoming match
+                    const heroMatch = sourceMatches
+                      .filter(m => m.status === 'UPCOMING' && m.isLiveData)
+                      .sort((a, b) => {
+                        const confA = Math.max(a.probA, a.probB, a.probD);
+                        const confB = Math.max(b.probA, b.probB, b.probD);
+                        return confB - confA;
+                      })[0] || sourceMatches.filter(m => m.status === 'UPCOMING')[0] || sourceMatches[0];
+
+                    if (!heroMatch) return null;
+
+                    const heroMaxProb = Math.max(heroMatch.probA, heroMatch.probB, heroMatch.probD);
+                    const heroWinner =
+                      heroMaxProb === heroMatch.probA ? heroMatch.teamA :
+                      heroMaxProb === heroMatch.probB ? heroMatch.teamB : 'Draw';
+                    const heroWinnerCode =
+                      heroMaxProb === heroMatch.probA ? heroMatch.teamACode :
+                      heroMaxProb === heroMatch.probB ? heroMatch.teamBCode : 'DRW';
+
+                    return (
                     <div className="bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-905 rounded-lg p-6 md:p-8 flex flex-col md:flex-row items-stretch justify-between gap-8 relative overflow-hidden group">
                       {/* Subtle background flare */}
                       <div className="absolute right-0 top-0 w-80 h-80 bg-green-accent/5 rounded-full blur-3xl pointer-events-none group-hover:bg-green-accent/10 transition-colors duration-1000"></div>
@@ -1574,23 +1602,23 @@ export default function App() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <span className="text-xs uppercase font-mono tracking-widest text-[#1cdb5e] block font-bold">Championship Projections • Final Match simulation</span>
+                          <span className="text-xs uppercase font-mono tracking-widest text-[#1cdb5e] block font-bold">{heroMatch.stage}</span>
                           <h3 className="text-3xl font-serif text-white uppercase tracking-tight">
-                            Argentina vs England
+                            {heroMatch.teamA} vs {heroMatch.teamB}
                           </h3>
                         </div>
 
                         <p className="text-zinc-400 text-sm max-w-xl leading-relaxed">
-                          Sustained numerical dominance registers in our final knockout brackets. The model flags Argentina as holding the highest rest-defense efficiency ratings in the tournament, yielding an Elite 55% win probability estimate.
+                          Our ML model gives <strong className="text-white">{heroWinner}</strong> the highest win probability in this fixture at <strong className="text-green-400">{heroMaxProb}%</strong>, making it today's most confident call across all {sourceMatches.filter(m => m.status === 'UPCOMING').length} upcoming matches.
                         </p>
 
                         <div className="flex gap-4 items-center font-mono text-zinc-500">
                           <div className="text-xs">
-                            Model Grade: <span className="text-[#1cdb5e] font-bold">ELITE CALIBRATION</span>
+                            Confidence: <span className="text-[#1cdb5e] font-bold uppercase">{heroMatch.confidence}</span>
                           </div>
                           <div className="w-1.5 h-1.5 rounded-full bg-zinc-800"></div>
                           <div className="text-xs">
-                            Date: <span className="text-white font-semibold">July 19, 2026</span>
+                            Kickoff: <span className="text-white font-semibold">{heroMatch.date}</span>
                           </div>
                         </div>
                       </div>
@@ -1599,29 +1627,24 @@ export default function App() {
                       <div className="w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-l border-zinc-800 pt-6 md:pt-0 md:pl-8 flex flex-col justify-between items-stretch">
                         <div className="space-y-4">
                           <div className="flex items-center justify-between text-xs font-mono">
-                            <span className="text-zinc-500 font-bold">ARG WIN PROBABILITY</span>
-                            <span className="text-green-accent font-extrabold text-base">55%</span>
+                            <span className="text-zinc-500 font-bold">{heroWinnerCode} WIN PROBABILITY</span>
+                            <span className="text-green-accent font-extrabold text-base">{heroMaxProb}%</span>
                           </div>
                           <div className="h-2 w-full bg-zinc-950 rounded overflow-hidden flex">
-                            <div className="h-full bg-green-accent" style={{ width: '55%' }}></div>
-                            <div className="h-full bg-zinc-800" style={{ width: '25%' }}></div>
-                            <div className="h-full bg-zinc-900" style={{ width: '20%' }}></div>
+                            <div className="h-full bg-green-accent" style={{ width: `${heroMatch.probA}%` }}></div>
+                            <div className="h-full bg-zinc-800" style={{ width: `${heroMatch.probD}%` }}></div>
+                            <div className="h-full bg-zinc-900" style={{ width: `${heroMatch.probB}%` }}></div>
                           </div>
                           <div className="flex justify-between w-full text-[9px] font-mono text-zinc-550">
-                            <span>ARG Win 55%</span>
-                            <span>Draw 25%</span>
-                            <span>ENG Win 20%</span>
+                            <span>{heroMatch.teamACode} Win {heroMatch.probA}%</span>
+                            <span>Draw {heroMatch.probD}%</span>
+                            <span>{heroMatch.teamBCode} Win {heroMatch.probB}%</span>
                           </div>
                         </div>
 
                         <div className="pt-6">
                           <button
-                            onClick={() => {
-                              const argMatch = sourceMatches.find(m => m.id === "m12") || sourceMatches[0];
-                              if (argMatch) {
-                                openMatchAnalysis(argMatch);
-                              }
-                            }}
+                            onClick={() => openMatchAnalysis(heroMatch)}
                             className="w-full py-3.5 bg-zinc-100 hover:bg-white text-black font-semibold text-xs font-mono tracking-widest uppercase transition-all flex items-center justify-center gap-2 rounded select-none cursor-pointer"
                           >
                             View Full Report <ArrowRight className="w-3.5 h-3.5" />
@@ -1629,7 +1652,9 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
+
 
                   {/* VERTICAL MATCH FEED BLOCK */}
                   <div className="flex flex-col items-stretch space-y-4">
