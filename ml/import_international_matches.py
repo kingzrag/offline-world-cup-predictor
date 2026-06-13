@@ -73,8 +73,12 @@ def generate_external_id(row: pd.Series) -> str:
 
 
 def get_or_create_competition(session, name: str) -> Competition:
-    """Return an existing Competition object or create a new one if missing."""
-    comp = session.execute(select(Competition).where(Competition.name == name)).scalar_one_or_none()
+    """Return an existing Competition object or create a new one if missing.
+    Uses .first() to safely handle duplicate rows (prefers lowest id).
+    """
+    comp = session.execute(
+        select(Competition).where(Competition.name == name).order_by(Competition.id)
+    ).scalars().first()
     if comp:
         return comp
     code = TOURNAMENT_CODE_MAP.get(name, name[:3].upper())
@@ -84,8 +88,12 @@ def get_or_create_competition(session, name: str) -> Competition:
     return comp
 
 def get_or_create_team(session, name: str) -> Team:
-    """Return an existing Team object or create it if missing."""
-    team = session.execute(select(Team).where(Team.name == name)).scalar_one_or_none()
+    """Return an existing Team object or create it if missing.
+    Uses .first() to safely handle duplicate rows (prefers lowest id).
+    """
+    team = session.execute(
+        select(Team).where(Team.name == name).order_by(Team.id)
+    ).scalars().first()
     if team:
         return team
     team = Team(name=name)
@@ -115,33 +123,26 @@ def insert_matches(df: pd.DataFrame, session) -> dict:
         if existing:
             stats["duplicates"] += 1
             continue
-        # Competition
-        # Competition lookup with missing logging
-        comp = session.execute(select(Competition).where(Competition.name == row["tournament"]))
-        comp = comp.scalar_one_or_none()
+        # Competition — use .first() to safely handle duplicate rows
+        comp = session.execute(
+            select(Competition).where(Competition.name == row["tournament"]).order_by(Competition.id)
+        ).scalars().first()
         if not comp:
             stats["missing_competitions"] += 1
             comp = get_or_create_competition(session, row["tournament"])
-        else:
-            # Ensure we have a persistent object
-            pass
-        # Teams
-        # Home team lookup with missing logging
-        home = session.execute(select(Team).where(Team.name == row["home_team"]))
-        home = home.scalar_one_or_none()
+        # Teams — use .first() to safely handle duplicate team rows
+        home = session.execute(
+            select(Team).where(Team.name == row["home_team"]).order_by(Team.id)
+        ).scalars().first()
         if not home:
             stats["missing_teams"] += 1
             home = get_or_create_team(session, row["home_team"])
-        else:
-            pass
-        # Away team lookup with missing logging
-        away = session.execute(select(Team).where(Team.name == row["away_team"]))
-        away = away.scalar_one_or_none()
+        away = session.execute(
+            select(Team).where(Team.name == row["away_team"]).order_by(Team.id)
+        ).scalars().first()
         if not away:
             stats["missing_teams"] += 1
             away = get_or_create_team(session, row["away_team"])
-        else:
-            pass
         # Build Match object
         try:
             # Ensure required score fields are present and numeric

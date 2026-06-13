@@ -190,5 +190,18 @@ async def startup_event():
         logger.error(f"Startup: FAILED to load ML models — {e}", exc_info=True)
         # Do NOT crash the server; predictions will return 503 until fixed.
 
+    # ── Seed ELO ratings if the table is empty ────────────────────────────────
+    try:
+        logger.info("Startup: checking team_elo table for seed data …")
+        from database.connection import SessionLocal
+        from ml.seed_elo import seed_elo_ratings
+        _db = SessionLocal()
+        try:
+            seed_elo_ratings(_db)
+        finally:
+            _db.close()
+    except Exception as e:
+        logger.error(f"Startup: ELO seed step failed — {e}", exc_info=True)
+
     logger.info("Starting background scheduler task...")
     asyncio.create_task(run_daily_scheduler())
