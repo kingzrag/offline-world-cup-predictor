@@ -20,6 +20,7 @@ import {
   MOCK_INTELLIGENCE,
   MOCK_ACCURACY_STATS,
 } from './data';
+import { getFlag } from './flagUtils';
 import { motion } from 'motion/react';
 import {
   Search,
@@ -583,29 +584,8 @@ export default function App() {
   const [aiInsightExplanations, setAiInsightExplanations] = useState<{ [insightId: string]: string }>({});
   const [aiInsightLoading, setAiInsightLoading] = useState<string | null>(null);
 
-  // Global Country Flag emojis mappings representing competitor nations
-  const FLAG_MAP: { [key: string]: string } = {
-    "Brazil": "🇧🇷",
-    "Germany": "🇩🇪",
-    "Argentina": "🇦🇷",
-    "France": "🇫🇷",
-    "Spain": "🇪🇸",
-    "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
-    "USA": "🇺🇸",
-    "Mexico": "🇲🇽",
-    "Canada": "🇨🇦",
-    "Portugal": "🇵🇹",
-    "Italy": "🇮🇹",
-    "Netherlands": "🇳🇱",
-    "Senegal": "🇸🇳",
-    "Uruguay": "🇺🇾",
-    "Japan": "🇯🇵",
-    "Croatia": "🇭🇷",
-    "Morocco": "🇲🇦",
-    "Belgium": "🇧🇪",
-    "Colombia": "🇨🇴",
-    "Denmark": "🇩🇰"
-  };
+  // Flag emojis are now resolved dynamically via getFlag() from flagUtils.ts.
+  // No hardcoded FLAG_MAP needed — new teams are covered automatically.
 
   const carouselRef = useRef<HTMLDivElement>(null);
   const scrollCarousel = (direction: 'left' | 'right') => {
@@ -1315,8 +1295,8 @@ export default function App() {
                   </div>
                 ) : (
                   sourceMatches.slice(0, 9).map((match) => {
-                    const flagA = FLAG_MAP[match.teamA] || "🏳️";
-                    const flagB = FLAG_MAP[match.teamB] || "🏳️";
+                    const flagA = getFlag(match.teamA);
+                    const flagB = getFlag(match.teamB);
                     return (
                       <div 
                         key={match.id}
@@ -1731,8 +1711,8 @@ export default function App() {
                           const showHeader = heading !== lastHeading;
                           lastHeading = heading;
                           
-                          const flagA = FLAG_MAP[match.teamA] || "🏳️";
-                          const flagB = FLAG_MAP[match.teamB] || "🏳️";
+                          const flagA = getFlag(match.teamA);
+                          const flagB = getFlag(match.teamB);
                           const isFavorite = favoriteMatchIds.includes(match.id);
                           
                           return (
@@ -3412,7 +3392,7 @@ export default function App() {
                               </thead>
                               <tbody className="divide-y divide-zinc-900/40 text-[11px] font-sans text-zinc-300">
                                 {standings[groupKey]?.map((team) => {
-                                  const flag = FLAG_MAP[team.name] || "🏳️";
+                                  const flag = getFlag(team.name);
                                   return (
                                     <tr key={team.id} className="hover:bg-zinc-900/20 transition-colors">
                                       <td className="py-2 text-center font-mono font-bold text-zinc-500">
@@ -3473,8 +3453,8 @@ export default function App() {
                                   </div>
                                 ) : (
                                   matches.map((m) => {
-                                    const flagHome = FLAG_MAP[m.home_team.name] || "🏳️";
-                                    const flagAway = FLAG_MAP[m.away_team.name] || "🏳️";
+                                    const flagHome = getFlag(m.home_team.name);
+                                    const flagAway = getFlag(m.away_team.name);
                                     const isFinished = m.status === 'FINISHED';
                                     const homeWinner = isFinished && m.winner === 'HOME_TEAM';
                                     const awayWinner = isFinished && m.winner === 'AWAY_TEAM';
@@ -3681,8 +3661,8 @@ export default function App() {
       {/* MATCH ANALYSIS DETAILED RIGHT SIDE SLIDE-OVER DRAWER */}
       {selectedMatch && (() => {
         const match = selectedMatch;
-        const flagA = FLAG_MAP[match.teamA] || "🏳️";
-        const flagB = FLAG_MAP[match.teamB] || "🏳️";
+        const flagA = getFlag(match.teamA);
+        const flagB = getFlag(match.teamB);
 
         // SECTION 1 — MATCH OUTCOME
         const probA = match.probA;
@@ -4524,8 +4504,8 @@ export default function App() {
 
       {/* SCORE SIMULATION / EDITING MODAL */}
       {editingMatch && (() => {
-        const flagA = FLAG_MAP[editingMatch.teamA] || "🏳️";
-        const flagB = FLAG_MAP[editingMatch.teamB] || "🏳️";
+        const flagA = getFlag(editingMatch.teamA);
+        const flagB = getFlag(editingMatch.teamB);
         return (
           <div id="set-score-overlay" className="fixed inset-0 z-50 overflow-y-auto bg-black/95 backdrop-blur-md flex items-center justify-center p-4 select-none">
             <div 
