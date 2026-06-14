@@ -2255,13 +2255,9 @@ export default function App() {
               const drawProb = m.probD;
               const label = favA ? m.teamA : m.teamB;
               
-              let confidenceScore = 74;
-              if (m.id === "m1") confidenceScore = 92;
-              else if (m.id === "m12") confidenceScore = 95;
-              else if (m.id === "m11") confidenceScore = 91;
-              else if (m.id === "m6") confidenceScore = 90;
-              else if (m.id === "m3") confidenceScore = 89;
-              else confidenceScore = m.confidence === "High" ? 88 : 74;
+              const confidenceScore = m.modelConfidence !== undefined
+                ? Math.round(m.modelConfidence * 100)
+                : (m.confidence === "High" ? 88 : m.confidence === "Medium" ? 74 : 60);
 
               return {
                 ...m,
@@ -2280,16 +2276,16 @@ export default function App() {
           const sortedGoalForecasts = [...sourceMatches]
             .map(m => {
               const totalXG = Number((m.xGA + m.xGB).toFixed(2));
-              const over25 = Math.min(95, Math.max(30, Math.round(60 + (totalXG - 3.0) * 15)));
-              const over35 = Math.min(85, Math.max(15, Math.round(over25 - 25)));
+              const over25 = m.overUnder?.["2.5"]
+                ? Math.round((m.overUnder["2.5"].over ?? 0) * 100)
+                : Math.min(95, Math.max(30, Math.round(60 + (totalXG - 3.0) * 15)));
+              const over35 = m.overUnder?.["3.5"]
+                ? Math.round((m.overUnder["3.5"].over ?? 0) * 100)
+                : Math.min(85, Math.max(15, Math.round(over25 - 25)));
               
-              let mlScore = "2-1";
-              if (m.id === "m11") mlScore = "2-1";
-              else {
-                const goalsA = Math.round(m.xGA);
-                const goalsB = Math.round(m.xGB);
-                mlScore = `${goalsA}-${goalsB}`;
-              }
+              const mlScore = m.mostLikelyScore
+                ? m.mostLikelyScore
+                : `${Math.round(m.xGA)}-${Math.round(m.xGB)}`;
 
               return {
                 ...m,
@@ -2305,9 +2301,12 @@ export default function App() {
           // Section 3: BTTS WATCH
           const sortedBttsWatch = [...sourceMatches]
             .map(m => {
-              let bttsYes = Math.round((m.bttsRateA + m.bttsRateB) / 2);
-              if (m.id === "m3") bttsYes = 81; // Spain vs England has 81%
-              const bttsNo = 100 - bttsYes;
+              const bttsYes = m.bttsMarket
+                ? Math.round((m.bttsMarket.yes ?? 0) * 100)
+                : Math.round((1 - Math.exp(-m.xGA)) * (1 - Math.exp(-m.xGB)) * 100);
+              const bttsNo = m.bttsMarket
+                ? Math.round((m.bttsMarket.no ?? 0) * 100)
+                : 100 - bttsYes;
               const totalXG = Number((m.xGA + m.xGB).toFixed(2));
 
               return {
@@ -2395,16 +2394,16 @@ export default function App() {
           const matchIntelligenceResult = [...sourceMatches]
             .map(m => {
               const totalXG = Number((m.xGA + m.xGB).toFixed(2));
-              const bttsYes = Math.round((m.bttsRateA + m.bttsRateB) / 2);
-              const over25 = Math.min(95, Math.max(30, Math.round(60 + (totalXG - 3.0) * 15)));
+              const bttsYes = m.bttsMarket
+                ? Math.round((m.bttsMarket.yes ?? 0) * 100)
+                : Math.round((1 - Math.exp(-m.xGA)) * (1 - Math.exp(-m.xGB)) * 100);
+              const over25 = m.overUnder?.["2.5"]
+                ? Math.round((m.overUnder["2.5"].over ?? 0) * 100)
+                : Math.min(95, Math.max(30, Math.round(60 + (totalXG - 3.0) * 15)));
               
-              let confidenceScore = 74;
-              if (m.id === "m1") confidenceScore = 92;
-              else if (m.id === "m12") confidenceScore = 95;
-              else if (m.id === "m11") confidenceScore = 91;
-              else if (m.id === "m6") confidenceScore = 90;
-              else if (m.id === "m3") confidenceScore = 89;
-              else confidenceScore = m.confidence === "High" ? 88 : 74;
+              const confidenceScore = m.modelConfidence !== undefined
+                ? Math.round(m.modelConfidence * 100)
+                : (m.confidence === "High" ? 88 : m.confidence === "Medium" ? 74 : 60);
 
               return {
                 ...m,

@@ -358,6 +358,7 @@ export function mapBackendPrediction(
     probB,
     prediction: predictionLabel,
     confidence,
+    modelConfidence: o.confidence,
     // Goals / xG
     xGA: g.expected_home_goals,
     xGB: g.expected_away_goals,
@@ -416,6 +417,7 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
   // Baseline outcome fields
   let predictionLabel = "Draw / Even Lean";
   let confidence: "High" | "Medium" | "Low" = "Medium";
+  let modelConfidence = 0.50;
   let probA = 33;
   let probD = 34;
   let probB = 33;
@@ -429,6 +431,9 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
                       p.predicted_outcome === "AWAY_WIN" ? `${teamB} Win` : "Draw";
     confidence = (p.home_probability >= 0.60 || p.away_probability >= 0.60) ? "High" : 
                  (p.home_probability >= 0.45 || p.away_probability >= 0.45) ? "Medium" : "Low";
+    modelConfidence = p.predicted_outcome === "HOME_WIN" ? p.home_probability :
+                      p.predicted_outcome === "AWAY_WIN" ? p.away_probability :
+                      p.draw_probability;
   } else if (statusMapped === "COMPLETED") {
     if (f.winner === "HOME_TEAM") {
       predictionLabel = `${teamA} Win`;
@@ -441,6 +446,7 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
       probA = 0; probD = 100; probB = 0;
     }
     confidence = "High";
+    modelConfidence = 1.0;
   }
 
   return {
@@ -455,6 +461,7 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     status: statusMapped,
     prediction: predictionLabel,
     confidence,
+    modelConfidence,
     probA,
     probD,
     probB,
