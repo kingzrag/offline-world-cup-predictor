@@ -4,6 +4,7 @@ api/routes/predict.py
 Production-ready prediction endpoints.
 
     POST  /api/predict              → Full prediction (1X2 + goals + all markets)
+    POST  /api/predict-batch        → Batch predictions for multiple matches (15-min cache)
     GET   /api/teams                → All teams (searchable)
     GET   /api/team/{team_name}     → Team profile + stats
     GET   /api/fixtures             → Scheduled & Live World Cup matches
@@ -14,7 +15,7 @@ All ML inference goes through the ModelService singleton.
 
 import time
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -37,6 +38,26 @@ class PredictRequest(BaseModel):
         example="WC",
         description="Competition code (WC = World Cup, PL = Premier League, etc.)"
     )
+
+
+class BatchMatchItem(BaseModel):
+    home_team: str = Field(..., example="Brazil")
+    away_team: str = Field(..., example="Germany")
+    competition_code: Optional[str] = Field(default="WC")
+
+
+class BatchPredictRequest(BaseModel):
+    matches: List[BatchMatchItem] = Field(
+        ...,
+        description="Array of match pairs to predict in one round-trip.",
+        max_items=100,
+    )
+
+
+# ── In-memory prediction cache ─────────────────────────────────────────────────
+# Key: "home_team|away_team|competition_code"   Value: (result_dict, expiry_ts)
+PREDICTION_CACHE_TTL_SECONDS: int = 15 * 60   # 15 minutes
+_prediction_cache: Dict[str, Tuple[Any, float]] = {}
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -89,6 +110,123 @@ def predict_match(
         "status":       "success",
         "latency_ms":   elapsed_ms,
         "prediction":   result,
+    }
+
+
+# ── Batch prediction endpoint ─────────────────────────────────────────────────
+
+@router.post("/predict-batch", summary="Batch predictions for multiple matches (15-min cache)")
+def predict_batch(
+    body: BatchPredictRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Accepts an array of match pairs and returns predictions for all of them in a
+    single HTTP round-trip.  Results are cached in-process for 15 minutes so that
+    repeated page loads do not re-run expensive ML inference.
+
+    **Response shape:**
+    ```json
+    {
+      "status": "success",
+      "total_ms": 1234.5,
+      "count": 48,
+      "results": [
+        { "home_team": "Brazil", "away_team": "Germany",
+          "status": "success", "prediction": {...}, "cached": false, "latency_ms": 45.2 },
+        { "home_team": "Canada", "away_team": "Morocco",
+          "status": "error",   "error": "Team not found", "cached": false, "latency_ms": 3.1 }
+      ]
+    }
+    ```
+    """
+    if not model_service.is_ready:
+        raise HTTPException(
+            status_code=503,
+            detail="ML models are not yet loaded. Please retry in a moment."
+        )
+
+    batch_start = time.perf_counter()
+    now = time.time()
+    results = []
+
+    # Evict stale cache entries once per batch request (O(n) but n is small)
+    expired_keys = [k for k, (_, exp) in _prediction_cache.items() if now > exp]
+    for k in expired_keys:
+        del _prediction_cache[k]
+
+    logger.info(
+        f"POST /api/predict-batch  →  {len(body.matches)} matches requested "
+        f"({len(expired_keys)} stale cache entries evicted)"
+    )
+
+    for item in body.matches:
+        cache_key = f"{item.home_team.strip()}|{item.away_team.strip()}|{item.competition_code or 'WC'}"
+        t0 = time.perf_counter()
+
+        # ── Cache hit ────────────────────────────────────────────────────────
+        if cache_key in _prediction_cache:
+            cached_result, _ = _prediction_cache[cache_key]
+            latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+            results.append({
+                "home_team":  item.home_team,
+                "away_team":  item.away_team,
+                "status":     "success",
+                "prediction": cached_result,
+                "cached":     True,
+                "latency_ms": latency_ms,
+            })
+            continue
+
+        # ── Cache miss — run inference ────────────────────────────────────────
+        try:
+            prediction = model_service.predict(
+                db=db,
+                home_team_name=item.home_team,
+                away_team_name=item.away_team,
+                competition_code=item.competition_code or "WC",
+            )
+            latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+            logger.info(
+                f"  [{item.home_team} vs {item.away_team}] predicted in {latency_ms} ms"
+            )
+            # Store in cache
+            _prediction_cache[cache_key] = (prediction, now + PREDICTION_CACHE_TTL_SECONDS)
+            results.append({
+                "home_team":  item.home_team,
+                "away_team":  item.away_team,
+                "status":     "success",
+                "prediction": prediction,
+                "cached":     False,
+                "latency_ms": latency_ms,
+            })
+        except Exception as e:
+            latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+            logger.warning(
+                f"  [{item.home_team} vs {item.away_team}] prediction failed in {latency_ms} ms: {e}"
+            )
+            results.append({
+                "home_team":  item.home_team,
+                "away_team":  item.away_team,
+                "status":     "error",
+                "error":      str(e),
+                "cached":     False,
+                "latency_ms": latency_ms,
+            })
+
+    total_ms = round((time.perf_counter() - batch_start) * 1000, 1)
+    cache_hits  = sum(1 for r in results if r.get("cached"))
+    cache_miss  = len(results) - cache_hits
+    logger.info(
+        f"POST /api/predict-batch  ←  {len(results)} results in {total_ms} ms "
+        f"(cache hits: {cache_hits}, misses: {cache_miss})"
+    )
+
+    return {
+        "status":   "success",
+        "total_ms": total_ms,
+        "count":    len(results),
+        "results":  results,
     }
 
 

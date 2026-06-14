@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import football2 from './assets/images/football2.png';
 import { 
   getPredictions, 
+  loadFixturesInstant,
+  enrichPredictionsInBackground,
   API_BASE,
   getStandings,
   getBracket,
@@ -177,38 +179,61 @@ export default function App() {
   const [showHistorical, setShowHistorical] = useState<boolean>(false);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const t0Page = performance.now();
+
     async function load() {
       try {
         setIsLoadingMatches(true);
-        console.log("[App] load() → calling getPredictions...");
-        const data = await getPredictions(undefined, showHistorical);
-        console.log(`[App] getPredictions returned ${data.length} matches.`);
-        if (active) {
-          setSourceMatches(sortSourceMatches(data));
-          setMatchError(null);
-        }
+
+        // ── Phase 1: render fixtures instantly (no ML inference) ────────────
+        console.log("[App] Phase 1 → loading fixtures instantly...");
+        const fixtures = await loadFixturesInstant(undefined, showHistorical, signal);
+        if (signal.aborted) return;
+
+        console.log(`[App] Phase 1 complete: ${fixtures.length} fixtures rendered instantly.`);
+        setSourceMatches(sortSourceMatches(fixtures));
+        setMatchError(null);
+        setIsLoadingMatches(false);  // Page is live — unlock the UI now
+
+        // ── Phase 2: hydrate ML predictions in background ───────────────
+        console.log("[App] Phase 2 → enriching predictions in background...");
+        await enrichPredictionsInBackground(
+          fixtures,
+          (matchId, enriched) => {
+            if (signal.aborted) return;
+            // Update only the single card that just received its prediction
+            setSourceMatches(prev => {
+              const idx = prev.findIndex(m => m.id === matchId);
+              if (idx === -1) return prev;
+              const next = [...prev];
+              next[idx] = enriched;
+              return next;
+            });
+          },
+          signal,
+          t0Page
+        );
+
       } catch (err: any) {
+        if (signal.aborted) return;
         // Only health check or fixtures fetch failing will reach here.
-        // Individual prediction enrichment failures are handled inside getPredictions
+        // Individual prediction enrichment failures are handled inside enrichPredictionsInBackground
         // via Promise.allSettled and never propagate to this catch block.
         console.error("[App] Critical load failure (health or fixtures unreachable):", err?.message ?? err);
-        if (active) {
-          setMatchError(
-            err?.message?.includes("unreachable")
-              ? "Backend is unreachable. Please check your connection and reload."
-              : "Could not load fixtures from the prediction engine. Please reload."
-          );
-        }
-      } finally {
-        if (active) {
-          setIsLoadingMatches(false);
-        }
+        setMatchError(
+          err?.message?.includes("unreachable")
+            ? "Backend is unreachable. Please check your connection and reload."
+            : "Could not load fixtures from the prediction engine. Please reload."
+        );
+        setIsLoadingMatches(false);
       }
     }
+
     load();
     return () => {
-      active = false;
+      controller.abort();
     };
   }, [showHistorical]);
 
@@ -996,18 +1021,18 @@ export default function App() {
                   alt="Stadium Hero Background"
                   className="w-full h-full object-cover scale-100 transition-all duration-300"
                   style={{
-                    opacity: 0.48,
-                    filter: "brightness(1.25) contrast(1.18) saturate(0.65)"
+                    opacity: 0.65,
+                    filter: "brightness(1.60) contrast(1.30) saturate(0.80)"
                   }}
                   referrerPolicy="no-referrer"
                 />
                 {/* Subtle OFFLINE green tint to the highlights to match brand identity without being colorful */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-[#1cdb5e]/2 via-[#1cdb5e]/6 to-[#1cdb5e]/3 mix-blend-color-dodge opacity-70"></div>
+                <div className="absolute inset-0 bg-gradient-to-tr from-[#1cdb5e]/4 via-[#1cdb5e]/10 to-[#1cdb5e]/6 mix-blend-screen opacity-60"></div>
                 {/* Subtle dark overlay gradient for readability, maintaining full pitch and lights visibility */}
-                <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/25 to-black/45 mix-blend-multiply"></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/15"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/12 to-black/26"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/8"></div>
                 {/* Soft vignette around the outer edges to maintain focus on the center content */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_25%,rgba(0,0,0,0.85)_100%)]"></div>
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_42%,rgba(0,0,0,0.88)_100%)]"></div>
               </div>
 
               {/* Floating content wrapped in standard content grid alignment */}
