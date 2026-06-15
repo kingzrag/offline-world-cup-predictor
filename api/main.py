@@ -12,15 +12,19 @@ from api.routes import predict as predict_router
 from services.model_service import model_service
 from utils.logger import logger
 
-# Automatically trigger database schema creation on startup.
-# In a real environment, this operates as a fallback / bootstrapper
-# alongside alembic migrations.
+# Automatically bootstrap schema: Alembic migrations first, then create_all fallback.
 try:
-    logger.info("Initializing database schema tables creation...")
+    from database.migrate import run_migrations, verify_matches_schema
+
+    run_migrations()
+    verify_matches_schema()
+
+    logger.info("Initializing database schema tables creation (create_all fallback)...")
     Base.metadata.create_all(bind=engine)
+    verify_matches_schema()
     logger.info("Database schema sync completed successfully.")
 except Exception as err:
-    logger.error(f"Critical: Database connection failed during startup: {err}")
+    logger.error(f"Critical: Database migration or schema sync failed: {err}", exc_info=True)
 
 app = FastAPI(
     title="Football Prediction Platform",
