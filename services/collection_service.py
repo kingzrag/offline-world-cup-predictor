@@ -212,7 +212,12 @@ class CollectionService:
 
     async def ingest_matches(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         logger.info(f"Starting matches ingestion for competition: {competition_code}")
-        summary = {"matches": 0}
+        summary: Dict[str, Any] = {
+            "matches": 0,
+            "updated_count": 0,
+            "updated_match_ids": [],
+            "changes": [],
+        }
         created_teams_count = 0
         placeholder_matches_skipped = 0
 
@@ -258,10 +263,30 @@ class CollectionService:
 
                 existing_match = db.query(Match).filter_by(api_id=str(m["id"])).first()
                 utc_date = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
-                full_time = m.get("score", {}).get("fullTime", {})
+                score_data = m.get("score", {})
+                full_time = score_data.get("fullTime", {})
+                half_time = score_data.get("halfTime", {})
                 home_score = full_time.get("home")
                 away_score = full_time.get("away")
-                winner = m.get("score", {}).get("winner")
+                match_status = m["status"]
+
+                # During live play fullTime may lag; fall back to halfTime when needed.
+                if home_score is None and away_score is None and match_status in {"IN_PLAY", "PAUSED"}:
+                    home_score = half_time.get("home")
+                    away_score = half_time.get("away")
+
+                winner = score_data.get("winner")
+                live_minute = m.get("minute") if match_status in {"IN_PLAY", "PAUSED"} else None
+
+                before_state = None
+                if existing_match:
+                    before_state = {
+                        "home_score": existing_match.home_score,
+                        "away_score": existing_match.away_score,
+                        "status": existing_match.status,
+                        "live_minute": existing_match.live_minute,
+                        "winner": existing_match.winner,
+                    }
 
                 if not existing_match:
                     existing_match = Match(
@@ -270,22 +295,60 @@ class CollectionService:
                         home_team_id=home_team.id,
                         away_team_id=away_team.id,
                         utc_date=utc_date,
-                        status=m["status"],
+                        status=match_status,
                         stage=m.get("stage"),
                         group=m.get("group"),
                         home_score=home_score,
                         away_score=away_score,
                         winner=winner,
+                        live_minute=live_minute,
                     )
                     db.add(existing_match)
                 else:
                     existing_match.utc_date = utc_date
-                    existing_match.status = m["status"]
+                    existing_match.status = match_status
                     existing_match.stage = m.get("stage") or existing_match.stage
                     existing_match.group = m.get("group") or existing_match.group
-                    existing_match.home_score = home_score if home_score is not None else existing_match.home_score
-                    existing_match.away_score = away_score if away_score is not None else existing_match.away_score
-                    existing_match.winner = winner or existing_match.winner
+                    if home_score is not None:
+                        existing_match.home_score = home_score
+                    if away_score is not None:
+                        existing_match.away_score = away_score
+                    if winner is not None:
+                        existing_match.winner = winner
+                    existing_match.live_minute = live_minute
+
+                after_state = {
+                    "home_score": existing_match.home_score,
+                    "away_score": existing_match.away_score,
+                    "status": existing_match.status,
+                    "live_minute": existing_match.live_minute,
+                    "winner": existing_match.winner,
+                }
+
+                if before_state and before_state != after_state:
+                    home_name = home_team.name
+                    away_name = away_team.name
+                    change_entry = {
+                        "match_id": existing_match.id,
+                        "api_id": existing_match.api_id,
+                        "fixture": f"{home_name} vs {away_name}",
+                        "old_score": f"{before_state['home_score']}-{before_state['away_score']}",
+                        "new_score": f"{after_state['home_score']}-{after_state['away_score']}",
+                        "old_status": before_state["status"],
+                        "new_status": after_state["status"],
+                        "old_minute": before_state["live_minute"],
+                        "new_minute": after_state["live_minute"],
+                    }
+                    summary["updated_count"] += 1
+                    summary["updated_match_ids"].append(existing_match.id)
+                    summary["changes"].append(change_entry)
+                    logger.info(
+                        f"Match updated id={existing_match.id} api_id={existing_match.api_id} "
+                        f"({home_name} vs {away_name}): "
+                        f"score {change_entry['old_score']} → {change_entry['new_score']}, "
+                        f"status {change_entry['old_status']} → {change_entry['new_status']}, "
+                        f"minute {change_entry['old_minute']} → {change_entry['new_minute']}"
+                    )
 
                 summary["matches"] += 1
 
@@ -296,7 +359,11 @@ class CollectionService:
             logger.info(
                 f"Auto-created {created_teams_count} missing teams during match ingestion."
             )
-            logger.info(f"Matches ingestion completed: {summary}")
+            logger.info(
+                f"Matches ingestion completed: processed={summary['matches']} "
+                f"updated={summary['updated_count']} "
+                f"updated_ids={summary['updated_match_ids']}"
+            )
             return summary
 
         except Exception as e:

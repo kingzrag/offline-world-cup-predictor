@@ -4,6 +4,8 @@ import {
   getPredictions, 
   loadFixturesInstant,
   enrichPredictionsInBackground,
+  refreshFixturesFromApi,
+  refreshLiveScoresInto,
   API_BASE,
   getStandings,
   getBracket,
@@ -76,6 +78,52 @@ function formatSmartKickoff(isoStr: string | null | undefined): string {
   }
 }
 
+function formatKickoffIST(isoStr: string | null | undefined): string {
+  if (!isoStr) return "TBD";
+  try {
+    const time = new Date(isoStr).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
+    });
+    return `${time} IST`;
+  } catch {
+    return "TBD";
+  }
+}
+
+function pickFeaturedMatch(matches: MatchPrediction[]): MatchPrediction | null {
+  if (!matches.length) return null;
+
+  const live = matches.filter(m => m.status === 'LIVE');
+  if (live.length > 0) {
+    return [...live].sort((a, b) => {
+      const tA = new Date(a.kickoffTime || a.date).getTime();
+      const tB = new Date(b.kickoffTime || b.date).getTime();
+      return tA - tB;
+    })[0];
+  }
+
+  const upcoming = matches
+    .filter(m => m.status === 'UPCOMING')
+    .sort((a, b) => {
+      const tA = new Date(a.kickoffTime || a.date).getTime();
+      const tB = new Date(b.kickoffTime || b.date).getTime();
+      return tA - tB;
+    });
+  if (upcoming.length > 0) return upcoming[0];
+
+  const bestPrediction = [...matches]
+    .filter(m => m.status === 'UPCOMING')
+    .sort((a, b) => {
+      const confA = Math.max(a.probA, a.probB, a.probD);
+      const confB = Math.max(b.probA, b.probB, b.probD);
+      return confB - confA;
+    })[0];
+  return bestPrediction ?? null;
+}
+
 function MatchTimeDisplay({ match }: { match: MatchPrediction }) {
   if (match.status === 'LIVE') {
     return (
@@ -85,12 +133,18 @@ function MatchTimeDisplay({ match }: { match: MatchPrediction }) {
           <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
         </span>
         <span className="text-red-500 font-extrabold tracking-widest uppercase">LIVE</span>
+        {match.minute != null && (
+          <>
+            <span className="text-zinc-600">•</span>
+            <span className="text-red-400 font-bold font-mono">{match.minute}&apos;</span>
+          </>
+        )}
       </div>
     );
   }
   
   if (match.status === 'COMPLETED') {
-    return <span className="text-zinc-550 font-bold uppercase tracking-wider">FINAL</span>;
+    return <span className="text-zinc-550 font-bold uppercase tracking-wider">FULL TIME</span>;
   }
   
   return <span className="text-zinc-450">{formatSmartKickoff(match.kickoffTime) || match.date}</span>;
@@ -237,6 +291,66 @@ export default function App() {
       controller.abort();
     };
   }, [showHistorical]);
+
+  const sourceMatchesRef = useRef(sourceMatches);
+  sourceMatchesRef.current = sourceMatches;
+  const showHistoricalRef = useRef(showHistorical);
+  showHistoricalRef.current = showHistorical;
+
+  // Auto-refresh fixtures: live scores every 30s, full list every 5min
+  useEffect(() => {
+    if (isLoadingMatches || matchError) return;
+
+    const refreshLive = async () => {
+      try {
+        const updated = await refreshLiveScoresInto(sourceMatchesRef.current);
+        setSourceMatches(sortSourceMatches(updated));
+      } catch (err) {
+        console.warn("[App] Live score refresh failed:", err);
+      }
+    };
+
+    const refreshAll = async () => {
+      try {
+        const updated = await refreshFixturesFromApi(
+          sourceMatchesRef.current,
+          showHistoricalRef.current
+        );
+        setSourceMatches(sortSourceMatches(updated));
+        console.info("[App] Full fixture refresh completed");
+      } catch (err) {
+        console.warn("[App] Full fixture refresh failed:", err);
+      }
+    };
+
+    const hasLive = sourceMatchesRef.current.some(m => m.status === 'LIVE');
+    if (hasLive) {
+      console.info("[App] Live matches detected — 30s score polling active");
+    }
+
+    const liveInterval = setInterval(() => {
+      if (sourceMatchesRef.current.some(m => m.status === 'LIVE')) {
+        refreshLive();
+      }
+    }, 30_000);
+
+    const upcomingInterval = setInterval(refreshAll, 5 * 60_000);
+
+    return () => {
+      clearInterval(liveInterval);
+      clearInterval(upcomingInterval);
+    };
+  }, [isLoadingMatches, matchError]);
+
+  // Start live polling as soon as a match transitions to LIVE
+  const liveMatchCount = sourceMatches.filter(m => m.status === 'LIVE').length;
+  useEffect(() => {
+    if (isLoadingMatches || matchError || liveMatchCount === 0) return;
+
+    refreshLiveScoresInto(sourceMatchesRef.current)
+      .then(updated => setSourceMatches(sortSourceMatches(updated)))
+      .catch(err => console.warn("[App] Live transition refresh failed:", err));
+  }, [liveMatchCount, isLoadingMatches, matchError]);
 
   // Safe navigation function ensuring a uniform, instant scroll reset to top
   const navigateTo = (tab: 'home' | 'predictions' | 'favorites' | 'intelligence' | 'model' | 'tournament') => {
@@ -601,19 +715,8 @@ export default function App() {
   // Section heading separator categorizer
   const getSectionHeading = (match: MatchPrediction) => {
     if (match.status === 'LIVE') return "🔴 Live Matches";
-    if (match.date.includes('June 09') || match.date.includes('June 9')) return "⚡ Today's Predictions";
-    if (match.date.includes('June 10')) return "📅 Tomorrow's Matches";
-    
-    const day = parseInt(match.date.replace(/\D/g, ''));
-    if (match.date.includes('June') && day >= 11 && day <= 16) return "📊 This Week";
-    
-    const stage = match.stage.toLowerCase();
-    if (stage.includes('group stage')) return "⚔️ Group Stage";
-    if (stage.includes('round of 32')) return "🎟️ Round of 32";
-    if (stage.includes('round of 16')) return "🛡️ Round of 16";
-    if (stage.includes('quarter final')) return "🏆 Quarter Finals";
-    if (stage.includes('semi final')) return "⚡ Semi Finals";
-    if (stage.includes('final')) return "👑 The Grand Final";
+    if (match.status === 'UPCOMING') return "📅 Upcoming Matches";
+    if (match.status === 'COMPLETED') return "✅ Completed Matches";
     return "📓 Scheduled Matches";
   };
 
@@ -1106,6 +1209,54 @@ export default function App() {
                     </motion.div>
                   </div>
 
+                  {/* Featured live / upcoming match tracker */}
+                  {(() => {
+                    const featured = pickFeaturedMatch(sourceMatches);
+                    if (!featured || isLoadingMatches) return null;
+                    const flagA = getFlag(featured.teamA);
+                    const flagB = getFlag(featured.teamB);
+                    return (
+                      <motion.div
+                        variants={{
+                          hidden: { opacity: 0, y: 15 },
+                          show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
+                        }}
+                        className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl hover:border-green-accent/30 transition-all duration-300 text-left"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-[9px] uppercase font-mono tracking-widest text-green-accent font-bold">
+                            {featured.status === 'LIVE' ? 'Live Now' : featured.status === 'UPCOMING' ? 'Next Up' : 'Featured Match'}
+                          </span>
+                          <MatchTimeDisplay match={featured} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 text-sm font-bold text-white uppercase">
+                            <span className="text-lg">{flagA}</span>
+                            <span>{featured.teamA}</span>
+                          </div>
+                          {featured.status === 'LIVE' || featured.status === 'COMPLETED' ? (
+                            <div className="flex items-center gap-3 text-2xl font-black text-white font-mono pl-7">
+                              <span>{featured.liveScore?.home ?? 0}</span>
+                              <span className="text-zinc-600 font-light text-lg">—</span>
+                              <span>{featured.liveScore?.away ?? 0}</span>
+                            </div>
+                          ) : (
+                            <div className="text-zinc-500 text-[10px] font-mono uppercase pl-7">vs</div>
+                          )}
+                          <div className="flex items-center gap-2 text-sm font-bold text-white uppercase">
+                            <span className="text-lg">{flagB}</span>
+                            <span>{featured.teamB}</span>
+                          </div>
+                        </div>
+                        {featured.status === 'UPCOMING' && (
+                          <div className="mt-3 pt-3 border-t border-zinc-900/80 text-[10px] font-mono text-zinc-400">
+                            Kickoff: <span className="text-white font-semibold">{formatKickoffIST(featured.kickoffTime)}</span>
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })()}
+
                   {/* Calibration Operational Status block */}
                   <motion.div 
                     variants={{
@@ -1483,10 +1634,12 @@ export default function App() {
                     <span className="text-white font-bold">48</span>
                     <span className="text-zinc-650 text-[10px] uppercase tracking-wider">Nations</span>
                   </div>
-                  <div className="px-4 py-2 border border-zinc-900 bg-zinc-950/40 rounded flex items-center space-x-2.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-accent animate-pulse"></span>
-                    <span className="text-white font-bold">LIVE</span>
-                  </div>
+                  {sourceMatches.some(m => m.status === 'LIVE') && (
+                    <div className="px-4 py-2 border border-red-500/30 bg-red-950/20 rounded flex items-center space-x-2.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                      <span className="text-red-400 font-bold">{sourceMatches.filter(m => m.status === 'LIVE').length} LIVE</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1577,14 +1730,7 @@ export default function App() {
                   
                   {/* TOP INTUITIVE INSIGHT PANEL: Highest Confidence Prediction Today */}
                   {selectedFilter === 'All Matches' && (() => {
-                    // Dynamically pick the highest-confidence upcoming match
-                    const heroMatch = sourceMatches
-                      .filter(m => m.status === 'UPCOMING' && m.isLiveData)
-                      .sort((a, b) => {
-                        const confA = Math.max(a.probA, a.probB, a.probD);
-                        const confB = Math.max(b.probA, b.probB, b.probD);
-                        return confB - confA;
-                      })[0] || sourceMatches.filter(m => m.status === 'UPCOMING')[0] || sourceMatches[0];
+                    const heroMatch = pickFeaturedMatch(sourceMatches);
 
                     if (!heroMatch) return null;
 
@@ -1596,6 +1742,11 @@ export default function App() {
                       heroMaxProb === heroMatch.probA ? heroMatch.teamACode :
                       heroMaxProb === heroMatch.probB ? heroMatch.teamBCode : 'DRW';
 
+                    const heroLabel =
+                      heroMatch.status === 'LIVE' ? 'Live Match' :
+                      heroMatch.status === 'UPCOMING' ? 'Next Upcoming Fixture' :
+                      'Highest Confidence Prediction';
+
                     return (
                     <div className="bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-905 rounded-lg p-6 md:p-8 flex flex-col md:flex-row items-stretch justify-between gap-8 relative overflow-hidden group">
                       {/* Subtle background flare */}
@@ -1603,8 +1754,15 @@ export default function App() {
                       
                       <div className="space-y-4 flex-1">
                         <div className="inline-flex items-center space-x-2 bg-green-accent/10 border border-green-accent/30 px-3 py-1 rounded text-[9px] uppercase tracking-widest text-green-accent font-mono font-extrabold">
-                          <Sparkles className="w-3" />
-                          <span>Highest Confidence Prediction Today</span>
+                          {heroMatch.status === 'LIVE' ? (
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                            </span>
+                          ) : (
+                            <Sparkles className="w-3" />
+                          )}
+                          <span>{heroLabel}</span>
                         </div>
 
                         <div className="space-y-1.5">
@@ -1612,24 +1770,67 @@ export default function App() {
                           <h3 className="text-3xl font-serif text-white uppercase tracking-tight">
                             {heroMatch.teamA} vs {heroMatch.teamB}
                           </h3>
+                          {(heroMatch.status === 'LIVE' || heroMatch.status === 'COMPLETED') && (
+                            <div className="flex items-center gap-3 text-4xl font-black text-white font-mono tracking-wider pt-2">
+                              <span>{heroMatch.liveScore?.home ?? 0}</span>
+                              <span className="text-zinc-600 font-light">—</span>
+                              <span>{heroMatch.liveScore?.away ?? 0}</span>
+                            </div>
+                          )}
                         </div>
 
-                        <p className="text-zinc-400 text-sm max-w-xl leading-relaxed">
-                          Our ML model gives <strong className="text-white">{heroWinner}</strong> the highest win probability in this fixture at <strong className="text-green-400">{heroMaxProb}%</strong>, making it today's most confident call across all {sourceMatches.filter(m => m.status === 'UPCOMING').length} upcoming matches.
-                        </p>
+                        {heroMatch.status === 'LIVE' ? (
+                          <p className="text-zinc-400 text-sm max-w-xl leading-relaxed flex items-center gap-2">
+                            <MatchTimeDisplay match={heroMatch} />
+                            <span>— tracking live score from fixture data, refreshing every 30 seconds.</span>
+                          </p>
+                        ) : heroMatch.status === 'UPCOMING' ? (
+                          <p className="text-zinc-400 text-sm max-w-xl leading-relaxed">
+                            Next fixture on the schedule. Kickoff at <strong className="text-white">{formatKickoffIST(heroMatch.kickoffTime)}</strong>.
+                          </p>
+                        ) : (
+                          <p className="text-zinc-400 text-sm max-w-xl leading-relaxed">
+                            Our ML model gives <strong className="text-white">{heroWinner}</strong> the highest win probability in this fixture at <strong className="text-green-400">{heroMaxProb}%</strong>.
+                          </p>
+                        )}
 
                         <div className="flex gap-4 items-center font-mono text-zinc-500">
+                          {heroMatch.status !== 'UPCOMING' && (
+                            <>
+                              <div className="text-xs">
+                                Confidence: <span className="text-[#1cdb5e] font-bold uppercase">{heroMatch.confidence}</span>
+                              </div>
+                              <div className="w-1.5 h-1.5 rounded-full bg-zinc-800"></div>
+                            </>
+                          )}
                           <div className="text-xs">
-                            Confidence: <span className="text-[#1cdb5e] font-bold uppercase">{heroMatch.confidence}</span>
-                          </div>
-                          <div className="w-1.5 h-1.5 rounded-full bg-zinc-800"></div>
-                          <div className="text-xs">
-                            Kickoff: <span className="text-white font-semibold">{heroMatch.date}</span>
+                            {heroMatch.status === 'UPCOMING' ? (
+                              <>Kickoff: <span className="text-white font-semibold">{formatKickoffIST(heroMatch.kickoffTime)}</span></>
+                            ) : (
+                              <MatchTimeDisplay match={heroMatch} />
+                            )}
                           </div>
                         </div>
                       </div>
 
                       {/* Highlights Card stats right side */}
+                      {heroMatch.status === 'UPCOMING' ? (
+                        <div className="w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-l border-zinc-800 pt-6 md:pt-0 md:pl-8 flex flex-col justify-center items-stretch">
+                          <div className="text-center space-y-2">
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">Scheduled Kickoff</span>
+                            <span className="text-2xl font-bold text-white font-mono block">{formatKickoffIST(heroMatch.kickoffTime)}</span>
+                            <span className="text-[10px] font-mono text-zinc-600 block">{formatSmartKickoff(heroMatch.kickoffTime)}</span>
+                          </div>
+                          <div className="pt-6">
+                            <button
+                              onClick={() => openMatchAnalysis(heroMatch)}
+                              className="w-full py-3.5 bg-zinc-100 hover:bg-white text-black font-semibold text-xs font-mono tracking-widest uppercase transition-all flex items-center justify-center gap-2 rounded select-none cursor-pointer"
+                            >
+                              View Full Report <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
                       <div className="w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-l border-zinc-800 pt-6 md:pt-0 md:pl-8 flex flex-col justify-between items-stretch">
                         <div className="space-y-4">
                           <div className="flex items-center justify-between text-xs font-mono">
@@ -1657,6 +1858,7 @@ export default function App() {
                           </button>
                         </div>
                       </div>
+                      )}
                     </div>
                     );
                   })()}
@@ -1757,12 +1959,6 @@ export default function App() {
                                       <span>{match.stage}</span>
                                       <span>•</span>
                                       <MatchTimeDisplay match={match} />
-                                      {match.status === 'LIVE' && (
-                                        <>
-                                          <span>•</span>
-                                          <span className="text-[#1cdb5e] font-extrabold animate-pulse">IN PROGRESS</span>
-                                        </>
-                                      )}
                                       <span>•</span>
                                       {match.isLiveData ? (
                                         <span className="text-green-accent font-bold text-[8.5px] bg-green-accent/10 border border-green-accent/25 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase">LIVE MODEL</span>

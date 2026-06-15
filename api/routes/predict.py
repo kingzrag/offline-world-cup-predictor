@@ -586,6 +586,7 @@ def get_fixtures(
             "live_score":   _live_score(m),
             "winner":       m.winner,
             "prediction":   _prediction(m),
+            "live_minute":  m.live_minute,
         }
         for m in matches
     ]
@@ -600,6 +601,48 @@ def get_fixtures(
         "competition": comp.name,
         "count":       len(fixtures_out),
         "fixtures":    fixtures_out,
+    }
+
+
+@router.get("/debug/live-sync", summary="Debug: live sync state and current DB scores")
+def debug_live_sync(db: Session = Depends(get_db)):
+    """
+    Temporary debug endpoint for verifying live score refresh pipeline.
+    """
+    from models import Match, Competition
+    from services.live_sync_state import get_live_sync_state
+
+    comp = db.query(Competition).filter_by(code="WC").first()
+    live_matches = []
+    if comp:
+        live_rows = (
+            db.query(Match)
+            .filter(
+                Match.competition_id == comp.id,
+                Match.status.in_(["IN_PLAY", "PAUSED"]),
+            )
+            .order_by(Match.utc_date.asc())
+            .all()
+        )
+        for m in live_rows:
+            live_matches.append({
+                "id": m.id,
+                "api_id": m.api_id,
+                "home_team": m.home_team.name if m.home_team else None,
+                "away_team": m.away_team.name if m.away_team else None,
+                "status": m.status,
+                "home_score": m.home_score,
+                "away_score": m.away_score,
+                "live_minute": m.live_minute,
+                "kickoff_time": m.utc_date.isoformat() if m.utc_date else None,
+            })
+
+    sync_state = get_live_sync_state()
+    return {
+        "status": "success",
+        "sync_state": sync_state,
+        "live_match_count": len(live_matches),
+        "live_matches": live_matches,
     }
 
 

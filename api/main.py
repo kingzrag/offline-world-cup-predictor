@@ -97,6 +97,63 @@ from api.routes.admin import router as admin_router
 app.include_router(admin_router)
 
 
+async def run_live_match_sync():
+    """
+    Poll football-data.org every 30 seconds so live scores stay current during matches.
+    """
+    from services.live_sync_state import (
+        mark_task_initialized,
+        record_sync_complete,
+        record_sync_error,
+        record_sync_start,
+    )
+
+    mark_task_initialized()
+    logger.info("Live match sync background task initialized (30s interval).")
+    await asyncio.sleep(5)  # let startup finish before first sync
+
+    while True:
+        started_at = datetime.now(timezone.utc)
+        record_sync_start()
+        logger.info("Live sync started")
+
+        try:
+            from database.connection import SessionLocal
+            from services.collection_service import CollectionService
+
+            db = SessionLocal()
+            try:
+                service = CollectionService()
+                summary = await service.ingest_matches(db, "WC")
+                record_sync_complete(started_at, summary)
+                logger.info(
+                    f"Live sync completed — processed={summary.get('matches', 0)} "
+                    f"updated={summary.get('updated_count', 0)} "
+                    f"updated_ids={summary.get('updated_match_ids', [])}"
+                )
+                if summary.get("changes"):
+                    for change in summary["changes"]:
+                        logger.info(
+                            f"  ↳ {change['fixture']}: "
+                            f"{change['old_score']} → {change['new_score']} "
+                            f"({change['old_status']} → {change['new_status']}, "
+                            f"min {change['old_minute']} → {change['new_minute']})"
+                        )
+            except Exception as e:
+                record_sync_error(str(e))
+                logger.error(f"Live sync failed during ingest_matches: {e}", exc_info=True)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            logger.info("Live match sync task cancelled.")
+            break
+        except Exception as e:
+            record_sync_error(str(e))
+            logger.error(f"Live sync unexpected error: {e}", exc_info=True)
+
+        await asyncio.sleep(30)
+
+
 async def run_daily_scheduler():
     """
     Asynchronous background loop to run data ingestion at 02:00 AM IST daily.
@@ -209,3 +266,4 @@ async def startup_event():
 
     logger.info("Starting background scheduler task...")
     asyncio.create_task(run_daily_scheduler())
+    asyncio.create_task(run_live_match_sync())

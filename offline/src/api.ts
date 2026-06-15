@@ -187,6 +187,7 @@ export interface BackendFixture {
   away_team: BackendFixtureTeam | null;
   live_score: BackendFixtureLiveScore | null;  // populated for IN_PLAY, PAUSED, FINISHED
   winner: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null;
+  live_minute?: number | null;
   prediction?: {
     predicted_outcome: "HOME_WIN" | "AWAY_WIN" | "DRAW";
     home_probability: number;
@@ -468,6 +469,7 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     venue: f.venue || "TBD Stadium",
     liveScore: f.live_score ?? null,
     winner: f.winner,
+    minute: f.live_minute ?? null,
 
     // Default placeholders for tactical ratings that get loaded dynamically or mapped
     attackA: 80, attackB: 80,
@@ -815,10 +817,145 @@ export async function getPredictions(year?: number, showHistorical?: boolean): P
 }
 
 /**
+ * mergeFixturesWithEnrichment
+ * Re-applies ML enrichment from a previous render when refreshing fixture scores/status.
+ */
+export function mergeFixturesWithEnrichment(
+  fresh: MatchPrediction[],
+  existing: MatchPrediction[]
+): MatchPrediction[] {
+  const existingById = new Map(existing.map(m => [m.id, m]));
+
+  return fresh.map(freshMatch => {
+    const prev = existingById.get(freshMatch.id);
+    if (!prev) return freshMatch;
+
+    // Completed matches: use fresh result-derived probabilities from the API.
+    if (freshMatch.status === "COMPLETED") {
+      return { ...freshMatch, isLiveData: prev.isLiveData ?? freshMatch.isLiveData };
+    }
+
+    if (!prev.isLiveData) return freshMatch;
+
+    return {
+      ...freshMatch,
+      probA: prev.probA,
+      probD: prev.probD,
+      probB: prev.probB,
+      prediction: prev.prediction,
+      confidence: prev.confidence,
+      modelConfidence: prev.modelConfidence,
+      isLiveData: true,
+      overUnder: prev.overUnder,
+      bttsMarket: prev.bttsMarket,
+      mostLikelyScore: prev.mostLikelyScore,
+      top5Scorelines: prev.top5Scorelines,
+      asianHandicap: prev.asianHandicap,
+      teamGoals: prev.teamGoals,
+      totalExpectedGoals: prev.totalExpectedGoals,
+      xGA: prev.xGA,
+      xGB: prev.xGB,
+      aiSummary: prev.aiSummary,
+    };
+  });
+}
+
+/**
+ * mergeLiveScoreUpdate
+ * Applies score/status/minute from a fresh fixture onto an existing enriched match.
+ */
+export function mergeLiveScoreUpdate(
+  existing: MatchPrediction,
+  fresh: MatchPrediction
+): MatchPrediction {
+  const merged = mergeFixturesWithEnrichment([fresh], [existing])[0];
+  return merged;
+}
+
+/**
+ * refreshLiveScoresInto()
+ * Lightweight poll — fetches only IN_PLAY/PAUSED fixtures and merges into existing state.
+ * Used by the 30-second live refresh interval.
+ */
+export async function refreshLiveScoresInto(
+  existing: MatchPrediction[]
+): Promise<MatchPrediction[]> {
+  const previouslyLiveIds = new Set(
+    existing.filter(m => m.status === "LIVE").map(m => m.id)
+  );
+
+  const liveFixtures = await getLiveFixtures();
+
+  if (previouslyLiveIds.size > 0) {
+    const stillLiveIds = new Set(liveFixtures.map(f => f.id));
+    const endedCount = [...previouslyLiveIds].filter(id => !stillLiveIds.has(id)).length;
+    if (endedCount > 0) {
+      console.info(
+        `[api] ${endedCount} previously-live match(es) no longer IN_PLAY — running full fixture refresh`
+      );
+      return refreshFixturesFromApi(existing);
+    }
+  }
+
+  if (liveFixtures.length === 0) {
+    console.info("[api] refreshLiveScoresInto — no live fixtures in DB");
+    return existing;
+  }
+
+  const liveById = new Map(liveFixtures.map(m => [m.id, m]));
+  let changeCount = 0;
+
+  const updated = existing.map(match => {
+    const fresh = liveById.get(match.id);
+    if (!fresh) return match;
+
+    const scoreChanged =
+      match.liveScore?.home !== fresh.liveScore?.home ||
+      match.liveScore?.away !== fresh.liveScore?.away ||
+      match.status !== fresh.status ||
+      match.minute !== fresh.minute;
+
+    if (scoreChanged) {
+      changeCount += 1;
+      console.info(
+        `[api] Live score update: ${match.teamA} vs ${match.teamB} ` +
+        `${match.liveScore?.home ?? "?"}-${match.liveScore?.away ?? "?"} → ` +
+        `${fresh.liveScore?.home ?? "?"}-${fresh.liveScore?.away ?? "?"} ` +
+        `(min ${fresh.minute ?? "?"})`
+      );
+    }
+
+    return mergeLiveScoreUpdate(match, fresh);
+  });
+
+  console.info(
+    `[api] refreshLiveScoresInto — ${liveFixtures.length} live fixture(s), ${changeCount} score change(s)`
+  );
+  return updated;
+}
+
+/**
+ * refreshFixturesFromApi()
+ * Lightweight poll — fetches all fixtures and merges with existing ML enrichment.
+ * Used by the 30s (live) and 5min (upcoming) frontend refresh intervals.
+ */
+export async function refreshFixturesFromApi(
+  existing: MatchPrediction[],
+  showHistorical?: boolean
+): Promise<MatchPrediction[]> {
+  const fixturesResponse = await getFixtures({
+    competition_code: "WC",
+    limit: 500,
+    show_historical: showHistorical,
+  });
+  const fresh = (fixturesResponse.fixtures || []).map(mapFixtureToPrediction);
+  return mergeFixturesWithEnrichment(fresh, existing);
+}
+
+/**
  * getLiveFixtures()
  *
  * Lightweight poll — fetches only IN_PLAY and PAUSED fixtures from the DB.
- * Used by the 60-second frontend refresh interval.
  * Does NOT re-run ML batch predictions (score/status sync only).
  */
 export async function getLiveFixtures(): Promise<MatchPrediction[]> {

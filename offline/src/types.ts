@@ -120,6 +120,7 @@ export interface MatchPrediction {
     away: TeamGoalMarket;
   };
   totalExpectedGoals?: number;
+  modelConfidence?: number;
 
   /** Set to true when this record was enriched by the live FastAPI model */
   isLiveData?: boolean;
@@ -134,7 +135,7 @@ export interface MatchPrediction {
    */
   liveScore?: { home: number; away: number; is_live: boolean } | null;
 
-  /** Match minute (if available from the API in future, currently null) */
+  /** Match minute from football-data.org (IN_PLAY / PAUSED only) */
   minute?: number | null;
 }
 

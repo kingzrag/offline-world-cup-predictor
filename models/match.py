@@ -17,6 +17,7 @@ class Match(Base):
     home_score = Column(Integer, nullable=True)
     away_score = Column(Integer, nullable=True)
     winner = Column(String(50), nullable=True)  # e.g., "HOME_TEAM", "AWAY_TEAM", "DRAW"
+    live_minute = Column(Integer, nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

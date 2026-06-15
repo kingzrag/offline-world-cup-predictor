@@ -81,10 +81,13 @@ class FootballDataCollector(BaseCollector):
             for match in res.get("matches", []):
                 score = match.get("score", {})
                 full_time = score.get("fullTime", {})
+                half_time = score.get("halfTime", {})
                 parsed_matches.append({
                     "id": match["id"],
                     "utcDate": match["utcDate"],
                     "status": match["status"],
+                    "minute": match.get("minute"),
+                    "injuryTime": match.get("injuryTime"),
                     "stage": match.get("stage"),
                     "group": match.get("group"),
                     "homeTeam": {
@@ -106,6 +109,10 @@ class FootballDataCollector(BaseCollector):
                         "fullTime": {
                             "home": full_time.get("home"),
                             "away": full_time.get("away")
+                        },
+                        "halfTime": {
+                            "home": half_time.get("home"),
+                            "away": half_time.get("away")
                         }
                     }
                 })
