@@ -20,6 +20,11 @@
  * All subsequent calls are O(1) alias lookups or O(n) map lookups where n ≤ 250.
  */
 
+const countryAliases = {
+  FRA: "FR",
+  TUR: "TR",
+};
+
 // ── Alias map ────────────────────────────────────────────────────────────────
 // Maps common alternate team names → ISO 3166-1 alpha-2 codes (or special tags).
 // Add entries here whenever the API sends a name that doesn't match the
@@ -38,6 +43,8 @@ const ALIAS_MAP: Record<string, string> = {
   "northern ireland":           "GB-NIR",
 
   // Common alternate spellings / FIFA names
+  "france":                     "FR",
+  "turkey":                     "TR",
   "bosnia-herzegovina":         "BA",
   "bosnia & herzegovina":       "BA",
   "bosnia and herzegovina":     "BA",
@@ -153,6 +160,11 @@ function isoToEmoji(code: string): string {
  */
 export function getFlag(countryName: string): string {
   if (!countryName) return "🏳️";
+
+  const upper = countryName.trim().toUpperCase();
+  if (upper in countryAliases) {
+    return isoToEmoji(countryAliases[upper as keyof typeof countryAliases]);
+  }
 
   const normalised = countryName.trim().toLowerCase();
 
