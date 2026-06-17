@@ -229,6 +229,12 @@ class CollectionService:
 
             logger.info("Ingesting league matches...")
             matches_data = await self.fd_collector.fetch_matches(competition_code)
+            if not matches_data:
+                logger.warning(
+                    f"No match data returned for {competition_code} — skipping ingestion cycle"
+                )
+                return summary
+
             for m in matches_data:
                 home_team_data = m.get("homeTeam", {})
                 away_team_data = m.get("awayTeam", {})

@@ -22,20 +22,22 @@ class BaseCollector:
         self, 
         endpoint: str, 
         params: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
+        empty_on_failure: bool = False,
     ) -> Dict[str, Any]:
         """
         Executes HTTP GET requests, returning json. Raises Exception on non-200.
-        Retries up to 3 times on 429 Rate Limit responses with exponential backoff.
+        Retries up to 3 times on 429 or transient network errors (e.g.
+        RemoteProtocolError) with exponential backoff of 2s, 4s, 8s.
         """
         url = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         req_headers = self._get_headers()
         if headers:
             req_headers.update(headers)
-            
-        max_retries = 3
-        backoff = 1.0
-        
+
+        retry_backoffs = (2.0, 4.0, 8.0)
+        max_retries = len(retry_backoffs)
+
         for attempt in range(max_retries + 1):
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 try:
@@ -45,12 +47,34 @@ class BaseCollector:
                     return response.json()
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 429 and attempt < max_retries:
-                        sleep_time = backoff * (2 ** attempt)
-                        logger.warning(f"Rate limited (429) on {url}. Retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})...")
-                        await asyncio.sleep(sleep_time)
+                        wait = retry_backoffs[attempt]
+                        logger.warning(
+                            f"Rate limited (429) on {url}. "
+                            f"Retrying in {wait}s (attempt {attempt + 1}/{max_retries})..."
+                        )
+                        await asyncio.sleep(wait)
                         continue
                     logger.error(f"HTTP Error for endpoint {endpoint}: {e.response.status_code} - {e.response.text}")
+                    if empty_on_failure:
+                        return {}
                     raise
                 except httpx.RequestError as e:
-                    logger.error(f"Network error accessing {url}: {str(e)}")
+                    if attempt < max_retries:
+                        wait = retry_backoffs[attempt]
+                        logger.warning(
+                            f"Network error on {url}: {type(e).__name__}: {e}. "
+                            f"Retrying in {wait}s (attempt {attempt + 1}/{max_retries})..."
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+                    logger.error(
+                        f"Network error on {url} after {max_retries} retries: "
+                        f"{type(e).__name__}: {e}"
+                    )
+                    if empty_on_failure:
+                        return {}
                     raise
+
+        if empty_on_failure:
+            return {}
+        raise RuntimeError(f"Request to {url} failed after {max_retries} retries")

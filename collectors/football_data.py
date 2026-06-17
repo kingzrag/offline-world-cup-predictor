@@ -73,10 +73,20 @@ class FootballDataCollector(BaseCollector):
     async def fetch_matches(self, competition_code: str = "WC") -> List[Dict[str, Any]]:
         """
         Retrieves recent and scheduled matches.
+        Returns an empty list if the API is unreachable after retries.
         """
+        res = await self._request(
+            f"competitions/{competition_code}/matches",
+            empty_on_failure=True,
+        )
+        if not res:
+            logger.warning(
+                f"FootballDataCollector fetch_matches({competition_code}): "
+                "returning empty list after retries exhausted"
+            )
+            return []
 
         try:
-            res = await self._request(f"competitions/{competition_code}/matches")
             parsed_matches = []
             for match in res.get("matches", []):
                 score = match.get("score", {})
@@ -118,5 +128,5 @@ class FootballDataCollector(BaseCollector):
                 })
             return parsed_matches
         except Exception as e:
-            logger.error(f"FootballDataCollector matches fetch error: {e}")
-            raise
+            logger.error(f"FootballDataCollector matches parse error: {e}")
+            return []
