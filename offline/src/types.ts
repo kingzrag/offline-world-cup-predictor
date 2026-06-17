@@ -125,7 +125,7 @@ export interface MatchPrediction {
   /** Set to true when this record was enriched by the live FastAPI model */
   isLiveData?: boolean;
 
-  /** Raw ISO-8601 UTC kickoff time — used for local-timezone rendering */
+  /** Raw ISO-8601 UTC kickoff time — always UTC; format for display via dateTimeUtils */
   kickoffTime?: string | null;
 
   /**

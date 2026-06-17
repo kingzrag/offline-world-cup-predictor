@@ -31,6 +31,7 @@ import type {
   AsianHandicap,
   TeamGoalMarket,
 } from "./types";
+import { formatKickoffDateLocal } from "./dateTimeUtils";
 import { MOCK_MATCHES } from "./data";
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
@@ -378,20 +379,6 @@ export function mapBackendPrediction(
 
 // ── Primary consumer: load all predictions ────────────────────────────────────
 
-function formatKickoffDate(isoStr: string | null): string {
-  if (!isoStr) return "Unknown Date";
-  try {
-    const d = new Date(isoStr);
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric"
-    });
-  } catch {
-    return "Unknown Date";
-  }
-}
-
 export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
   const teamA = f.home_team?.name ?? "Unknown";
   const teamB = f.away_team?.name ?? "Unknown";
@@ -456,7 +443,7 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     teamB,
     teamACode,
     teamBCode,
-    date: formatKickoffDate(f.kickoff_time),
+    date: formatKickoffDateLocal(f.kickoff_time),
     kickoffTime: f.kickoff_time,
     stage: stageLabel,
     status: statusMapped,

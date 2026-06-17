@@ -23,6 +23,14 @@ import {
   MOCK_ACCURACY_STATS,
 } from './data';
 import { getFlag } from './flagUtils';
+import {
+  formatSmartKickoffLocal,
+  formatKickoffTimeLocal,
+  formatKickoffDateLocal,
+  formatKickoffDateTimeLocal,
+  isKickoffToday,
+  isKickoffTomorrow,
+} from './dateTimeUtils';
 import { motion } from 'motion/react';
 import {
   Search,
@@ -53,45 +61,6 @@ import {
 } from 'lucide-react';
 
 
-
-function formatSmartKickoff(isoStr: string | null | undefined): string {
-  if (!isoStr) return "TBD";
-  try {
-    const d = new Date(isoStr);
-    const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
-    const day = d.toLocaleDateString("en-US", { day: "numeric" });
-    const month = d.toLocaleDateString("en-US", { month: "short" });
-    
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    
-    let tz = '';
-    try {
-      const parts = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(d);
-      const tzPart = parts.find(p => p.type === 'timeZoneName');
-      if (tzPart) tz = tzPart.value;
-    } catch {}
-    
-    return `${weekday} ${day} ${month} · ${hours}:${minutes} ${tz}`.trim();
-  } catch {
-    return "TBD";
-  }
-}
-
-function formatKickoffIST(isoStr: string | null | undefined): string {
-  if (!isoStr) return "TBD";
-  try {
-    const time = new Date(isoStr).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    });
-    return `${time} IST`;
-  } catch {
-    return "TBD";
-  }
-}
 
 function pickFeaturedMatch(matches: MatchPrediction[]): MatchPrediction | null {
   if (!matches.length) return null;
@@ -147,7 +116,7 @@ function MatchTimeDisplay({ match }: { match: MatchPrediction }) {
     return <span className="text-zinc-550 font-bold uppercase tracking-wider">FULL TIME</span>;
   }
   
-  return <span className="text-zinc-450">{formatSmartKickoff(match.kickoffTime) || match.date}</span>;
+  return <span className="text-zinc-450">{formatSmartKickoffLocal(match.kickoffTime) || match.date}</span>;
 }
 
 const getYear = (match: MatchPrediction) => {
@@ -733,14 +702,9 @@ export default function App() {
     if (selectedFilter === 'Live') {
       list = list.filter(m => m.status === 'LIVE');
     } else if (selectedFilter === "Today") {
-      // Use real current date — compare against ISO kickoffTime field
-      const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      list = list.filter(m => m.kickoffTime?.startsWith(todayStr));
+      list = list.filter(m => isKickoffToday(m.kickoffTime));
     } else if (selectedFilter === "Tomorrow") {
-      const tmrw = new Date();
-      tmrw.setDate(tmrw.getDate() + 1);
-      const tmrwStr = tmrw.toISOString().slice(0, 10);
-      list = list.filter(m => m.kickoffTime?.startsWith(tmrwStr));
+      list = list.filter(m => isKickoffTomorrow(m.kickoffTime));
     } else if (selectedFilter === "This Week") {
       const now = new Date();
       const weekEnd = new Date();
@@ -819,8 +783,9 @@ export default function App() {
   const [favoriteTeamCodes, setFavoriteTeamCodes] = useState<string[]>([]);
   const [favoriteInsightIds, setFavoriteInsightIds] = useState<string[]>([]);
 
-  // Local running Countdown to Kickoff
-  const [countdown, setCountdown] = useState('02:08:46:37');
+  // Local running countdown to next upcoming kickoff (UTC stored, local display)
+  const [countdown, setCountdown] = useState('00:00:00:00');
+  const [countdownLabel, setCountdownLabel] = useState('Next kickoff');
 
   // Load and sync favorites on mount
   useEffect(() => {
@@ -837,12 +802,23 @@ export default function App() {
     }
   }, []);
 
-  // Update Countdown timer based on actual World Cup 2026 Opening target (June 11, 2026, 18:00 UTC)
+  // Countdown to next upcoming match (falls back to World Cup opening)
   useEffect(() => {
     const updateCountdown = () => {
-      const targetTime = new Date("2026-06-11T18:00:00Z").getTime();
-      const now = new Date().getTime();
+      const nextUpcoming = sourceMatches
+        .filter(m => m.status === 'UPCOMING' && m.kickoffTime)
+        .sort((a, b) => new Date(a.kickoffTime!).getTime() - new Date(b.kickoffTime!).getTime())[0];
+
+      const targetIso = nextUpcoming?.kickoffTime ?? "2026-06-11T18:00:00Z";
+      const targetTime = new Date(targetIso).getTime();
+      const now = Date.now();
       const diff = targetTime - now;
+
+      if (nextUpcoming?.kickoffTime) {
+        setCountdownLabel(`${nextUpcoming.teamA} vs ${nextUpcoming.teamB}`);
+      } else {
+        setCountdownLabel('World Cup 2026 Opening');
+      }
 
       if (diff <= 0) {
         setCountdown("00:00:00:00");
@@ -854,18 +830,15 @@ export default function App() {
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-      const dStr = String(days).padStart(2, '0');
-      const hStr = String(hours).padStart(2, '0');
-      const mStr = String(minutes).padStart(2, '0');
-      const sStr = String(seconds).padStart(2, '0');
-
-      setCountdown(`${dStr}:${hStr}:${mStr}:${sStr}`);
+      setCountdown(
+        `${String(days).padStart(2, '0')}:${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      );
     };
 
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [sourceMatches]);
 
   // Keyboard shortcut for search trigger (Press '/' key)
   useEffect(() => {
@@ -1073,7 +1046,9 @@ export default function App() {
           </button>
 
           <div className="flex flex-col items-end md:border-l border-zinc-900 md:pl-6 leading-tight">
-            <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Kickoff Countdown</span>
+            <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono truncate max-w-[180px]" title={countdownLabel}>
+              {countdownLabel}
+            </span>
             <span className="text-lg font-mono tracking-wider text-green-accent font-semibold tabular-nums">{countdown}</span>
           </div>
         </div>
@@ -1250,7 +1225,7 @@ export default function App() {
                         </div>
                         {featured.status === 'UPCOMING' && (
                           <div className="mt-3 pt-3 border-t border-zinc-900/80 text-[10px] font-mono text-zinc-400">
-                            Kickoff: <span className="text-white font-semibold">{formatKickoffIST(featured.kickoffTime)}</span>
+                            Kickoff: <span className="text-white font-semibold">{formatKickoffTimeLocal(featured.kickoffTime)}</span>
                           </div>
                         )}
                       </motion.div>
@@ -1786,7 +1761,7 @@ export default function App() {
                           </p>
                         ) : heroMatch.status === 'UPCOMING' ? (
                           <p className="text-zinc-400 text-sm max-w-xl leading-relaxed">
-                            Next fixture on the schedule. Kickoff at <strong className="text-white">{formatKickoffIST(heroMatch.kickoffTime)}</strong>.
+                            Next fixture on the schedule. Kickoff at <strong className="text-white">{formatKickoffTimeLocal(heroMatch.kickoffTime)}</strong>.
                           </p>
                         ) : (
                           <p className="text-zinc-400 text-sm max-w-xl leading-relaxed">
@@ -1805,7 +1780,7 @@ export default function App() {
                           )}
                           <div className="text-xs">
                             {heroMatch.status === 'UPCOMING' ? (
-                              <>Kickoff: <span className="text-white font-semibold">{formatKickoffIST(heroMatch.kickoffTime)}</span></>
+                              <>Kickoff: <span className="text-white font-semibold">{formatKickoffTimeLocal(heroMatch.kickoffTime)}</span></>
                             ) : (
                               <MatchTimeDisplay match={heroMatch} />
                             )}
@@ -1818,8 +1793,8 @@ export default function App() {
                         <div className="w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-l border-zinc-800 pt-6 md:pt-0 md:pl-8 flex flex-col justify-center items-stretch">
                           <div className="text-center space-y-2">
                             <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">Scheduled Kickoff</span>
-                            <span className="text-2xl font-bold text-white font-mono block">{formatKickoffIST(heroMatch.kickoffTime)}</span>
-                            <span className="text-[10px] font-mono text-zinc-600 block">{formatSmartKickoff(heroMatch.kickoffTime)}</span>
+                            <span className="text-2xl font-bold text-white font-mono block">{formatKickoffTimeLocal(heroMatch.kickoffTime)}</span>
+                            <span className="text-[10px] font-mono text-zinc-600 block">{formatSmartKickoffLocal(heroMatch.kickoffTime)}</span>
                           </div>
                           <div className="pt-6">
                             <button
@@ -2076,7 +2051,7 @@ export default function App() {
                     <div className="p-5 border-b border-zinc-900 flex justify-between items-start">
                       <div className="flex flex-col">
                         <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase">{match.stage}</span>
-                        <span className="text-[11px] font-mono text-zinc-300 font-semibold mt-1">{match.date}</span>
+                        <span className="text-[11px] font-mono text-zinc-300 font-semibold mt-1">{formatSmartKickoffLocal(match.kickoffTime)}</span>
                       </div>
                       <button 
                         onClick={() => toggleFavoriteMatch(match.id)}
@@ -2270,7 +2245,10 @@ export default function App() {
                             className="group bg-zinc-950 border border-zinc-900 rounded p-6 flex flex-col justify-between"
                           >
                             <div className="flex justify-between items-start mb-4">
-                              <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase">{match.stage}</span>
+                              <div>
+                                <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase block">{match.stage}</span>
+                                <span className="text-[9px] font-mono text-zinc-400 mt-1 block">{formatSmartKickoffLocal(match.kickoffTime)}</span>
+                              </div>
                               <button 
                                 onClick={() => toggleFavoriteMatch(match.id)}
                                 className="text-green-accent shrink-0"
@@ -3661,6 +3639,9 @@ export default function App() {
                                       >
                                         <div className="flex justify-between items-center text-[9px] font-mono text-zinc-550 uppercase">
                                           <span>Match #{m.id}</span>
+                                          <span className="text-zinc-400 normal-case">{formatSmartKickoffLocal(m.utc_date)}</span>
+                                        </div>
+                                        <div className="flex justify-end items-center text-[9px] font-mono uppercase -mt-2 mb-1">
                                           {m.stage === 'THIRD_PLACE' ? (
                                             <span className="text-yellow-600 font-bold tracking-wider">3rd Place Match</span>
                                           ) : (
@@ -3712,7 +3693,7 @@ export default function App() {
                                                   teamB: m.away_team.name,
                                                   teamACode: m.home_team.tla || m.home_team.name.substring(0, 3).toUpperCase(),
                                                   teamBCode: m.away_team.tla || m.away_team.name.substring(0, 3).toUpperCase(),
-                                                  date: m.utc_date,
+                                                  date: formatKickoffDateLocal(m.utc_date),
                                                   kickoffTime: m.utc_date,
                                                   stage: m.stage,
                                                   status: m.status === 'FINISHED' ? 'COMPLETED' : m.status === 'IN_PLAY' || m.status === 'PAUSED' ? 'LIVE' : 'UPCOMING',
@@ -4020,8 +4001,8 @@ export default function App() {
                     <span className="text-white font-serif italic normal-case font-bold">{match.venue}</span>
                   </div>
                   <div>
-                    <span className="text-zinc-650 block mb-1">KICKOFF DATE</span>
-                    <span className="text-white font-bold">{match.date}</span>
+                    <span className="text-zinc-650 block mb-1">KICKOFF</span>
+                    <span className="text-white font-bold normal-case">{formatKickoffDateTimeLocal(match.kickoffTime)}</span>
                   </div>
                   <div>
                     <span className="text-zinc-650 block mb-1">MODEL CONFIDENCE</span>
@@ -4631,7 +4612,10 @@ export default function App() {
                             }}
                           >
                             <span className="font-bold text-white uppercase font-sans">{m.teamA} vs {m.teamB} <span className="text-[10px] text-zinc-500 font-mono">({m.stage})</span></span>
-                            <span className="text-[10px] font-mono text-[#1cdb5e] uppercase">Open Intel →</span>
+                            <div className="text-right">
+                              <span className="text-[10px] font-mono text-zinc-400 block">{formatKickoffTimeLocal(m.kickoffTime)}</span>
+                              <span className="text-[10px] font-mono text-[#1cdb5e] uppercase">Open Intel →</span>
+                            </div>
                           </div>
                         ))}
                       </div>
