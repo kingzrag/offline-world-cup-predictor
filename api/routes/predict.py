@@ -44,6 +44,10 @@ class BatchMatchItem(BaseModel):
     home_team: str = Field(..., example="Brazil")
     away_team: str = Field(..., example="Germany")
     competition_code: Optional[str] = Field(default="WC")
+    match_id: Optional[str] = Field(
+        default=None,
+        description="Optional client fixture id echoed back for reliable frontend mapping",
+    )
 
 
 class BatchPredictRequest(BaseModel):
@@ -171,6 +175,7 @@ def predict_batch(
             results.append({
                 "home_team":  item.home_team,
                 "away_team":  item.away_team,
+                "match_id":   item.match_id,
                 "status":     "success",
                 "prediction": cached_result,
                 "cached":     True,
@@ -195,6 +200,7 @@ def predict_batch(
             results.append({
                 "home_team":  item.home_team,
                 "away_team":  item.away_team,
+                "match_id":   item.match_id,
                 "status":     "success",
                 "prediction": prediction,
                 "cached":     False,
@@ -208,6 +214,7 @@ def predict_batch(
             results.append({
                 "home_team":  item.home_team,
                 "away_team":  item.away_team,
+                "match_id":   item.match_id,
                 "status":     "error",
                 "error":      str(e),
                 "cached":     False,
@@ -216,17 +223,20 @@ def predict_batch(
 
     total_ms = round((time.perf_counter() - batch_start) * 1000, 1)
     cache_hits  = sum(1 for r in results if r.get("cached"))
-    cache_miss  = len(results) - cache_hits
+    success_count = sum(1 for r in results if r.get("status") == "success")
+    error_count   = sum(1 for r in results if r.get("status") == "error")
     logger.info(
         f"POST /api/predict-batch  ←  {len(results)} results in {total_ms} ms "
-        f"(cache hits: {cache_hits}, misses: {cache_miss})"
+        f"(success: {success_count}, errors: {error_count}, cache hits: {cache_hits})"
     )
 
     return {
-        "status":   "success",
-        "total_ms": total_ms,
-        "count":    len(results),
-        "results":  results,
+        "status":        "success",
+        "total_ms":      total_ms,
+        "count":         len(results),
+        "success_count": success_count,
+        "error_count":   error_count,
+        "results":       results,
     }
 
 

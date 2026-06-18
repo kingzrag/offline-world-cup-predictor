@@ -48,8 +48,14 @@ export const API_BASE: string = import.meta.env.PROD
 // Log the resolved API base so it is visible in the browser console on first load.
 console.info(
   `[api] Resolved API base: "${API_BASE}" ` +
-  `(${import.meta.env.PROD ? "production → Railway" : "development → Express proxy"})`
+  `(${import.meta.env.PROD ? "production → direct backend" : "development → Express proxy"})`
 );
+if (import.meta.env.PROD && !API_BASE) {
+  console.error(
+    "[api] VITE_API_URL is not set — prediction requests will fail. " +
+    "Set it in Vercel → Environment Variables (e.g. https://your-backend.onrender.com/api)"
+  );
+}
 
 /** @internal – used by every apiFetch call below */
 const BASE = API_BASE;
@@ -206,17 +212,52 @@ export interface BackendHealth {
 
 // ── Low-level fetch helper ────────────────────────────────────────────────────
 
+/** Combine caller abort signal with a request timeout. */
+function mergeAbortSignals(
+  external: AbortSignal | undefined,
+  timeoutMs: number
+): { signal: AbortSignal; cleanup: () => void } {
+  const timeoutController = new AbortController();
+  const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
+
+  if (!external) {
+    return {
+      signal: timeoutController.signal,
+      cleanup: () => clearTimeout(timer),
+    };
+  }
+
+  if (external.aborted) {
+    clearTimeout(timer);
+    return { signal: external, cleanup: () => clearTimeout(timer) };
+  }
+
+  const merged = new AbortController();
+  const onAbort = () => merged.abort();
+  external.addEventListener("abort", onAbort);
+  timeoutController.signal.addEventListener("abort", onAbort);
+
+  return {
+    signal: merged.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      external.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
 async function apiFetch<T>(
   path: string,
   options?: RequestInit,
   timeoutMs = 30000
 ): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const url = `${BASE}${path}`;
+  const { signal, cleanup } = mergeAbortSignals(options?.signal ?? undefined, timeoutMs);
   try {
-    const res = await fetch(`${BASE}${path}`, {
+    console.log(`[api] → ${options?.method ?? "GET"} ${url}`);
+    const res = await fetch(url, {
       ...options,
-      signal: controller.signal,
+      signal,
       headers: {
         "Content-Type": "application/json",
         ...(options?.headers ?? {}),
@@ -224,11 +265,12 @@ async function apiFetch<T>(
     });
     if (!res.ok) {
       const body = await res.text();
+      console.error(`[api] ✗ ${res.status} ${url}: ${body.slice(0, 300)}`);
       throw new Error(`API ${res.status}: ${body.slice(0, 300)}`);
     }
     return (await res.json()) as T;
   } finally {
-    clearTimeout(timer);
+    cleanup();
   }
 }
 
@@ -314,8 +356,32 @@ export async function getFixtures(
 /**
  * GET /fastapi/health
  */
-export async function checkHealth(): Promise<BackendHealth> {
-  return apiFetch<BackendHealth>("/health");
+export async function checkHealth(signal?: AbortSignal): Promise<BackendHealth> {
+  return apiFetch<BackendHealth>("/health", { signal }, 15000);
+}
+
+/**
+ * Wait until ML models are loaded (Render cold-start can take 30–60s).
+ */
+export async function waitForModelsReady(
+  maxAttempts = 8,
+  delayMs = 4000,
+  signal?: AbortSignal
+): Promise<BackendHealth> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    try {
+      const health = await checkHealth(signal);
+      console.log(`[api] health attempt ${attempt}/${maxAttempts}:`, health);
+      if (health.models_loaded) return health;
+    } catch (err: any) {
+      console.warn(`[api] health attempt ${attempt}/${maxAttempts} failed:`, err?.message);
+    }
+    if (attempt < maxAttempts) {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  throw new Error("ML models are still loading on the backend — please reload in a moment.");
 }
 
 // ── Mapping helper ────────────────────────────────────────────────────────────
@@ -457,6 +523,7 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     liveScore: f.live_score ?? null,
     winner: f.winner,
     minute: f.live_minute ?? null,
+    ...(f.prediction ? { isLiveData: true } : {}),
 
     // Default placeholders for tactical ratings that get loaded dynamically or mapped
     attackA: 80, attackB: 80,
@@ -543,11 +610,13 @@ interface BatchMatchInput {
   home_team: string;
   away_team: string;
   competition_code?: string;
+  match_id?: string;
 }
 
 interface BatchResultItem {
   home_team: string;
   away_team: string;
+  match_id?: string;
   status: "success" | "error";
   prediction?: BackendPrediction;
   cached: boolean;
@@ -559,18 +628,135 @@ interface BatchPredictResponse {
   status: string;
   total_ms: number;
   count: number;
+  success_count?: number;
+  error_count?: number;
   results: BatchResultItem[];
+}
+
+const BATCH_CHUNK_SIZE = 10;
+const BATCH_CHUNK_TIMEOUT_MS = 90000;
+
+function normalizeTeamName(name: string): string {
+  return name.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+}
+
+function findMatchForBatchResult(
+  matches: MatchPrediction[],
+  item: BatchResultItem
+): MatchPrediction | undefined {
+  if (item.match_id) {
+    const byId = matches.find(m => m.id === item.match_id);
+    if (byId) return byId;
+  }
+  const home = normalizeTeamName(item.home_team);
+  const away = normalizeTeamName(item.away_team);
+  return matches.find(
+    m => normalizeTeamName(m.teamA) === home && normalizeTeamName(m.teamB) === away
+  );
+}
+
+function applyBatchResults(
+  batchResp: BatchPredictResponse,
+  toFetch: MatchPrediction[],
+  enrichedIds: Set<string>,
+  onMatchUpdated: (matchId: string, enriched: MatchPrediction) => void
+): { success: number; failed: number } {
+  let success = 0;
+  let failed = 0;
+
+  for (const item of batchResp.results) {
+    if (item.status !== "success" || !item.prediction) {
+      failed += 1;
+      console.warn(`[batch] ✗ ${item.home_team} vs ${item.away_team}: ${item.error ?? "no prediction"}`);
+      continue;
+    }
+
+    const pred = item.prediction;
+    setCached(item.home_team, item.away_team, pred);
+
+    const base = findMatchForBatchResult(toFetch, item);
+    if (!base) {
+      failed += 1;
+      console.warn(
+        `[batch] ✗ could not match result to fixture: ${item.home_team} vs ${item.away_team}`
+      );
+      continue;
+    }
+
+    if (enrichedIds.has(base.id)) continue;
+
+    const enriched = mapBackendPrediction(base, pred);
+    enrichedIds.add(base.id);
+    onMatchUpdated(base.id, enriched);
+    success += 1;
+
+    console.log(
+      `[batch] ✓ ${enriched.teamA} vs ${enriched.teamB} → ` +
+      `H ${enriched.probA}% D ${enriched.probD}% A ${enriched.probB}%` +
+      (item.cached ? " (server cache)" : "")
+    );
+  }
+
+  return { success, failed };
+}
+
+async function enrichMatchesIndividually(
+  matches: MatchPrediction[],
+  enrichedIds: Set<string>,
+  onMatchUpdated: (matchId: string, enriched: MatchPrediction) => void,
+  signal?: AbortSignal,
+  concurrency = 5
+): Promise<void> {
+  const pending = matches.filter(m => !enrichedIds.has(m.id));
+  if (pending.length === 0) return;
+
+  console.log(`[api] individual /predict fallback for ${pending.length} match(es)`);
+
+  for (let i = 0; i < pending.length; i += concurrency) {
+    if (signal?.aborted) break;
+    const chunk = pending.slice(i, i + concurrency);
+    const settled = await Promise.allSettled(
+      chunk.map(async (match) => {
+        const resp = await predictMatch(match.teamA, match.teamB, "WC", signal);
+        return { id: match.id, base: match, prediction: resp.prediction };
+      })
+    );
+
+    for (const outcome of settled) {
+      if (signal?.aborted) break;
+      if (outcome.status === "fulfilled") {
+        const { id, base, prediction } = outcome.value;
+        if (enrichedIds.has(id)) continue;
+        setCached(base.teamA, base.teamB, prediction);
+        const enriched = mapBackendPrediction(base, prediction);
+        enrichedIds.add(id);
+        onMatchUpdated(id, enriched);
+        console.log(
+          `[predict] ✓ ${enriched.teamA} vs ${enriched.teamB} → ` +
+          `H ${enriched.probA}% D ${enriched.probD}% A ${enriched.probB}%`
+        );
+      } else {
+        console.warn("[api] Individual prediction failed (skipped):", outcome.reason?.message);
+      }
+    }
+  }
 }
 
 export async function predictBatch(
   matches: BatchMatchInput[],
   signal?: AbortSignal
 ): Promise<BatchPredictResponse> {
-  return apiFetch<BatchPredictResponse>("/predict-batch", {
+  console.log(`[api] predictBatch → ${matches.length} match(es)`);
+  const resp = await apiFetch<BatchPredictResponse>("/predict-batch", {
     method: "POST",
     signal,
     body: JSON.stringify({ matches }),
-  }, 120000); // 2-min timeout for large batches
+  }, BATCH_CHUNK_TIMEOUT_MS);
+  console.log(
+    `[api] predictBatch ← ${resp.count} results in ${resp.total_ms?.toFixed?.(0) ?? "?"} ms ` +
+    `(success: ${resp.success_count ?? "?"}, errors: ${resp.error_count ?? "?"})`
+  );
+  return resp;
 }
 
 // ── Instant fixture load (Phase 1 — renders immediately) ──────────────────────
@@ -645,22 +831,37 @@ export async function enrichPredictionsInBackground(
   t0Page = 0
 ): Promise<void> {
   const activeMatches = matches.filter(m => m.status === "LIVE" || m.status === "UPCOMING");
-  if (activeMatches.length === 0) return;
+  if (activeMatches.length === 0) {
+    console.log("[api] enrichment skipped — no LIVE/UPCOMING matches");
+    return;
+  }
 
-  // Separate already-cached from cache-misses
+  // Ensure ML models are loaded before firing batch requests (avoids 503 on cold start)
+  try {
+    await waitForModelsReady(8, 4000, signal);
+  } catch (err: any) {
+    if (signal?.aborted) return;
+    console.error("[api] Models not ready — skipping prediction enrichment:", err?.message);
+    return;
+  }
+
+  const enrichedIds = new Set<string>();
   const cached: MatchPrediction[] = [];
   const toFetch: MatchPrediction[] = [];
 
   for (const m of activeMatches) {
+    if (m.isLiveData) {
+      enrichedIds.add(m.id);
+      continue;
+    }
     const hit = getCached(m.teamA, m.teamB);
     if (hit) {
       cached.push(m);
       const enriched = mapBackendPrediction(m, hit);
+      enrichedIds.add(m.id);
       onMatchUpdated(m.id, enriched);
       console.log(
-        `[cache HIT] ${m.teamA} vs ${m.teamB}  →  Home ${Math.round(hit.outcome.home_win_probability * 100)}%  ` +
-        `Draw ${Math.round(hit.outcome.draw_probability * 100)}%  ` +
-        `Away ${Math.round(hit.outcome.away_win_probability * 100)}%`
+        `[cache HIT] ${m.teamA} vs ${m.teamB} → H ${enriched.probA}% D ${enriched.probD}% A ${enriched.probB}%`
       );
     } else {
       toFetch.push(m);
@@ -668,98 +869,63 @@ export async function enrichPredictionsInBackground(
   }
 
   console.log(
-    `[perf] ► prediction enrichment start: ${toFetch.length} cache-miss matches ` +
-    `(${cached.length} served from cache)`
+    `[perf] ► prediction enrichment start: ${toFetch.length} cache-miss, ` +
+    `${cached.length} client-cache hits, ${enrichedIds.size - cached.length} already enriched`
   );
 
   if (toFetch.length === 0) return;
 
   const tPredStart = performance.now();
 
-  // ─────────────────────────────────────────────────────────────────────
-  // Attempt 1: single batch request
-  // ─────────────────────────────────────────────────────────────────────
-  let usedBatch = false;
-  try {
-    if (signal?.aborted) return;
+  // Chunked batch requests — avoids 120s timeout when 40+ matches hit cold Render
+  for (let i = 0; i < toFetch.length; i += BATCH_CHUNK_SIZE) {
+    if (signal?.aborted) break;
 
-    const batchPayload = toFetch.map(m => ({
+    const chunk = toFetch.slice(i, i + BATCH_CHUNK_SIZE);
+    const batchPayload = chunk.map(m => ({
       home_team: m.teamA,
       away_team: m.teamB,
       competition_code: "WC",
+      match_id: m.id,
     }));
 
-    const batchResp = await predictBatch(batchPayload, signal);
-    usedBatch = true;
+    console.log(
+      `[batch] chunk ${Math.floor(i / BATCH_CHUNK_SIZE) + 1}/` +
+      `${Math.ceil(toFetch.length / BATCH_CHUNK_SIZE)} → ${chunk.length} match(es)`
+    );
 
-    for (const item of batchResp.results) {
-      if (signal?.aborted) break;
-      if (item.status !== "success" || !item.prediction) {
-        console.warn(`[batch] ✗ ${item.home_team} vs ${item.away_team}: ${item.error}`);
-        continue;
-      }
-
-      const pred = item.prediction as unknown as BackendPrediction;
-      setCached(item.home_team, item.away_team, pred);
-
-      const base = toFetch.find(
-        m => m.teamA === item.home_team && m.teamB === item.away_team
+    try {
+      const batchResp = await predictBatch(batchPayload, signal);
+      const { success, failed } = applyBatchResults(batchResp, chunk, enrichedIds, onMatchUpdated);
+      console.log(`[batch] chunk done: ${success} success, ${failed} failed`);
+    } catch (batchErr: any) {
+      if (signal?.aborted) return;
+      console.warn(
+        `[api] Batch chunk failed (${chunk.length} matches), will retry individually:`,
+        batchErr?.message
       );
-      if (!base) continue;
-
-      const enriched = mapBackendPrediction(base, pred);
-      onMatchUpdated(base.id, enriched);
-
-      console.log(
-        `\nMATCH:\n${enriched.teamA} vs ${enriched.teamB}\n\nRESULT:\n` +
-        `Home ${enriched.probA}%\nDraw ${enriched.probD}%\nAway ${enriched.probB}%\n` +
-        `[cached by server: ${item.cached}]`
-      );
-    }
-  } catch (batchErr: any) {
-    if (signal?.aborted) return;
-    console.warn("[api] Batch endpoint failed, falling back to individual requests:", batchErr?.message);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
-  // Fallback: 10-concurrent individual /predict requests
-  // Only runs for matches still missing predictions after batch attempt
-  // ─────────────────────────────────────────────────────────────────────
-  if (!usedBatch) {
-    const CONCURRENCY = 10;
-    for (let i = 0; i < toFetch.length; i += CONCURRENCY) {
-      if (signal?.aborted) break;
-      const chunk = toFetch.slice(i, i + CONCURRENCY);
-      const settled = await Promise.allSettled(
-        chunk.map(async (match) => {
-          const resp = await predictMatch(match.teamA, match.teamB, "WC", signal);
-          return { id: match.id, base: match, prediction: resp.prediction };
-        })
-      );
-
-      for (const outcome of settled) {
-        if (signal?.aborted) break;
-        if (outcome.status === "fulfilled") {
-          const { id, base, prediction } = outcome.value;
-          setCached(base.teamA, base.teamB, prediction);
-          const enriched = mapBackendPrediction(base, prediction);
-          onMatchUpdated(id, enriched);
-          console.log(
-            `\nMATCH:\n${enriched.teamA} vs ${enriched.teamB}\n\nRESULT:\n` +
-            `Home ${enriched.probA}%\nDraw ${enriched.probD}%\nAway ${enriched.probB}%\n`
-          );
-        } else {
-          console.warn("[api] Individual prediction failed (skipped):", outcome.reason?.message);
-        }
-      }
     }
   }
 
+  // Always retry any still-missing matches individually (fixes partial batch failure bug)
+  const stillMissing = toFetch.filter(m => !enrichedIds.has(m.id));
+  if (stillMissing.length > 0 && !signal?.aborted) {
+    console.log(`[api] ${stillMissing.length} match(es) still need predictions after batch`);
+    await enrichMatchesIndividually(stillMissing, enrichedIds, onMatchUpdated, signal);
+  }
+
+  const finalMissing = toFetch.filter(m => !enrichedIds.has(m.id)).length;
   if (!signal?.aborted) {
     const tPredEnd = performance.now();
     const totalElapsed = t0Page > 0 ? tPredEnd - t0Page : tPredEnd - tPredStart;
-    console.log(`[perf] prediction fetch time: ${(tPredEnd - tPredStart).toFixed(0)} ms`);
+    console.log(
+      `[perf] prediction enrichment complete: ${enrichedIds.size}/${activeMatches.length} enriched, ` +
+      `${finalMissing} still missing, fetch time ${(tPredEnd - tPredStart).toFixed(0)} ms`
+    );
     console.log(`[perf] total page render time (fixtures + enrichment): ${totalElapsed.toFixed(0)} ms`);
+    if (finalMissing > 0) {
+      console.warn(`[api] ${finalMissing} match(es) could not be enriched — check team names or backend logs`);
+    }
   }
 }
 
