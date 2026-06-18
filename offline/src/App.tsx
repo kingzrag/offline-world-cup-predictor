@@ -1055,7 +1055,7 @@ export default function App() {
             {/* Fully Responsive & Cinematic 100% Width editorial-hero */}
             <div 
               id="editorial-hero" 
-              className="relative w-full h-[calc(100vh-80px)] min-h-[660px] max-h-[820px] lg:max-h-[860px] flex flex-col justify-between bg-black overflow-hidden border-b border-zinc-900"
+              className="relative w-full h-[calc(82vh-80px)] min-h-[520px] max-h-[700px] lg:max-h-[740px] flex flex-col justify-between bg-black overflow-hidden border-b border-zinc-900"
               style={{
                 transform: `translateY(${scrollY * -0.15}px)`,
                 opacity: Math.max(0, 1 - scrollY / 600),
@@ -1069,18 +1069,19 @@ export default function App() {
                   alt="Stadium Hero Background"
                   className="w-full h-full object-cover scale-100 transition-all duration-300"
                   style={{
-                    opacity: 0.65,
-                    filter: "brightness(1.60) contrast(1.30) saturate(0.80)"
+                    opacity: 0.55,
+                    filter: "brightness(0.95) contrast(1.20) saturate(0.72)"
                   }}
                   referrerPolicy="no-referrer"
                 />
-                {/* Subtle OFFLINE green tint to the highlights to match brand identity without being colorful */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-[#1cdb5e]/4 via-[#1cdb5e]/10 to-[#1cdb5e]/6 mix-blend-screen opacity-60"></div>
-                {/* Subtle dark overlay gradient for readability, maintaining full pitch and lights visibility */}
-                <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/12 to-black/26"></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/8"></div>
-                {/* Soft vignette around the outer edges to maintain focus on the center content */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_42%,rgba(0,0,0,0.88)_100%)]"></div>
+                {/* Reduced green tint — 30% less saturation, toned down brand overlay */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-[#1cdb5e]/2 via-[#1cdb5e]/5 to-[#1cdb5e]/3 mix-blend-screen opacity-35"></div>
+                {/* Premium cinematic top-to-bottom gradient — dark luxury broadcast aesthetic */}
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.85) 100%)' }}></div>
+                {/* Lateral depth — left edge darkened for text column readability */}
+                <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/10 to-black/32"></div>
+                {/* Deep vignette — edges pulled darker to focus on center stage */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_35%,rgba(0,0,0,0.92)_100%)]"></div>
               </div>
 
               {/* Floating content wrapped in standard content grid alignment */}
