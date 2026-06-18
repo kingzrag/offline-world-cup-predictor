@@ -32,6 +32,7 @@ import {
   isKickoffTomorrow,
 } from './dateTimeUtils';
 import { motion } from 'motion/react';
+import { BestPredictionsCarousel } from './components/BestPredictionsCarousel';
 import {
   Search,
   Trophy,
@@ -669,17 +670,6 @@ export default function App() {
 
   // Flag emojis are now resolved dynamically via getFlag() from flagUtils.ts.
   // No hardcoded FLAG_MAP needed — new teams are covered automatically.
-
-  const carouselRef = useRef<HTMLDivElement>(null);
-  const scrollCarousel = (direction: 'left' | 'right') => {
-    if (carouselRef.current) {
-      const scrollAmount = carouselRef.current.clientWidth;
-      carouselRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth'
-      });
-    }
-  };
 
   // Section heading separator categorizer
   const getSectionHeading = (match: MatchPrediction) => {
@@ -1343,207 +1333,14 @@ export default function App() {
           <div className="w-full flex flex-col animate-fade-in">
             
             {/* TODAY'S BEST PREDICTIONS CAROUSEL SECTION */}
-            <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-16">
-              
-              <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-zinc-900 pb-6 mb-10 gap-6">
-                <div>
-                  <span className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold mb-1.5 animate-pulse">
-                    CURATED SELECTIONS
-                  </span>
-                  <span className="text-3xl font-serif text-white tracking-tight block">
-                    Today's Best Predictions
-                  </span>
-                  <p className="text-zinc-550 text-xs mt-2 max-w-xl font-sans">
-                    The highest confidence distributions, prominent fixtures, and decisive matchups simulated 50,051 times by the OFFLINE quantitative intelligence model.
-                  </p>
-                </div>
-                
-                {/* Carousel Navigation Arrows */}
-                <div className="flex items-center space-x-3 shrink-0">
-                  <button
-                    onClick={() => scrollCarousel('left')}
-                    className="p-3 rounded-full border border-zinc-900 hover:border-zinc-550 bg-zinc-950 text-zinc-455 hover:text-white transition-all cursor-pointer group"
-                    aria-label="Scroll left"
-                  >
-                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-                  </button>
-                  <button
-                    onClick={() => scrollCarousel('right')}
-                    className="p-3 rounded-full border border-zinc-900 hover:border-zinc-550 bg-zinc-950 text-zinc-455 hover:text-white transition-all cursor-pointer group"
-                    aria-label="Scroll right"
-                  >
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Horizontal Scroll Carousel Canvas */}
-              <div 
-                ref={carouselRef}
-                className="flex overflow-x-auto gap-6 scrollbar-none scroll-smooth pb-8 snap-x snap-mandatory select-none"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                {isLoadingMatches ? (
-                  Array.from({ length: 3 }).map((_, idx) => (
-                    <div 
-                      key={idx}
-                      className="w-full min-w-full md:min-w-[calc(50%-12px)] lg:min-w-[calc(33.333%-16px)] shrink-0 snap-start bg-zinc-950 border border-zinc-900 rounded p-6 flex flex-col justify-between h-[370px] animate-pulse"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div className="h-3 bg-zinc-900 rounded w-20"></div>
-                        <div className="h-3 bg-zinc-900 rounded w-16"></div>
-                      </div>
-                      <div className="space-y-4 my-4">
-                        <div className="h-6 bg-zinc-900 rounded w-3/4"></div>
-                        <div className="h-3 bg-zinc-900 rounded w-1/4"></div>
-                        <div className="h-6 bg-zinc-900 rounded w-2/3"></div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="h-2 bg-zinc-900 rounded w-full"></div>
-                        <div className="h-3 bg-zinc-900 rounded w-1/3"></div>
-                      </div>
-                    </div>
-                  ))
-                ) : matchError ? (
-                  <div className="w-full bg-zinc-950 border border-red-500/20 rounded p-12 text-center flex flex-col items-center justify-center space-y-4">
-                    <AlertCircle className="w-10 h-10 text-red-500 animate-pulse" />
-                    <span className="text-[10px] font-mono tracking-[0.2em] text-red-400 uppercase block font-bold">Prediction Engine Offline</span>
-                    <h4 className="text-xl font-serif text-white tracking-tight uppercase">Connection Failed</h4>
-                    <p className="text-zinc-400 text-xs max-w-lg leading-relaxed font-sans">
-                      The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Live predictions have been disabled to prevent displaying fallback/mock data. Please verify your backend server is running and reload.
-                    </p>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-mono font-bold tracking-widest uppercase border border-zinc-800 hover:border-zinc-700 cursor-pointer transition duration-300"
-                    >
-                      Retry Connection
-                    </button>
-                  </div>
-                ) : (
-                  sourceMatches.slice(0, 9).map((match) => {
-                    const flagA = getFlag(match.teamA);
-                    const flagB = getFlag(match.teamB);
-                    return (
-                      <div 
-                        key={match.id}
-                        className="w-full min-w-full md:min-w-[calc(50%-12px)] lg:min-w-[calc(33.333%-16px)] shrink-0 snap-start bg-zinc-950 border border-zinc-900 rounded p-6 hover:border-zinc-700 transition-all duration-300 flex flex-col justify-between h-[370px] group relative"
-                      >
-                        {/* Top metadata strip */}
-                        <div className="flex justify-between items-center text-[10px] font-mono">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-zinc-500 tracking-wider uppercase">{match.stage}</span>
-                            {match.isLiveData ? (
-                              <span className="text-green-accent text-[8px] bg-green-accent/10 border border-green-accent/25 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase font-bold">LIVE MODEL</span>
-                            ) : (
-                              <span className="text-zinc-500 text-[8px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase">LOCAL</span>
-                            )}
-                          </div>
-                          <MatchTimeDisplay match={match} />
-                        </div>
-
-                        {/* Large prominent matchup title */}
-                        <div className="my-2">
-                          <div className="text-lg font-bold text-white uppercase tracking-normal space-y-2">
-                            <div className="flex items-center gap-2.5">
-                              <span className="text-2xl leading-none select-none">{flagA}</span>
-                              <span>{match.teamA}</span>
-                            </div>
-                            <div className="text-zinc-500 text-[10px] font-mono uppercase pl-8 font-medium">vs</div>
-                            <div className="flex items-center gap-2.5">
-                              <span className="text-2xl leading-none select-none">{flagB}</span>
-                              <span>{match.teamB}</span>
-                            </div>
-                          </div>
-
-                          {/* Assessment / Score scoreboard */}
-                          {match.status === 'LIVE' ? (
-                            <div className="mt-5 flex flex-col justify-center items-start gap-1">
-                              <span className="text-[9px] font-mono uppercase tracking-widest text-red-500 block animate-pulse font-bold">Live Score</span>
-                              <div className="flex items-center gap-3 text-3xl font-black text-white tracking-wider">
-                                <span>{match.liveScore?.home ?? 0}</span>
-                                <span className="text-zinc-700 font-light">—</span>
-                                <span>{match.liveScore?.away ?? 0}</span>
-                              </div>
-                            </div>
-                          ) : match.status === 'COMPLETED' ? (
-                            (() => {
-                              const isCorrect = (match.prediction === `${match.teamA} Win` && match.winner === "HOME_TEAM") ||
-                                                (match.prediction === `${match.teamB} Win` && match.winner === "AWAY_TEAM") ||
-                                                (match.prediction === "Draw" && match.winner === "DRAW");
-                              return (
-                                <div className="mt-5 flex flex-col justify-center items-start gap-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 block font-bold">Final Score</span>
-                                    <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase ${
-                                      isCorrect ? 'text-green-accent bg-green-accent/15 border border-green-accent/25' : 'text-red-400 bg-red-950/20 border border-red-900/20'
-                                    }`}>
-                                      {isCorrect ? '✓ Correct' : '✕ Miss'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-3 text-3xl font-black text-white tracking-wider">
-                                    <span>{match.liveScore?.home ?? 0}</span>
-                                    <span className="text-zinc-700 font-light">—</span>
-                                    <span>{match.liveScore?.away ?? 0}</span>
-                                  </div>
-                                </div>
-                              );
-                            })()
-                          ) : (
-                            <div className="mt-5 space-y-1">
-                              <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-600 block">Assessment</span>
-                              <span className="text-white text-[15px] font-medium tracking-normal leading-snug block">
-                                {match.prediction}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Probabilities split tracker */}
-                        <div>
-                          <div className="mb-4">
-                            <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 mb-1.5">
-                              <span>{match.teamACode} {match.probA}%</span>
-                              <span>Draw {match.probD}%</span>
-                              <span>{match.teamBCode} {match.probB}%</span>
-                            </div>
-                            <div className="h-1 w-full bg-zinc-900 flex rounded overflow-hidden">
-                              <div className="h-full bg-green-accent" style={{ width: `${match.probA}%` }}></div>
-                              <div className="h-full bg-zinc-750" style={{ width: `${match.probD}%` }}></div>
-                              <div className="h-full bg-zinc-800" style={{ width: `${match.probB}%` }}></div>
-                            </div>
-                          </div>
-
-                          {/* Card CTA and confidence calibration */}
-                          <div className="flex items-center justify-between pt-2.5 border-t border-zinc-900">
-                            <span className={`text-[10px] font-mono uppercase tracking-widest font-bold ${match.confidence === 'High' ? 'text-green-accent' : 'text-yellow-500'}`}>
-                              {match.confidence} Confidence
-                            </span>
-                            
-                            <button
-                              onClick={() => openMatchAnalysis(match)}
-                              className="text-xs font-mono font-bold text-white hover:text-green-accent flex items-center gap-1.5 transition-colors group-hover:translate-x-0.5 duration-200 cursor-pointer"
-                            >
-                              View Analysis <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* View All Predictions Button */}
-              <div className="flex justify-center mt-10">
-                <button
-                  onClick={() => navigateTo('predictions')}
-                  className="group inline-flex items-center gap-2.5 px-8 py-3.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-700 rounded text-xs font-mono font-bold tracking-widest text-white uppercase cursor-pointer hover:bg-zinc-900 transition-all duration-300"
-                >
-                  VIEW ALL PREDICTIONS <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-
-            </div>
+            <BestPredictionsCarousel
+              matches={sourceMatches.slice(0, 9)}
+              isLoading={isLoadingMatches}
+              error={matchError}
+              apiBase={API_BASE}
+              onViewAnalysis={openMatchAnalysis}
+              onViewAll={() => navigateTo('predictions')}
+            />
 
             {/* THE MODEL section (Full-Width editorial block at bottom of Home) */}
             <div className="w-full bg-black border-t border-zinc-900 py-20 mt-10">
