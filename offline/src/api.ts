@@ -253,6 +253,7 @@ async function apiFetch<T>(
 ): Promise<T> {
   const url = `${BASE}${path}`;
   const { signal, cleanup } = mergeAbortSignals(options?.signal ?? undefined, timeoutMs);
+  const tStart = performance.now();
   try {
     console.log(`[api] → ${options?.method ?? "GET"} ${url}`);
     const res = await fetch(url, {
@@ -263,12 +264,20 @@ async function apiFetch<T>(
         ...(options?.headers ?? {}),
       },
     });
+    const tEnd = performance.now();
+    const duration = (tEnd - tStart).toFixed(0);
     if (!res.ok) {
       const body = await res.text();
-      console.error(`[api] ✗ ${res.status} ${url}: ${body.slice(0, 300)}`);
+      console.error(`[api] ✗ ${res.status} ${url} in ${duration}ms: ${body.slice(0, 300)}`);
       throw new Error(`API ${res.status}: ${body.slice(0, 300)}`);
     }
+    console.log(`[api] ← ${res.status} ${url} in ${duration}ms`);
     return (await res.json()) as T;
+  } catch (err) {
+    const tEnd = performance.now();
+    const duration = (tEnd - tStart).toFixed(0);
+    console.error(`[api] ✗ Request failed for ${url} in ${duration}ms:`, err);
+    throw err;
   } finally {
     cleanup();
   }

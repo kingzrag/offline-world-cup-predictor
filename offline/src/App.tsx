@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import football2 from './assets/images/football2.png';
 import { 
   getPredictions, 
@@ -205,56 +205,90 @@ export default function App() {
   const [matchError, setMatchError] = useState<string | null>(null);
   const [showHistorical, setShowHistorical] = useState<boolean>(false);
 
+  // Startup reliability / retry states
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [isRetrying, setIsRetrying] = useState<boolean>(false);
+  const [retryTrigger, setRetryTrigger] = useState<number>(0);
+
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
     const t0Page = performance.now();
 
     async function load() {
-      try {
-        setIsLoadingMatches(true);
+      const startTime = Date.now();
+      setIsLoadingMatches(true);
+      setMatchError(null);
+      setIsInitializing(true);
+      setIsRetrying(false);
 
-        // ── Phase 1: render fixtures instantly (no ML inference) ────────────
-        console.log("[App] Phase 1 → loading fixtures instantly...");
-        const fixtures = await loadFixturesInstant(undefined, showHistorical, signal);
+      while (true) {
         if (signal.aborted) return;
+        const attemptStart = performance.now();
 
-        console.log(`[App] Phase 1 complete: ${fixtures.length} fixtures rendered instantly.`);
-        setSourceMatches(sortSourceMatches(fixtures));
-        setMatchError(null);
-        setIsLoadingMatches(false);  // Page is live — unlock the UI now
+        try {
+          // ── Phase 1: render fixtures instantly (no ML inference) ────────────
+          console.log("[App] Phase 1 → loading fixtures instantly...");
+          const fixtures = await loadFixturesInstant(undefined, showHistorical, signal);
+          if (signal.aborted) return;
 
-        // ── Phase 2: hydrate ML predictions in background ───────────────
-        console.log("[App] Phase 2 → enriching predictions in background...");
-        await enrichPredictionsInBackground(
-          fixtures,
-          (matchId, enriched) => {
-            if (signal.aborted) return;
-            // Update only the single card that just received its prediction
-            setSourceMatches(prev => {
-              const idx = prev.findIndex(m => m.id === matchId);
-              if (idx === -1) return prev;
-              const next = [...prev];
-              next[idx] = enriched;
-              return next;
+          console.log(`[App] Phase 1 complete: ${fixtures.length} fixtures rendered instantly.`);
+          setSourceMatches(sortSourceMatches(fixtures));
+          setMatchError(null);
+          setIsLoadingMatches(false);
+          setIsInitializing(false);
+          setIsRetrying(false);
+
+          // ── Phase 2: hydrate ML predictions in background ───────────────
+          console.log("[App] Phase 2 → enriching predictions in background...");
+          await enrichPredictionsInBackground(
+            fixtures,
+            (matchId, enriched) => {
+              if (signal.aborted) return;
+              // Update only the single card that just received its prediction
+              setSourceMatches(prev => {
+                const idx = prev.findIndex(m => m.id === matchId);
+                if (idx === -1) return prev;
+                const next = [...prev];
+                next[idx] = enriched;
+                return next;
+              });
+            },
+            signal,
+            t0Page
+          );
+          break; // successfully completed everything, break the retry loop
+
+        } catch (err: any) {
+          if (signal.aborted) return;
+          const attemptEnd = performance.now();
+          console.warn(`[App] Connection/Load attempt failed in ${(attemptEnd - attemptStart).toFixed(0)}ms:`, err?.message ?? err);
+
+          const timeElapsed = Date.now() - startTime;
+          if (timeElapsed >= 60000) {
+            console.error(`[App] Connection timed out after 60 seconds (${timeElapsed}ms elapsed). Disabling fallback.`);
+            setMatchError(
+              err?.message?.includes("unreachable")
+                ? "Backend is unreachable. Please check your connection and reload."
+                : "Could not load fixtures from the prediction engine. Please reload."
+            );
+            setIsInitializing(false);
+            setIsLoadingMatches(false);
+            setIsRetrying(false);
+            break; // Exceeded 60 seconds budget, show error screen
+          } else {
+            setIsRetrying(true);
+            console.log(`[App] Retrying connection in 5 seconds... (${Math.round((60000 - timeElapsed) / 1000)}s budget remaining)`);
+            // Wait 5 seconds before retrying
+            await new Promise(resolve => {
+              const timer = setTimeout(resolve, 5000);
+              signal.addEventListener('abort', () => {
+                clearTimeout(timer);
+                resolve(null);
+              });
             });
-          },
-          signal,
-          t0Page
-        );
-
-      } catch (err: any) {
-        if (signal.aborted) return;
-        // Only health check or fixtures fetch failing will reach here.
-        // Individual prediction enrichment failures are handled inside enrichPredictionsInBackground
-        // via Promise.allSettled and never propagate to this catch block.
-        console.error("[App] Critical load failure (health or fixtures unreachable):", err?.message ?? err);
-        setMatchError(
-          err?.message?.includes("unreachable")
-            ? "Backend is unreachable. Please check your connection and reload."
-            : "Could not load fixtures from the prediction engine. Please reload."
-        );
-        setIsLoadingMatches(false);
+          }
+        }
       }
     }
 
@@ -262,7 +296,7 @@ export default function App() {
     return () => {
       controller.abort();
     };
-  }, [showHistorical]);
+  }, [showHistorical, retryTrigger]);
 
   const sourceMatchesRef = useRef(sourceMatches);
   sourceMatchesRef.current = sourceMatches;
@@ -1022,6 +1056,63 @@ export default function App() {
 
   const totalSearchResultsCount = filteredMatches.length + filteredTeams.length + filteredInsights.length;
 
+  if (isInitializing) {
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-6 select-none animate-fade-in">
+        {/* Background Decorative Grid */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(28,219,94,0.03)_0%,transparent_70%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.003)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.003)_1px,transparent_1px)] bg-[size:30px_30px] pointer-events-none" />
+
+        <div className="max-w-md w-full space-y-12 text-center relative z-10">
+          {/* Logo / Brand */}
+          <div className="flex flex-col items-center space-y-2 animate-pulse">
+            <span className="text-3xl font-serif text-white tracking-[0.45em] font-light pl-[0.45em] uppercase">
+              OFFLINE
+            </span>
+            <span className="text-[9px] font-mono tracking-[0.5em] text-zinc-500 uppercase pl-[0.5em]">
+              FOOTBALL INTELLIGENCE
+            </span>
+          </div>
+
+          {/* Animated Spinner with Pulsing Halo */}
+          <div className="relative flex items-center justify-center h-24 w-24 mx-auto">
+            <div className="absolute inset-0 rounded-full border border-green-accent/10 animate-ping opacity-45" />
+            <div className="absolute inset-2 rounded-full border border-green-accent/20 animate-pulse opacity-65" />
+            <div className="bg-zinc-950 border border-zinc-900 h-16 w-16 rounded-full flex items-center justify-center shadow-2xl">
+              <Loader2 className="w-6 h-6 text-green-accent animate-spin" />
+            </div>
+          </div>
+
+          {/* Loading status text */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <h2 className="text-white font-serif text-lg tracking-wide uppercase">
+                Initializing Football Intelligence Engine…
+              </h2>
+              <p className="text-zinc-400 font-sans text-xs tracking-wider">
+                Connecting to prediction servers…
+              </p>
+            </div>
+
+            {/* Retrying message */}
+            {isRetrying && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="pt-2"
+              >
+                <span className="inline-block px-3 py-1.5 bg-green-accent/5 border border-green-accent/15 rounded text-[10px] font-mono text-green-accent uppercase tracking-wider animate-pulse">
+                  Prediction engine is waking up. This may take a few moments.
+                </span>
+              </motion.div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div id="app-root" className="min-h-screen bg-black text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased">
       
@@ -1397,6 +1488,7 @@ export default function App() {
               apiBase={API_BASE}
               onViewAnalysis={openMatchAnalysis}
               onViewAll={() => navigateTo('predictions')}
+              onRetry={() => setRetryTrigger(prev => prev + 1)}
             />
 
             {/* THE MODEL section (Full-Width editorial block at bottom of Home) */}
@@ -1488,7 +1580,7 @@ export default function App() {
                     The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Offline/fallback predictions have been disabled to prevent displaying inaccurate or mock information. Please ensure the backend server is running and reload.
                   </p>
                   <button 
-                    onClick={() => window.location.reload()}
+                    onClick={() => setRetryTrigger(prev => prev + 1)}
                     className="px-5 py-3 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-mono font-bold tracking-widest uppercase transition duration-300 cursor-pointer"
                   >
                     Retry Connection
@@ -2221,7 +2313,7 @@ export default function App() {
                     The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Since all strategic insights, confidence picks, and goal forecasts are calculated dynamically from the active predictions feed, the Intelligence Hub is offline until a backend connection is established.
                   </p>
                   <button 
-                    onClick={() => window.location.reload()}
+                    onClick={() => setRetryTrigger(prev => prev + 1)}
                     className="px-5 py-3 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-mono font-bold tracking-widest uppercase transition duration-300 cursor-pointer"
                   >
                     Retry Connection

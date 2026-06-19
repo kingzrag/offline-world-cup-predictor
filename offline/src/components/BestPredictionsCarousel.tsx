@@ -227,6 +227,7 @@ export interface BestPredictionsCarouselProps {
   apiBase?: string;
   onViewAnalysis: (match: MatchPrediction) => void;
   onViewAll?: () => void;
+  onRetry?: () => void;
 }
 
 export function BestPredictionsCarousel({
@@ -236,6 +237,7 @@ export function BestPredictionsCarousel({
   apiBase = "",
   onViewAnalysis,
   onViewAll,
+  onRetry,
 }: BestPredictionsCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -354,7 +356,7 @@ export function BestPredictionsCarousel({
             your backend server is running and reload.
           </p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={onRetry || (() => window.location.reload())}
             className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-mono font-bold tracking-widest uppercase border border-zinc-800 hover:border-zinc-700 cursor-pointer transition duration-300"
           >
             Retry Connection
