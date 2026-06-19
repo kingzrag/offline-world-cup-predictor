@@ -583,8 +583,10 @@ def get_fixtures(
     Results are ordered by kick-off time ascending.
     """
     from models import Match, Competition
-    from sqlalchemy import asc
-    from sqlalchemy.orm import joinedload
+    from sqlalchemy import asc, desc, case, extract
+    from sqlalchemy.orm import joinedload, selectinload
+
+    t_start = time.perf_counter()
 
     # ── Resolve competition ───────────────────────────────────────────────────
     comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
@@ -599,8 +601,17 @@ def get_fixtures(
         )
 
     # ── Build query ───────────────────────────────────────────────────────────
-    # Eagerly load predictions to avoid N+1 queries (one extra query per match otherwise)
-    query = db.query(Match).options(joinedload(Match.predictions)).filter(Match.competition_id == comp.id)
+    # Eagerly load predictions, home_team, and away_team in one single batch to avoid N+1 queries.
+    # We use joinedload for home/away teams (one-to-one) and selectinload for predictions (one-to-many/collection).
+    query = (
+        db.query(Match)
+        .options(
+            joinedload(Match.home_team),
+            joinedload(Match.away_team),
+            selectinload(Match.predictions)
+        )
+        .filter(Match.competition_id == comp.id)
+    )
 
     if status:
         query = query.filter(Match.status == status.upper())
@@ -617,49 +628,51 @@ def get_fixtures(
     if date_to:
         query = query.filter(Match.utc_date <= datetime.combine(date_to, datetime.max.time()))
 
-    from sqlalchemy import extract
     if year:
         query = query.filter(extract('year', Match.utc_date) == year)
     elif not show_historical:
         # Default to only showing 2026 World Cup fixtures
         query = query.filter(extract('year', Match.utc_date) >= 2026)
 
-    # Fetch all matching results to sort properly in Python (to avoid LIMIT truncating 2026 matches)
-    matches = query.all()
+    # ── SQL-Side Sorting ──────────────────────────────────────────────────────
+    # Replicates Python sorting logic:
+    # Tier 0: Live matches (status IN_PLAY, PAUSED)
+    # Tier 1: Upcoming 2026+ matches (status != FINISHED and year >= 2026)
+    # Tier 2: Finished 2026+ matches (status == FINISHED and year >= 2026)
+    # Tier 3: Historical matches (year < 2026)
+    m_year = extract('year', Match.utc_date)
+    tier_case = case(
+        (Match.status.in_({"IN_PLAY", "PAUSED"}), 0),
+        ((m_year >= 2026) & (Match.status != "FINISHED"), 1),
+        ((m_year >= 2026) & (Match.status == "FINISHED"), 2),
+        else_=3
+    )
+    
+    # Within Tier 0 and 1, sort ascending by kickoff date.
+    # Within Tier 2 and 3, sort descending by kickoff date.
+    asc_date = case(
+        (tier_case.in_({0, 1}), Match.utc_date),
+        else_=None
+    )
+    desc_date = case(
+        (tier_case.in_({2, 3}), Match.utc_date),
+        else_=None
+    )
 
-    # ── Sort matches in Python ────────────────────────────────────────────────
-    # Priority rules:
-    # 1. LIVE matches first (status IN_PLAY, PAUSED).
-    # 2. Upcoming matches (status TIMED, SCHEDULED, POSTPONED, etc.) from 2026, sorted ascending by utc_date.
-    # 3. Finished matches from 2026, sorted descending by utc_date.
-    # 4. Historical matches (< 2026), sorted descending by utc_date.
-    def match_sort_key(m):
-        m_year = m.utc_date.year if m.utc_date else 2026
-        is_2026 = m_year >= 2026
-        
-        # Sort priority tier
-        if m.status in {"IN_PLAY", "PAUSED"}:
-            tier = 0  # Live matches
-        elif is_2026:
-            if m.status != "FINISHED":
-                tier = 1  # Upcoming 2026 matches
-            else:
-                tier = 2  # Finished 2026 matches
-        else:
-            tier = 3  # Historical matches
-            
-        ts = m.utc_date.timestamp() if m.utc_date else 0
-        if tier in (0, 1):
-            date_val = ts
-        else:
-            date_val = -ts
-            
-        return (tier, date_val)
+    query = query.order_by(
+        tier_case.asc(),
+        asc_date.asc(),
+        desc_date.desc()
+    )
 
-    matches.sort(key=match_sort_key)
-    matches = matches[:limit]
+    # ── Database Fetch ────────────────────────────────────────────────────────
+    t_query_start = time.perf_counter()
+    matches = query.limit(limit).all()
+    t_query_end = time.perf_counter()
+    query_ms = int((t_query_end - t_query_start) * 1000)
 
     # ── Serialise helpers ─────────────────────────────────────────────────────
+    t_serialize_start = time.perf_counter()
     live_statuses  = {"IN_PLAY", "PAUSED"}
     score_statuses = live_statuses | {"FINISHED"}
 
@@ -713,10 +726,15 @@ def get_fixtures(
         }
         for m in matches
     ]
+    t_serialize_end = time.perf_counter()
+    serialize_ms = int((t_serialize_end - t_serialize_start) * 1000)
+
+    t_end = time.perf_counter()
+    elapsed_ms = int((t_end - t_start) * 1000)
 
     logger.info(
-        f"GET /api/fixtures [{competition_code}] status={status} stage={stage} "
-        f"group={group} → {len(fixtures_out)} fixtures"
+        f"/fixtures completed in {elapsed_ms}ms "
+        f"(query={query_ms}ms serialize={serialize_ms}ms)"
     )
 
     return {

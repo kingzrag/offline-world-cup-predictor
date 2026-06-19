@@ -6,7 +6,7 @@ class Prediction(Base):
     __tablename__ = "predictions"
 
     id = Column(Integer, primary_key=True, index=True)
-    match_id = Column(Integer, ForeignKey("matches.id", ondelete="CASCADE"), nullable=False)
+    match_id = Column(Integer, ForeignKey("matches.id", ondelete="CASCADE"), nullable=False, index=True)
     predicted_winner_id = Column(Integer, ForeignKey("teams.id", ondelete="SET NULL"), nullable=True)
     predicted_outcome = Column(String(50), nullable=False)  # e.g., HOME_WIN, AWAY_WIN, DRAW
     home_probability = Column(Float, nullable=False)
