@@ -356,19 +356,19 @@ def get_team_profile(
             "result":   result,
         })
 
-    # Calculate ELO rank
-    elo_rank = 15
+    # Calculate ELO rank (None when no ELO data rather than a fake default)
+    elo_rank = None
     if elo_rating is not None:
         elo_rank = db.query(TeamElo).filter(TeamElo.elo_rating > elo_rating).count() + 1
 
-    # Format squad market value
+    # Format squad market value (N/A when genuinely missing rather than a fake €250M)
     val_m = team.squad_market_value or team.market_value or 0
     if val_m >= 1000:
         val_str = f"€{val_m/1000:.2f}B"
     elif val_m > 0:
         val_str = f"€{val_m:.1f}M"
     else:
-        val_str = "€250M"
+        val_str = "N/A"
 
     # Compile injuries
     injuries_list = []
@@ -400,13 +400,124 @@ def get_team_profile(
             "venue":       team.venue,
             "elo_rating":  elo_rating,
             "elo_rank":    elo_rank,
-            "fifa_rank":   team.fifa_ranking or 15,
+            "fifa_rank":   team.fifa_ranking,   # None when not set — no fake default
             "squad_value": val_str,
             "injuries":    injuries_list,
             "suspensions": suspensions_list,
             "squad_size":  len(team.players) if hasattr(team, "players") else None,
             "recent_form": form,
         },
+    }
+
+
+@router.get("/h2h/{team_a_name}/{team_b_name}", summary="Head-to-head record between two teams")
+def get_h2h(
+    team_a_name: str,
+    team_b_name: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns head-to-head match history between two teams.
+
+    **Response includes:**
+    - Total previous meetings
+    - Wins for team A, wins for team B, draws
+    - Total goals scored by each team across all historical matches
+    """
+    from models import Team, Match
+    from sqlalchemy import or_, and_, desc as sql_desc
+
+    # Alias resolution
+    aliases = {
+        "USA": "United States",
+        "US": "United States",
+        "UNITED STATES OF AMERICA": "United States"
+    }
+
+    def resolve_team(name: str):
+        clean = name.strip().upper()
+        resolved = aliases.get(clean, name)
+        team = (
+            db.query(Team).filter(Team.name.ilike(resolved)).first()
+            or db.query(Team).filter(Team.tla.ilike(resolved)).first()
+            or db.query(Team).filter(Team.short_name.ilike(resolved)).first()
+            or db.query(Team).filter(Team.name.ilike(f"%{resolved}%")).first()
+        )
+        return team
+
+    team_a = resolve_team(team_a_name)
+    if not team_a:
+        raise HTTPException(status_code=404, detail=f"Team '{team_a_name}' not found.")
+    team_b = resolve_team(team_b_name)
+    if not team_b:
+        raise HTTPException(status_code=404, detail=f"Team '{team_b_name}' not found.")
+
+    # Query all finished head-to-head matches
+    h2h_matches = (
+        db.query(Match)
+        .filter(
+            and_(
+                or_(
+                    and_(Match.home_team_id == team_a.id, Match.away_team_id == team_b.id),
+                    and_(Match.home_team_id == team_b.id, Match.away_team_id == team_a.id),
+                ),
+                Match.status == "FINISHED",
+            )
+        )
+        .order_by(sql_desc(Match.utc_date))
+        .limit(20)
+        .all()
+    )
+
+    a_wins = 0
+    b_wins = 0
+    draws = 0
+    a_goals = 0
+    b_goals = 0
+
+    recent_matches = []
+    for m in h2h_matches:
+        is_a_home = m.home_team_id == team_a.id
+        if is_a_home:
+            ga = m.home_score or 0
+            gb = m.away_score or 0
+        else:
+            ga = m.away_score or 0
+            gb = m.home_score or 0
+
+        a_goals += ga
+        b_goals += gb
+
+        if m.winner == "DRAW":
+            draws += 1
+            result = "D"
+        elif (m.winner == "HOME_TEAM" and is_a_home) or (m.winner == "AWAY_TEAM" and not is_a_home):
+            a_wins += 1
+            result = "W"
+        else:
+            b_wins += 1
+            result = "L"
+
+        recent_matches.append({
+            "date": m.utc_date.isoformat() if m.utc_date else None,
+            "home_team": m.home_team.name if m.home_team else None,
+            "away_team": m.away_team.name if m.away_team else None,
+            "score": f"{m.home_score}-{m.away_score}" if m.home_score is not None else None,
+            "winner": m.winner,
+            "result_for_a": result,
+        })
+
+    return {
+        "status": "success",
+        "team_a": team_a.name,
+        "team_b": team_b.name,
+        "previous_meetings": len(h2h_matches),
+        "team_a_wins": a_wins,
+        "team_b_wins": b_wins,
+        "draws": draws,
+        "team_a_goals": a_goals,
+        "team_b_goals": b_goals,
+        "recent_matches": recent_matches,
     }
 
 
@@ -473,6 +584,7 @@ def get_fixtures(
     """
     from models import Match, Competition
     from sqlalchemy import asc
+    from sqlalchemy.orm import joinedload
 
     # ── Resolve competition ───────────────────────────────────────────────────
     comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
@@ -487,7 +599,8 @@ def get_fixtures(
         )
 
     # ── Build query ───────────────────────────────────────────────────────────
-    query = db.query(Match).filter(Match.competition_id == comp.id)
+    # Eagerly load predictions to avoid N+1 queries (one extra query per match otherwise)
+    query = db.query(Match).options(joinedload(Match.predictions)).filter(Match.competition_id == comp.id)
 
     if status:
         query = query.filter(Match.status == status.upper())

@@ -11,6 +11,8 @@ import {
   getBracket,
   updateMatchScore,
   getModelPerformance,
+  getTeamProfile,
+  getH2h,
   type GroupStandingTeam,
   type GroupStandings,
   type BracketMatch,
@@ -408,6 +410,7 @@ export default function App() {
 
   // Detail Modal States
   const [selectedMatch, setSelectedMatch] = useState<MatchPrediction | null>(null);
+  const [drawerTeamLoading, setDrawerTeamLoading] = useState<boolean>(false);
   const [selectedTeam, setSelectedTeam] = useState<TrophyProbability | null>(null);
 
   // Live Model Performance tracking state
@@ -877,10 +880,63 @@ export default function App() {
     }
   };
 
-  // Trigger match analysis viewer modal
+  // Trigger match analysis viewer modal — opens immediately with fixture data,
+  // then hydrates real team stats (FIFA rank, ELO, form, H2H) in the background.
   const openMatchAnalysis = (match: MatchPrediction) => {
+    // Show drawer immediately with whatever data we already have
     setSelectedMatch(match);
     fetchAiMatchSummary(match);
+
+    // Fire team-profile + H2H fetches in parallel — no await, so the drawer renders first
+    setDrawerTeamLoading(true);
+    Promise.all([
+      getTeamProfile(match.teamA).catch(() => null),
+      getTeamProfile(match.teamB).catch(() => null),
+      getH2h(match.teamA, match.teamB).catch(() => null),
+    ]).then(([profileA, profileB, h2hData]) => {
+      setSelectedMatch(prev => {
+        if (!prev || prev.id !== match.id) return prev; // drawer was closed/changed
+        const a = profileA?.team;
+        const b = profileB?.team;
+
+        // Map BackendFormEntry[] → ("W" | "D" | "L")[]
+        const toFormArr = (entries: { result: string }[] | undefined) =>
+          (entries ?? []).slice(0, 5).map(e => e.result as "W" | "D" | "L");
+
+        // Format squad value — show "N/A" cleanly
+        const fmtVal = (v: string | null | undefined) =>
+          (v && v !== 'N/A' && v !== 'Loading...') ? v : '—';
+
+        return {
+          ...prev,
+          // Team A real data
+          fifaRankA:   a?.fifa_rank  ?? prev.fifaRankA,
+          eloRankA:    a?.elo_rank   ?? prev.eloRankA,
+          squadValueA: fmtVal(a?.squad_value) !== '—' ? fmtVal(a?.squad_value) : prev.squadValueA,
+          recentFormA: toFormArr(a?.recent_form).length > 0 ? toFormArr(a?.recent_form) : prev.recentFormA,
+          injuriesA:   a?.injuries   ?? prev.injuriesA,
+          suspensionsA: a?.suspensions ?? prev.suspensionsA,
+          // Team B real data
+          fifaRankB:   b?.fifa_rank  ?? prev.fifaRankB,
+          eloRankB:    b?.elo_rank   ?? prev.eloRankB,
+          squadValueB: fmtVal(b?.squad_value) !== '—' ? fmtVal(b?.squad_value) : prev.squadValueB,
+          recentFormB: toFormArr(b?.recent_form).length > 0 ? toFormArr(b?.recent_form) : prev.recentFormB,
+          injuriesB:   b?.injuries   ?? prev.injuriesB,
+          suspensionsB: b?.suspensions ?? prev.suspensionsB,
+          // Real H2H data
+          h2hPreviousMeetings: h2hData?.previous_meetings ?? prev.h2hPreviousMeetings,
+          h2hWinsA:  h2hData?.team_a_wins ?? prev.h2hWinsA,
+          h2hWinsB:  h2hData?.team_b_wins ?? prev.h2hWinsB,
+          h2hDraws:  h2hData?.draws       ?? prev.h2hDraws,
+          h2hGoalsA: h2hData?.team_a_goals ?? prev.h2hGoalsA,
+          h2hGoalsB: h2hData?.team_b_goals ?? prev.h2hGoalsB,
+        };
+      });
+    }).catch(err => {
+      console.warn('[drawer] Team profile / H2H fetch failed:', err);
+    }).finally(() => {
+      setDrawerTeamLoading(false);
+    });
   };
 
   // Trigger Intelligence explanation API request
@@ -3506,7 +3562,7 @@ export default function App() {
                                                   attackA: 80, attackB: 80, defenceA: 80, defenceB: 80, midfieldA: 80, midfieldB: 80,
                                                   xGA: 1.5, xGB: 1.5, xGAA: 1.0, xGAB: 1.0, possessionA: 50, possessionB: 50, shotsA: 12.0, shotsB: 12.0,
                                                   shotsAllowedA: 10.0, shotsAllowedB: 10.0, cleanSheetA: 30, cleanSheetB: 30, bttsRateA: 50, bttsRateB: 50,
-                                                  recentFormA: [], recentFormB: [], fifaRankA: 10, fifaRankB: 10, eloRankA: 10, eloRankB: 10,
+                                                  recentFormA: [], recentFormB: [], fifaRankA: 0, fifaRankB: 0, eloRankA: 0, eloRankB: 0,
                                                   squadValueA: '€100M', squadValueB: '€100M', restDaysA: 4, restDaysB: 4, fatigueA: 20, fatigueB: 20,
                                                   injuriesA: [], injuriesB: [], suspensionsA: [], suspensionsB: [], missingKeyPlayersA: [], missingKeyPlayersB: [],
                                                   impactRatingA: 'Minimal', impactRatingB: 'Minimal', h2hPreviousMeetings: 0, h2hWinsA: 0, h2hWinsB: 0, h2hDraws: 0,
@@ -3766,8 +3822,17 @@ export default function App() {
                   
                   <div className="text-center space-y-1">
                     <div className="text-3xl font-black text-white">{match.teamACode}</div>
-                    <span className="text-xs uppercase tracking-widest text-zinc-550 font-mono block">Rank: {match.fifaRankA} ({match.eloRankA} ELO)</span>
-                    <span className="text-xs font-mono text-zinc-400 block">{match.squadValueA} value</span>
+                    {drawerTeamLoading ? (
+                      <span className="text-[10px] font-mono text-zinc-600 block animate-pulse">Loading stats…</span>
+                    ) : (
+                      <span className="text-xs uppercase tracking-widest text-zinc-550 font-mono block">
+                        {match.fifaRankA ? `FIFA #${match.fifaRankA}` : '—'}
+                        {match.eloRankA ? ` · ELO #${match.eloRankA}` : ''}
+                      </span>
+                    )}
+                    <span className="text-xs font-mono text-zinc-400 block">
+                      {match.squadValueA && match.squadValueA !== 'Loading...' ? `${match.squadValueA} value` : (drawerTeamLoading ? '' : '— value')}
+                    </span>
                   </div>
 
                   <div className="flex flex-col items-center justify-center space-y-2 border-y md:border-y-0 md:border-x border-zinc-900 py-4 md:py-0">
@@ -3786,8 +3851,17 @@ export default function App() {
 
                   <div className="text-center space-y-1">
                     <div className="text-3xl font-black text-white">{match.teamBCode}</div>
-                    <span className="text-xs uppercase tracking-widest text-zinc-550 font-mono block">Rank: {match.fifaRankB} ({match.eloRankB} ELO)</span>
-                    <span className="text-xs font-mono text-zinc-400 block">{match.squadValueB} value</span>
+                    {drawerTeamLoading ? (
+                      <span className="text-[10px] font-mono text-zinc-600 block animate-pulse">Loading stats…</span>
+                    ) : (
+                      <span className="text-xs uppercase tracking-widest text-zinc-550 font-mono block">
+                        {match.fifaRankB ? `FIFA #${match.fifaRankB}` : '—'}
+                        {match.eloRankB ? ` · ELO #${match.eloRankB}` : ''}
+                      </span>
+                    )}
+                    <span className="text-xs font-mono text-zinc-400 block">
+                      {match.squadValueB && match.squadValueB !== 'Loading...' ? `${match.squadValueB} value` : (drawerTeamLoading ? '' : '— value')}
+                    </span>
                   </div>
 
                 </div>

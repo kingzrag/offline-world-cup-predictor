@@ -230,6 +230,17 @@ async def run_daily_scheduler():
                 except Exception as elo_err:
                     logger.error(f"Scheduler: Automatic ELO refresh failed: {elo_err}", exc_info=True)
                 # -------------------------------------------
+
+                # --- Automatic Prediction Generation (post-ingestion) ---
+                try:
+                    logger.info("Scheduler: Triggering bulk prediction generation for upcoming fixtures...")
+                    from services.prediction_service import PredictionService
+                    pred_service = PredictionService()
+                    preds = pred_service.generate_predictions_for_fixtures(db)
+                    logger.info(f"Scheduler: Prediction generation completed — {len(preds)} predictions upserted.")
+                except Exception as pred_err:
+                    logger.error(f"Scheduler: Automatic prediction generation failed: {pred_err}", exc_info=True)
+                # -------------------------------------------------------
                 
             except Exception as e:
                 logger.error(f"Scheduler: Daily collection job failed: {e}")
@@ -267,6 +278,28 @@ async def startup_event():
             _db.close()
     except Exception as e:
         logger.error(f"Startup: ELO seed step failed — {e}", exc_info=True)
+
+    # ── Bootstrap predictions for any TIMED fixtures missing predictions ───────
+    try:
+        logger.info("Startup: bootstrapping predictions for upcoming fixtures...")
+        from database.connection import SessionLocal
+        from services.prediction_service import PredictionService
+
+        async def _bootstrap_predictions():
+            await asyncio.sleep(10)  # allow all startup tasks to settle first
+            _db = SessionLocal()
+            try:
+                pred_service = PredictionService()
+                preds = pred_service.generate_predictions_for_fixtures(_db)
+                logger.info(f"Startup: bootstrap predictions complete — {len(preds)} predictions upserted.")
+            except Exception as _e:
+                logger.error(f"Startup: prediction bootstrap failed — {_e}", exc_info=True)
+            finally:
+                _db.close()
+
+        asyncio.create_task(_bootstrap_predictions())
+    except Exception as e:
+        logger.error(f"Startup: failed to schedule prediction bootstrap — {e}", exc_info=True)
 
     logger.info("Starting background scheduler task...")
     asyncio.create_task(run_daily_scheduler())

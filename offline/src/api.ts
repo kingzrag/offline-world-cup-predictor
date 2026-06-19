@@ -321,6 +321,40 @@ export async function getTeamProfile(
   return apiFetch(`/team/${encodeURIComponent(teamName)}`);
 }
 
+// ── H2H response shape ────────────────────────────────────────────────────────
+
+export interface BackendH2hMatch {
+  date: string | null;
+  home_team: string | null;
+  away_team: string | null;
+  score: string | null;
+  winner: string | null;
+  result_for_a: "W" | "D" | "L";
+}
+
+export interface BackendH2h {
+  status: string;
+  team_a: string;
+  team_b: string;
+  previous_meetings: number;
+  team_a_wins: number;
+  team_b_wins: number;
+  draws: number;
+  team_a_goals: number;
+  team_b_goals: number;
+  recent_matches: BackendH2hMatch[];
+}
+
+/**
+ * GET /fastapi/h2h/{teamA}/{teamB}
+ */
+export async function getH2h(
+  teamA: string,
+  teamB: string
+): Promise<BackendH2h> {
+  return apiFetch(`/h2h/${encodeURIComponent(teamA)}/${encodeURIComponent(teamB)}`);
+}
+
 /**
  * GET /fastapi/fixtures?status=&stage=&group=&date_from=&date_to=&limit=&competition_code=
  *
@@ -525,7 +559,7 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     minute: f.live_minute ?? null,
     ...(f.prediction ? { isLiveData: true } : {}),
 
-    // Default placeholders for tactical ratings that get loaded dynamically or mapped
+    // Default neutral placeholders for stats loaded dynamically in the match drawer
     attackA: 80, attackB: 80,
     defenceA: 80, defenceB: 80,
     midfieldA: 80, midfieldB: 80,
@@ -536,20 +570,25 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     shotsAllowedA: 10.0, shotsAllowedB: 10.0,
     cleanSheetA: 30, cleanSheetB: 30,
     bttsRateA: 50, bttsRateB: 50,
-    recentFormA: ["D", "D", "D", "D", "D"],
-    recentFormB: ["D", "D", "D", "D", "D"],
-    fifaRankA: 15, fifaRankB: 15,
-    eloRankA: 15, eloRankB: 15,
-    squadValueA: "€250M", squadValueB: "€250M",
+    // ── These are now loaded dynamically via getTeamProfile + getH2h ──────────
+    recentFormA: [],
+    recentFormB: [],
+    fifaRankA: 0,
+    fifaRankB: 0,
+    eloRankA: 0,
+    eloRankB: 0,
+    squadValueA: "Loading...",
+    squadValueB: "Loading...",
+    // ─────────────────────────────────────────────────────────────────────────
     restDaysA: 4, restDaysB: 4,
     fatigueA: 20, fatigueB: 20,
     injuriesA: [], injuriesB: [],
     suspensionsA: [], suspensionsB: [],
     missingKeyPlayersA: [], missingKeyPlayersB: [],
     impactRatingA: "Minimal", impactRatingB: "Minimal",
-    h2hPreviousMeetings: 5,
-    h2hWinsA: 2, h2hWinsB: 2, h2hDraws: 1,
-    h2hGoalsA: 7, h2hGoalsB: 7,
+    h2hPreviousMeetings: 0,
+    h2hWinsA: 0, h2hWinsB: 0, h2hDraws: 0,
+    h2hGoalsA: 0, h2hGoalsB: 0,
     aiSummary: "The ML analytical pipeline is ready to simulate transition profiles. Click 'View Full Report' to dynamically generate expected goal distributions and ELO metrics.",
     
     // If completed, add btts and correct scoreline indicators
