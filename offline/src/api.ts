@@ -41,16 +41,16 @@ import { MOCK_MATCHES } from "./data";
 // import.meta.env.PROD is injected by Vite at build time:
 //   true  when running `vite build`  (Vercel deploy)
 //   false when running `vite dev`    (local Express proxy)
-export const API_BASE: string = import.meta.env.PROD
-  ? (import.meta.env.VITE_API_URL as string) ?? ""
+export const API_BASE: string = (import.meta as any).env.PROD
+  ? ((import.meta as any).env.VITE_API_URL as string) ?? ""
   : "/fastapi";
 
 // Log the resolved API base so it is visible in the browser console on first load.
 console.info(
   `[api] Resolved API base: "${API_BASE}" ` +
-  `(${import.meta.env.PROD ? "production → direct backend" : "development → Express proxy"})`
+  `(${(import.meta as any).env.PROD ? "production → direct backend" : "development → Express proxy"})`
 );
-if (import.meta.env.PROD && !API_BASE) {
+if ((import.meta as any).env.PROD && !API_BASE) {
   console.error(
     "[api] VITE_API_URL is not set — prediction requests will fail. " +
     "Set it in Vercel → Environment Variables (e.g. https://your-backend.onrender.com/api)"

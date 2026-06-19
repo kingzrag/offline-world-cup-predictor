@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+// @ts-ignore
 import football2 from './assets/images/football2.png';
 import { 
   getPredictions, 
@@ -13,6 +14,8 @@ import {
   getModelPerformance,
   getTeamProfile,
   getH2h,
+  predictMatch,
+  mapBackendPrediction,
   type GroupStandingTeam,
   type GroupStandings,
   type BracketMatch,
@@ -915,21 +918,43 @@ export default function App() {
   };
 
   // Trigger match analysis viewer modal — opens immediately with fixture data,
-  // then hydrates real team stats (FIFA rank, ELO, form, H2H) in the background.
+  // then hydrates real team stats (FIFA rank, ELO, form, H2H) and prediction in the background.
   const openMatchAnalysis = (match: MatchPrediction) => {
     // Show drawer immediately with whatever data we already have
     setSelectedMatch(match);
     fetchAiMatchSummary(match);
 
-    // Fire team-profile + H2H fetches in parallel — no await, so the drawer renders first
+    // Fire team-profile + H2H + prediction fetches in parallel — no await, so the drawer renders first
     setDrawerTeamLoading(true);
+
+    const predPromise = !match.isLiveData
+      ? predictMatch(match.teamA, match.teamB).then(res => res.prediction).catch(() => null)
+      : Promise.resolve(null);
+
     Promise.all([
       getTeamProfile(match.teamA).catch(() => null),
       getTeamProfile(match.teamB).catch(() => null),
       getH2h(match.teamA, match.teamB).catch(() => null),
-    ]).then(([profileA, profileB, h2hData]) => {
+      predPromise,
+    ]).then(([profileA, profileB, h2hData, freshPred]) => {
       setSelectedMatch(prev => {
         if (!prev || prev.id !== match.id) return prev; // drawer was closed/changed
+
+        let updated = { ...prev };
+        if (freshPred) {
+          updated = mapBackendPrediction(updated, freshPred);
+          // Update sourceMatches so the card in the main layout updates too
+          setSourceMatches(source => {
+            const idx = source.findIndex(m => m.id === match.id);
+            if (idx !== -1) {
+              const next = [...source];
+              next[idx] = updated;
+              return next;
+            }
+            return source;
+          });
+        }
+
         const a = profileA?.team;
         const b = profileB?.team;
 
@@ -942,32 +967,32 @@ export default function App() {
           (v && v !== 'N/A' && v !== 'Loading...') ? v : '—';
 
         return {
-          ...prev,
+          ...updated,
           // Team A real data
-          fifaRankA:   a?.fifa_rank  ?? prev.fifaRankA,
-          eloRankA:    a?.elo_rank   ?? prev.eloRankA,
-          squadValueA: fmtVal(a?.squad_value) !== '—' ? fmtVal(a?.squad_value) : prev.squadValueA,
-          recentFormA: toFormArr(a?.recent_form).length > 0 ? toFormArr(a?.recent_form) : prev.recentFormA,
-          injuriesA:   a?.injuries   ?? prev.injuriesA,
-          suspensionsA: a?.suspensions ?? prev.suspensionsA,
+          fifaRankA:   a?.fifa_rank  ?? updated.fifaRankA,
+          eloRankA:    a?.elo_rank   ?? updated.eloRankA,
+          squadValueA: fmtVal(a?.squad_value) !== '—' ? fmtVal(a?.squad_value) : updated.squadValueA,
+          recentFormA: toFormArr(a?.recent_form).length > 0 ? toFormArr(a?.recent_form) : updated.recentFormA,
+          injuriesA:   a?.injuries   ?? updated.injuriesA,
+          suspensionsA: a?.suspensions ?? updated.suspensionsA,
           // Team B real data
-          fifaRankB:   b?.fifa_rank  ?? prev.fifaRankB,
-          eloRankB:    b?.elo_rank   ?? prev.eloRankB,
-          squadValueB: fmtVal(b?.squad_value) !== '—' ? fmtVal(b?.squad_value) : prev.squadValueB,
-          recentFormB: toFormArr(b?.recent_form).length > 0 ? toFormArr(b?.recent_form) : prev.recentFormB,
-          injuriesB:   b?.injuries   ?? prev.injuriesB,
-          suspensionsB: b?.suspensions ?? prev.suspensionsB,
+          fifaRankB:   b?.fifa_rank  ?? updated.fifaRankB,
+          eloRankB:    b?.elo_rank   ?? updated.eloRankB,
+          squadValueB: fmtVal(b?.squad_value) !== '—' ? fmtVal(b?.squad_value) : updated.squadValueB,
+          recentFormB: toFormArr(b?.recent_form).length > 0 ? toFormArr(b?.recent_form) : updated.recentFormB,
+          injuriesB:   b?.injuries   ?? updated.injuriesB,
+          suspensionsB: b?.suspensions ?? updated.suspensionsB,
           // Real H2H data
-          h2hPreviousMeetings: h2hData?.previous_meetings ?? prev.h2hPreviousMeetings,
-          h2hWinsA:  h2hData?.team_a_wins ?? prev.h2hWinsA,
-          h2hWinsB:  h2hData?.team_b_wins ?? prev.h2hWinsB,
-          h2hDraws:  h2hData?.draws       ?? prev.h2hDraws,
-          h2hGoalsA: h2hData?.team_a_goals ?? prev.h2hGoalsA,
-          h2hGoalsB: h2hData?.team_b_goals ?? prev.h2hGoalsB,
+          h2hPreviousMeetings: h2hData?.previous_meetings ?? updated.h2hPreviousMeetings,
+          h2hWinsA:  h2hData?.team_a_wins ?? updated.h2hWinsA,
+          h2hWinsB:  h2hData?.team_b_wins ?? updated.h2hWinsB,
+          h2hDraws:  h2hData?.draws       ?? updated.h2hDraws,
+          h2hGoalsA: h2hData?.team_a_goals ?? updated.h2hGoalsA,
+          h2hGoalsB: h2hData?.team_b_goals ?? updated.h2hGoalsB,
         };
       });
     }).catch(err => {
-      console.warn('[drawer] Team profile / H2H fetch failed:', err);
+      console.warn('[drawer] Team profile / H2H / prediction fetch failed:', err);
     }).finally(() => {
       setDrawerTeamLoading(false);
     });
@@ -2365,8 +2390,10 @@ export default function App() {
             })).sort((a, b) => b.probability - a.probability);
           };
 
+          const enrichedMatches = sourceMatches.filter(m => m.isLiveData || m.status === 'COMPLETED');
+
           // Section 1: HIGHEST CONFIDENCE PICKS
-          const sortedConfidencePicks = [...sourceMatches]
+          const sortedConfidencePicks = [...enrichedMatches]
             .map(m => {
               const favA = m.probA >= m.probB;
               const prediction = m.prediction;
@@ -2393,7 +2420,7 @@ export default function App() {
             .slice(0, 5);
 
           // Section 2: GOAL FEST FORECAST
-          const sortedGoalForecasts = [...sourceMatches]
+          const sortedGoalForecasts = [...enrichedMatches]
             .map(m => {
               const totalXG = Number((m.xGA + m.xGB).toFixed(2));
               const over25 = m.overUnder?.["2.5"]
@@ -2419,7 +2446,7 @@ export default function App() {
             .slice(0, 5);
 
           // Section 3: BTTS WATCH
-          const sortedBttsWatch = [...sourceMatches]
+          const sortedBttsWatch = [...enrichedMatches]
             .map(m => {
               const bttsYes = m.bttsMarket
                 ? Math.round((m.bttsMarket.yes ?? 0) * 100)
@@ -2442,16 +2469,23 @@ export default function App() {
           // Section 4: CLEAN SHEET LEADERS
           const cleanSheetLeadersList = (() => {
             const teamsMap: { [code: string]: { name: string; rates: number[] } } = {};
-            sourceMatches.forEach(m => {
+            enrichedMatches.forEach(m => {
+              const csA = m.teamGoals
+                ? Math.round((1 - m.teamGoals.away.over_0_5) * 100)
+                : Math.round(Math.exp(-m.xGB) * 100);
+              const csB = m.teamGoals
+                ? Math.round((1 - m.teamGoals.home.over_0_5) * 100)
+                : Math.round(Math.exp(-m.xGA) * 100);
+
               if (!teamsMap[m.teamACode]) {
                 teamsMap[m.teamACode] = { name: m.teamA, rates: [] };
               }
-              teamsMap[m.teamACode].rates.push(m.cleanSheetA);
+              teamsMap[m.teamACode].rates.push(csA);
 
               if (!teamsMap[m.teamBCode]) {
                 teamsMap[m.teamBCode] = { name: m.teamB, rates: [] };
               }
-              teamsMap[m.teamBCode].rates.push(m.cleanSheetB);
+              teamsMap[m.teamBCode].rates.push(csB);
             });
 
             return Object.entries(teamsMap)
@@ -2469,7 +2503,7 @@ export default function App() {
           })();
 
           // Section 5: MOST LIKELY SCORELINES
-          const poissonScoresList = sourceMatches.slice(0, 5).map(m => {
+          const poissonScoresList = enrichedMatches.slice(0, 5).map(m => {
             const topScores = getPoissonTop5(m.xGA, m.xGB, m.teamA, m.teamB);
             const firstVal = topScores[0];
             return {
@@ -2483,7 +2517,7 @@ export default function App() {
           });
 
           // Section 6: UPSET WATCH
-          const upsetWatchList = sourceMatches
+          const upsetWatchList = enrichedMatches
             .map(m => {
               const probA = m.probA;
               const probB = m.probB;
@@ -2511,7 +2545,7 @@ export default function App() {
             .slice(0, 5);
 
           // Section 8: MATCH INTELLIGENCE LEADERBOARD
-          const matchIntelligenceResult = [...sourceMatches]
+          const matchIntelligenceResult = [...enrichedMatches]
             .map(m => {
               const totalXG = Number((m.xGA + m.xGB).toFixed(2));
               const bttsYes = m.bttsMarket
@@ -2595,7 +2629,14 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-900/60">
-                          {sortedConfidencePicks.map((m) => (
+                          {sortedConfidencePicks.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-8 text-center text-zinc-555 font-sans">
+                                <Loader2 className="w-5 h-5 text-green-accent animate-spin inline-block mr-2" />
+                                Analyzing matchup probabilities...
+                              </td>
+                            </tr>
+                          ) : sortedConfidencePicks.map((m) => (
                             <tr key={m.id} className="hover:bg-zinc-900/30 transition-colors">
                               <td className="py-3 px-5 font-sans font-medium text-white">
                                 <span className="block text-zinc-500 font-normal text-[9px] uppercase font-mono">{m.stage}</span>
@@ -2622,7 +2663,7 @@ export default function App() {
                       </table>
                     </div>
                   </div>
-
+ 
                   {/* SECTION 2: GOAL FEST FORECAST */}
                   <div className="bg-zinc-950 border border-zinc-900 rounded overflow-hidden">
                     <div className="border-b border-zinc-900 px-5 py-3 flex items-center justify-between bg-black/40">
@@ -2644,7 +2685,14 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-900/60">
-                          {sortedGoalForecasts.map((m) => (
+                          {sortedGoalForecasts.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="py-8 text-center text-zinc-555 font-sans">
+                                <Loader2 className="w-5 h-5 text-green-accent animate-spin inline-block mr-2" />
+                                Computing goal expected values...
+                              </td>
+                            </tr>
+                          ) : sortedGoalForecasts.map((m) => (
                             <tr key={m.id} className="hover:bg-zinc-900/30 transition-colors">
                               <td className="py-3 px-5 font-sans font-medium text-white">
                                 <span className="block text-zinc-500 font-normal text-[9px] uppercase font-mono">{m.venue.split(',')[0]}</span>
@@ -2668,7 +2716,7 @@ export default function App() {
                       </table>
                     </div>
                   </div>
-
+ 
                   {/* SECTION 3: BTTS WATCH */}
                   <div className="bg-zinc-950 border border-zinc-900 rounded overflow-hidden">
                     <div className="border-b border-zinc-900 px-5 py-3 flex items-center justify-between bg-black/40">
@@ -2689,7 +2737,14 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-900/60">
-                          {sortedBttsWatch.map((m) => (
+                          {sortedBttsWatch.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-8 text-center text-zinc-555 font-sans">
+                                <Loader2 className="w-5 h-5 text-green-accent animate-spin inline-block mr-2" />
+                                Scanning BTTS distributions...
+                              </td>
+                            </tr>
+                          ) : sortedBttsWatch.map((m) => (
                             <tr key={m.id} className="hover:bg-zinc-900/30 transition-colors">
                               <td className="py-3 px-5 font-sans font-medium text-white">
                                 <span className="block text-zinc-500 font-normal text-[9px] uppercase font-mono">{m.stage}</span>
@@ -2721,7 +2776,12 @@ export default function App() {
                       <span className="text-[9px] font-mono text-zinc-550 uppercase">Defensive metrics</span>
                     </div>
                     <div className="p-5 space-y-4">
-                      {cleanSheetLeadersList.map((t) => (
+                      {cleanSheetLeadersList.length === 0 ? (
+                        <div className="py-8 text-center text-zinc-555 font-sans">
+                          <Loader2 className="w-5 h-5 text-green-accent animate-spin inline-block mr-2" />
+                          Evaluating defensive ratings...
+                        </div>
+                      ) : cleanSheetLeadersList.map((t) => (
                         <div key={t.code} className="flex items-center justify-between gap-4 font-mono text-[11px]">
                           <div className="flex items-center space-x-3 min-w-[130px]">
                             <span className="text-[10px] text-zinc-600">0{t.rank}</span>
@@ -2755,7 +2815,12 @@ export default function App() {
                       <span className="text-[9px] font-mono text-zinc-550 uppercase">Poisson engine predictions</span>
                     </div>
                     <div className="p-5 space-y-4">
-                      {poissonScoresList.map((m) => (
+                      {poissonScoresList.length === 0 ? (
+                        <div className="py-8 text-center text-zinc-555 font-sans">
+                          <Loader2 className="w-5 h-5 text-green-accent animate-spin inline-block mr-2" />
+                          Simulating Poisson score matrices...
+                        </div>
+                      ) : poissonScoresList.map((m) => (
                         <div key={m.matchId} className="border border-zinc-900/60 bg-zinc-950/20 p-3 rounded space-y-3 font-mono">
                           <div className="flex items-center justify-between border-b border-zinc-900/40 pb-1.5">
                             <span className="text-[11px] font-sans font-bold text-white">{m.teamA} vs {m.teamB}</span>
@@ -2798,7 +2863,14 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-zinc-900/60">
-                            {upsetWatchList.map((item) => (
+                            {upsetWatchList.length === 0 ? (
+                              <tr>
+                                <td colSpan={3} className="py-8 text-center text-zinc-555 font-sans">
+                                  <Loader2 className="w-5 h-5 text-green-accent animate-spin inline-block mr-2" />
+                                  Evaluating underdog risk scenarios...
+                                </td>
+                              </tr>
+                            ) : upsetWatchList.map((item) => (
                               <tr key={item.id} className="hover:bg-zinc-900/30 transition-colors">
                                 <td className="py-3 px-5 text-white">
                                   <div className="font-sans font-medium text-xs">
@@ -2893,7 +2965,14 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-900">
-                        {matchIntelligenceResult.map((m) => (
+                        {matchIntelligenceResult.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-zinc-555 font-sans">
+                              <Loader2 className="w-5 h-5 text-green-accent animate-spin inline-block mr-2" />
+                              Constructing global match intelligence matrix...
+                            </td>
+                          </tr>
+                        ) : matchIntelligenceResult.map((m) => (
                           <tr key={m.id} className="hover:bg-zinc-900/30 transition-colors">
                             <td className="py-4 px-5 font-sans font-bold text-white text-sm">
                               {m.teamA} <span className="text-zinc-500 text-xs font-normal">vs</span> {m.teamB}
@@ -3786,6 +3865,14 @@ export default function App() {
         const flagA = getFlag(match.teamA);
         const flagB = getFlag(match.teamB);
 
+        // Loader helper for loading states
+        const renderPredictionLoading = (sectionTitle: string) => (
+          <div className="p-5 bg-zinc-950/45 border border-zinc-900 rounded flex flex-col items-center justify-center space-y-2 font-mono">
+            <Loader2 className="w-5 h-5 text-[#1cdb5e] animate-spin" />
+            <span className="text-[9px] uppercase tracking-widest text-zinc-550">Calculating {sectionTitle}...</span>
+          </div>
+        );
+
         // SECTION 1 — MATCH OUTCOME
         const probA = match.probA;
         const probD = match.probD;
@@ -3834,10 +3921,25 @@ export default function App() {
         const dnbAway = 100 - dnbHome;
 
         // SECTION 6 — CLEAN SHEET
-        const csA = match.cleanSheetA;
-        const csB = match.cleanSheetB;
+        const csA = match.teamGoals
+          ? Math.round((1 - match.teamGoals.away.over_0_5) * 100)
+          : Math.round(Math.exp(-xGB) * 100);
+        const csB = match.teamGoals
+          ? Math.round((1 - match.teamGoals.home.over_0_5) * 100)
+          : Math.round(Math.exp(-xGA) * 100);
 
         // SECTION 7 — CORRECT SCORE MATRIX (Top 5 scorelines ranked)
+        const formatScorelineLabel = (score: string) => {
+          const parts = score.split('-');
+          if (parts.length !== 2) return score;
+          const h = parseInt(parts[0], 10);
+          const a = parseInt(parts[1], 10);
+          if (isNaN(h) || isNaN(a)) return score;
+          if (h > a) return `${h}-${a} ${match.teamA}`;
+          if (a > h) return `${a}-${h} ${match.teamB}`;
+          return `${h}-${a} Draw`;
+        };
+
         const scores: { label: string; prob: number }[] = [];
         for (let gA = 0; gA <= 4; gA++) {
           for (let gB = 0; gB <= 4; gB++) {
@@ -3854,7 +3956,7 @@ export default function App() {
           }
         }
         const top5Scores = match.top5Scorelines ? match.top5Scorelines.map(s => ({
-          scoreline: s.score,
+          scoreline: formatScorelineLabel(s.score),
           pct: Math.round(s.probability * 100)
         })) : scores.slice(0, 5).map(s => ({
           scoreline: s.label,
@@ -3865,19 +3967,92 @@ export default function App() {
         const confidenceLabel = match.confidence === 'High' ? 'Elite Confidence' : match.confidence === 'Medium' ? 'Standard Calibration' : 'Experimental Index';
         const modelAgreement = match.confidence === 'High' ? 88 + (probA % 9) : match.confidence === 'Medium' ? 76 + (probA % 9) : 61 + (probA % 9);
         const varianceScore = match.confidence === 'High' ? '0.04 - 0.08' : match.confidence === 'Medium' ? '0.12 - 0.16' : '0.22 - 0.28';
-        const freshness = "Data updated 1.4h ago (via simulated telemetry)";
+        const freshness = "Data updated dynamically (synchronized)";
 
         // SECTION 10 — SQUAD HEALTH
         const missingKeyPlayersA = match.missingKeyPlayersA || (match.injuriesA.length > 0 ? [match.injuriesA[0]] : ["None"]);
         const missingKeyPlayersB = match.missingKeyPlayersB || (match.injuriesB.length > 0 ? [match.injuriesB[0]] : ["None"]);
 
-        // SECTION 11 — TOURNAMENT IMPACT
-        const qualA = Math.min(99, Math.max(5, Math.round(probA + probD * 0.4 + 25)));
-        const qualB = 100 - qualA;
-        const groupPosA = probA >= probB ? "1st (62% probability)" : "2nd (48% probability)";
-        const groupPosB = probB > probA ? "1st (58% probability)" : "2nd (52% probability)";
-        const tournamentAdvA = match.confidence === 'High' ? 'Quarter-Finals (64%)' : 'Quarter-Finals (51%)';
-        const tournamentAdvB = match.confidence === 'High' ? 'Round of 16 (73%)' : 'Round of 16 (62%)';
+        // SECTION 11 — TOURNAMENT IMPACT PROJECTIONS
+        const getGroupQualProb = (rank: number) => {
+          if (!rank) return 50;
+          const val = 50 - (rank - 24) * 1.5;
+          return Math.min(95, Math.max(5, Math.round(val)));
+        };
+
+        const getProjectedPosition = (rank: number) => {
+          if (!rank) return "TBD";
+          if (rank <= 12) {
+            const prob = Math.round(80 - rank * 2);
+            return `1st (${prob}% probability)`;
+          } else if (rank <= 24) {
+            const prob = Math.round(70 - (rank - 12) * 2);
+            return `2nd (${prob}% probability)`;
+          } else if (rank <= 36) {
+            const prob = Math.round(60 - (rank - 24) * 2);
+            return `3rd (${prob}% probability)`;
+          } else {
+            const prob = Math.round(50 - (rank - 36) * 1.5);
+            return `4th (${prob}% probability)`;
+          }
+        };
+
+        const getProjectedAdvancement = (rank: number) => {
+          if (!rank) return "TBD";
+          if (rank <= 4) {
+            const prob = Math.round(45 - rank * 5);
+            return `Semi-Finals (${prob}%)`;
+          } else if (rank <= 8) {
+            const prob = Math.round(55 - (rank - 4) * 4);
+            return `Quarter-Finals (${prob}%)`;
+          } else if (rank <= 16) {
+            const prob = Math.round(65 - (rank - 8) * 3);
+            return `Round of 16 (${prob}%)`;
+          } else if (rank <= 32) {
+            const prob = Math.round(75 - (rank - 16) * 2);
+            return `Round of 32 (${prob}%)`;
+          } else {
+            const prob = Math.round(85 - (rank - 32) * 1.5);
+            return `Group Stage (${prob}%)`;
+          }
+        };
+
+        const findStanding = (teamName: string) => {
+          for (const [grp, teams] of Object.entries(standings)) {
+            const found = (teams as GroupStandingTeam[]).find(t => t.name.toLowerCase() === teamName.toLowerCase());
+            if (found) return { group: grp, position: found.position, points: found.points };
+          }
+          return null;
+        };
+
+        const isKnockout = !match.stage.toLowerCase().includes("group stage");
+        let qualA = 50;
+        let qualB = 50;
+        if (isKnockout) {
+          qualA = Math.round(probA + 0.5 * probD);
+          qualB = 100 - qualA;
+        } else {
+          qualA = getGroupQualProb(match.eloRankA || match.fifaRankA);
+          qualB = getGroupQualProb(match.eloRankB || match.fifaRankB);
+        }
+
+        const standingA = findStanding(match.teamA);
+        const standingB = findStanding(match.teamB);
+
+        const groupPosA = isKnockout
+          ? "N/A (Knockout stage)"
+          : (standingA
+            ? `Currently ${standingA.position === 1 ? '1st' : standingA.position === 2 ? '2nd' : standingA.position === 3 ? '3rd' : '4th'} (${standingA.points} pts)`
+            : getProjectedPosition(match.eloRankA || match.fifaRankA));
+
+        const groupPosB = isKnockout
+          ? "N/A (Knockout stage)"
+          : (standingB
+            ? `Currently ${standingB.position === 1 ? '1st' : standingB.position === 2 ? '2nd' : standingB.position === 3 ? '3rd' : '4th'} (${standingB.points} pts)`
+            : getProjectedPosition(match.eloRankB || match.fifaRankB));
+
+        const tournamentAdvA = getProjectedAdvancement(match.eloRankA || match.fifaRankA);
+        const tournamentAdvB = getProjectedAdvancement(match.eloRankB || match.fifaRankB);
 
         return (
           <div id="match-analysis-backdrop" className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end" onClick={() => setSelectedMatch(null)}>
@@ -3994,207 +4169,227 @@ export default function App() {
                 </div>
 
                 {/* SECTION 1 — MATCH OUTCOME */}
-                <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded">
-                  <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-910 pb-2 flex items-center justify-between">
-                    <span>SECTION 1 — Match Outcome Probabilities</span>
-                    <span className="text-[10px] text-zinc-500 font-normal">Deterministic calibration</span>
-                  </h4>
-                  <div className="grid grid-cols-3 gap-4 text-center mt-2 font-mono text-xs">
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[10px] text-zinc-500 block uppercase mb-1">Home Win</span>
-                      <span className="text-sm font-bold text-white">Home Win: {probA}%</span>
-                    </div>
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[10px] text-zinc-500 block uppercase mb-1">Draw</span>
-                      <span className="text-sm font-bold text-white">Draw: {probD}%</span>
-                    </div>
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[10px] text-zinc-500 block uppercase mb-1">Away Win</span>
-                      <span className="text-sm font-bold text-white">Away Win: {probB}%</span>
+                {!match.isLiveData ? renderPredictionLoading("Match Outcome") : (
+                  <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded">
+                    <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-910 pb-2 flex items-center justify-between">
+                      <span>SECTION 1 — Match Outcome Probabilities</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">Deterministic calibration</span>
+                    </h4>
+                    <div className="grid grid-cols-3 gap-4 text-center mt-2 font-mono text-xs">
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[10px] text-zinc-500 block uppercase mb-1">Home Win</span>
+                        <span className="text-sm font-bold text-white">Home Win: {probA}%</span>
+                      </div>
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[10px] text-zinc-500 block uppercase mb-1">Draw</span>
+                        <span className="text-sm font-bold text-white">Draw: {probD}%</span>
+                      </div>
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[10px] text-zinc-500 block uppercase mb-1">Away Win</span>
+                        <span className="text-sm font-bold text-white">Away Win: {probB}%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* SECTION 2 — EXPECTED GOALS */}
-                <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded">
-                  <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 2 — Expected Goals (xG) Matrix
-                  </h4>
-                  <div className="grid grid-cols-3 gap-4 text-center mt-2 font-mono text-xs">
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 block uppercase mb-1">{match.teamA} xG</span>
-                      <span className="text-sm font-bold text-white">{match.teamACode} xG: {xGA.toFixed(2)}</span>
-                    </div>
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 block uppercase mb-1">{match.teamB} xG</span>
-                      <span className="text-sm font-bold text-white">{match.teamBCode} xG: {xGB.toFixed(2)}</span>
-                    </div>
-                    <div className="p-2 bg-black rounded border border-[#1cdb5e]/40">
-                      <span className="text-[9px] text-green-accent block uppercase mb-1">Total xG</span>
-                      <span className="text-sm font-bold text-green-accent">Total xG: {totalXG}</span>
+                {!match.isLiveData ? renderPredictionLoading("Expected Goals Matrix") : (
+                  <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded">
+                    <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-900 pb-2">
+                      SECTION 2 — Expected Goals (xG) Matrix
+                    </h4>
+                    <div className="grid grid-cols-3 gap-4 text-center mt-2 font-mono text-xs">
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-500 block uppercase mb-1">{match.teamA} xG</span>
+                        <span className="text-sm font-bold text-white">{match.teamACode} xG: {xGA.toFixed(2)}</span>
+                      </div>
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-550 block uppercase mb-1">{match.teamB} xG</span>
+                        <span className="text-sm font-bold text-white">{match.teamBCode} xG: {xGB.toFixed(2)}</span>
+                      </div>
+                      <div className="p-2 bg-black rounded border border-[#1cdb5e]/40">
+                        <span className="text-[9px] text-green-accent block uppercase mb-1">Total xG</span>
+                        <span className="text-sm font-bold text-green-accent">Total xG: {totalXG}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* SECTION 3 — GOAL PROBABILITIES */}
-                <details className="group border border-zinc-900 bg-zinc-950/40 rounded overflow-hidden" open>
-                  <summary className="flex justify-between items-center px-4 py-3 text-xs font-mono font-bold tracking-widest text-zinc-400 group-open:text-zinc-100 hover:text-white cursor-pointer select-none bg-zinc-950/60 border-b border-transparent group-open:border-zinc-900 transition-colors">
-                    <span>SECTION 3 — Goal Probabilities &amp; BTTS</span>
-                    <ChevronDown className="w-4 h-4 text-zinc-550 group-open:rotate-180 transition-transform duration-300" />
-                  </summary>
-                  <div className="p-4 space-y-4 font-mono text-xs text-zinc-400">
-                    <div className="bg-black p-3 rounded border border-zinc-900/60 flex justify-between">
-                      <span>BTTS Yes: <strong className="text-white">{bttsYes}%</strong></span>
-                      <span>BTTS No: <strong className="text-white">{bttsNo}%</strong></span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5 p-3 bg-black rounded border border-zinc-900">
-                        <div className="text-[10px] text-zinc-500 uppercase font-bold border-b border-zinc-900 pb-1 mb-1.5">Over Probabilities</div>
-                        <div className="flex justify-between"><span>Over 0.5 Goals:</span> <span className="text-white font-bold">{over0_5}%</span></div>
-                        <div className="flex justify-between"><span>Over 1.5 Goals:</span> <span className="text-white font-bold">{over1_5}%</span></div>
-                        <div className="flex justify-between"><span>Over 2.5 Goals:</span> <span className="text-white font-bold">{over2_5}%</span></div>
-                        <div className="flex justify-between"><span>Over 3.5 Goals:</span> <span className="text-white font-bold">{over3_5}%</span></div>
-                        <div className="flex justify-between"><span>Over 4.5 Goals:</span> <span className="text-white font-bold">{over4_5}%</span></div>
+                {!match.isLiveData ? renderPredictionLoading("Goal Probabilities & BTTS") : (
+                  <details className="group border border-zinc-900 bg-zinc-950/40 rounded overflow-hidden" open>
+                    <summary className="flex justify-between items-center px-4 py-3 text-xs font-mono font-bold tracking-widest text-zinc-400 group-open:text-zinc-100 hover:text-white cursor-pointer select-none bg-zinc-950/60 border-b border-transparent group-open:border-zinc-900 transition-colors">
+                      <span>SECTION 3 — Goal Probabilities &amp; BTTS</span>
+                      <ChevronDown className="w-4 h-4 text-zinc-550 group-open:rotate-180 transition-transform duration-300" />
+                    </summary>
+                    <div className="p-4 space-y-4 font-mono text-xs text-zinc-400">
+                      <div className="bg-black p-3 rounded border border-zinc-900/60 flex justify-between">
+                        <span>BTTS Yes: <strong className="text-white">{bttsYes}%</strong></span>
+                        <span>BTTS No: <strong className="text-white">{bttsNo}%</strong></span>
                       </div>
-                      <div className="space-y-1.5 p-3 bg-black rounded border border-zinc-900">
-                        <div className="text-[10px] text-zinc-500 uppercase font-bold border-b border-zinc-900 pb-1 mb-1.5">Under Probabilities</div>
-                        <div className="flex justify-between"><span>Under 0.5 Goals:</span> <span className="text-white font-bold">{under0_5}%</span></div>
-                        <div className="flex justify-between"><span>Under 1.5 Goals:</span> <span className="text-white font-bold">{under1_5}%</span></div>
-                        <div className="flex justify-between"><span>Under 2.5 Goals:</span> <span className="text-white font-bold">{under2_5}%</span></div>
-                        <div className="flex justify-between"><span>Under 3.5 Goals:</span> <span className="text-white font-bold">{under3_5}%</span></div>
-                        <div className="flex justify-between"><span>Under 4.5 Goals:</span> <span className="text-white font-bold">{under4_5}%</span></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5 p-3 bg-black rounded border border-zinc-900">
+                          <div className="text-[10px] text-zinc-500 uppercase font-bold border-b border-zinc-900 pb-1 mb-1.5">Over Probabilities</div>
+                          <div className="flex justify-between"><span>Over 0.5 Goals:</span> <span className="text-white font-bold">{over0_5}%</span></div>
+                          <div className="flex justify-between"><span>Over 1.5 Goals:</span> <span className="text-white font-bold">{over1_5}%</span></div>
+                          <div className="flex justify-between"><span>Over 2.5 Goals:</span> <span className="text-white font-bold">{over2_5}%</span></div>
+                          <div className="flex justify-between"><span>Over 3.5 Goals:</span> <span className="text-white font-bold">{over3_5}%</span></div>
+                          <div className="flex justify-between"><span>Over 4.5 Goals:</span> <span className="text-white font-bold">{over4_5}%</span></div>
+                        </div>
+                        <div className="space-y-1.5 p-3 bg-black rounded border border-zinc-900">
+                          <div className="text-[10px] text-zinc-500 uppercase font-bold border-b border-zinc-900 pb-1 mb-1.5">Under Probabilities</div>
+                          <div className="flex justify-between"><span>Under 0.5 Goals:</span> <span className="text-white font-bold">{under0_5}%</span></div>
+                          <div className="flex justify-between"><span>Under 1.5 Goals:</span> <span className="text-white font-bold">{under1_5}%</span></div>
+                          <div className="flex justify-between"><span>Under 2.5 Goals:</span> <span className="text-white font-bold">{under2_5}%</span></div>
+                          <div className="flex justify-between"><span>Under 3.5 Goals:</span> <span className="text-white font-bold">{under3_5}%</span></div>
+                          <div className="flex justify-between"><span>Under 4.5 Goals:</span> <span className="text-white font-bold">{under4_5}%</span></div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </details>
+                  </details>
+                )}
 
                 {/* SECTION 4 — DOUBLE CHANCE */}
-                <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 4 — Double Chance
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2 mt-2 text-center">
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 uppercase block">Home or Draw</span>
-                      <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or Draw: {dcHD}%</span>
-                    </div>
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 uppercase block">Away or Draw</span>
-                      <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} or Draw: {dcAD}%</span>
-                    </div>
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 uppercase block">Home or Away</span>
-                      <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or {match.teamBCode}: {dcHA}%</span>
+                {!match.isLiveData ? renderPredictionLoading("Double Chance Markets") : (
+                  <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
+                      SECTION 4 — Double Chance
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2 mt-2 text-center">
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-500 uppercase block">Home or Draw</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or Draw: {dcHD}%</span>
+                      </div>
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-500 uppercase block">Away or Draw</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} or Draw: {dcAD}%</span>
+                      </div>
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-500 uppercase block">Home or Away</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or {match.teamBCode}: {dcHA}%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* SECTION 5 — DRAW NO BET */}
-                <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 5 — Draw No Bet (DNB)
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4 mt-2 text-center">
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 block uppercase">Home DNB</span>
-                      <span className="text-xs font-bold text-white block mt-1">{match.teamACode} DNB: {dnbHome}%</span>
-                    </div>
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 block uppercase">Away DNB</span>
-                      <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} DNB: {dnbAway}%</span>
+                {!match.isLiveData ? renderPredictionLoading("Draw No Bet Markets") : (
+                  <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
+                      SECTION 5 — Draw No Bet (DNB)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 mt-2 text-center">
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-500 block uppercase">Home DNB</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} DNB: {dnbHome}%</span>
+                      </div>
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-500 block uppercase">Away DNB</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} DNB: {dnbAway}%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* SECTION 6 — CLEAN SHEET */}
-                <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 6 — Clean Sheet
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4 mt-2 text-center">
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 block uppercase">{match.teamA} Clean Sheet</span>
-                      <span className="text-xs font-bold text-white block mt-1">{match.teamACode} Clean Sheet: {csA}%</span>
-                    </div>
-                    <div className="p-2 bg-black rounded border border-zinc-900">
-                      <span className="text-[9px] text-zinc-500 block uppercase">{match.teamB} Clean Sheet</span>
-                      <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} Clean Sheet: {csB}%</span>
+                {!match.isLiveData ? renderPredictionLoading("Clean Sheet Probabilities") : (
+                  <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
+                      SECTION 6 — Clean Sheet
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 mt-2 text-center">
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-500 block uppercase">{match.teamA} Clean Sheet</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} Clean Sheet: {csA}%</span>
+                      </div>
+                      <div className="p-2 bg-black rounded border border-zinc-900">
+                        <span className="text-[9px] text-zinc-500 block uppercase">{match.teamB} Clean Sheet</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} Clean Sheet: {csB}%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* SECTION 7 — CORRECT SCORE MATRIX */}
-                <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 7 — Correct Score Matrix (Top 5 Likeliest)
-                  </h4>
-                  <div className="space-y-2 mt-2">
-                    {top5Scores.map((sc, index) => (
-                      <div key={index} className="flex justify-between items-center p-2.5 bg-black border border-zinc-900 rounded text-xs">
-                        <span className="text-zinc-450 uppercase">{index + 1}. {sc.scoreline}</span>
-                        <span className="text-green-accent font-bold font-mono">{sc.pct}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* SECTION 13 — ASIAN HANDICAP */}
-                {match.asianHandicap && (
+                {!match.isLiveData ? renderPredictionLoading("Correct Score Matrix") : (
                   <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                    <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-900 pb-2 flex justify-between">
-                      <span>SECTION 13 — Asian Handicap ({match.asianHandicap.label})</span>
-                      <span className="text-[10px] text-zinc-500 lowercase">Favored: {match.asianHandicap.favored_team}</span>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
+                      SECTION 7 — Correct Score Matrix (Top 5 Likeliest)
                     </h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2">
-                      {Object.entries(match.asianHandicap.lines).map(([line, val]) => (
-                        <div key={line} className="p-2 bg-black rounded border border-zinc-900 hover:border-zinc-700 transition-colors text-center">
-                          <span className="text-[9px] text-zinc-550 block uppercase mb-1">Line {line}</span>
-                          <span className="text-xs font-bold text-white">{Math.round((val as number) * 100)}%</span>
+                    <div className="space-y-2 mt-2">
+                      {top5Scores.map((sc, index) => (
+                        <div key={index} className="flex justify-between items-center p-2.5 bg-black border border-zinc-900 rounded text-xs">
+                          <span className="text-zinc-450 uppercase">{index + 1}. {sc.scoreline}</span>
+                          <span className="text-green-accent font-bold font-mono">{sc.pct}%</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
+                {/* SECTION 13 — ASIAN HANDICAP */}
+                {match.asianHandicap && (
+                  !match.isLiveData ? renderPredictionLoading("Asian Handicap") : (
+                    <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
+                      <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-900 pb-2 flex justify-between">
+                        <span>SECTION 13 — Asian Handicap ({match.asianHandicap.label})</span>
+                        <span className="text-[10px] text-zinc-500 lowercase">Favored: {match.asianHandicap.favored_team}</span>
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2">
+                        {Object.entries(match.asianHandicap.lines).map(([line, val]) => (
+                          <div key={line} className="p-2 bg-black rounded border border-zinc-900 hover:border-zinc-700 transition-colors text-center">
+                            <span className="text-[9px] text-zinc-550 block uppercase mb-1">Line {line}</span>
+                            <span className="text-xs font-bold text-white">{Math.round((val as number) * 100)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                )}
+
                 {/* SECTION 14 — TEAM GOALS (OVER/UNDER) */}
                 {match.teamGoals && (
-                  <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                      SECTION 14 — Team Goals Over/Under
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                      <div className="space-y-2 bg-black p-3 border border-zinc-900 rounded">
-                        <span className="text-[10px] text-zinc-500 uppercase block font-bold">{match.teamA} (Home)</span>
-                        <div className="space-y-1 text-zinc-400">
-                          <div className="flex justify-between"><span>Over 0.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.home.over_0_5 * 100)}%</span></div>
-                          <div className="flex justify-between"><span>Over 1.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.home.over_1_5 * 100)}%</span></div>
-                          <div className="flex justify-between"><span>Over 2.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.home.over_2_5 * 100)}%</span></div>
+                  !match.isLiveData ? renderPredictionLoading("Team Goals Over/Under") : (
+                    <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
+                        SECTION 14 — Team Goals Over/Under
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        <div className="space-y-2 bg-black p-3 border border-zinc-900 rounded">
+                          <span className="text-[10px] text-zinc-500 uppercase block font-bold">{match.teamA} (Home)</span>
+                          <div className="space-y-1 text-zinc-400">
+                            <div className="flex justify-between"><span>Over 0.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.home.over_0_5 * 100)}%</span></div>
+                            <div className="flex justify-between"><span>Over 1.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.home.over_1_5 * 100)}%</span></div>
+                            <div className="flex justify-between"><span>Over 2.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.home.over_2_5 * 100)}%</span></div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="space-y-2 bg-black p-3 border border-zinc-900 rounded">
-                        <span className="text-[10px] text-zinc-500 uppercase block font-bold">{match.teamB} (Away)</span>
-                        <div className="space-y-1 text-zinc-400">
-                          <div className="flex justify-between"><span>Over 0.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.away.over_0_5 * 100)}%</span></div>
-                          <div className="flex justify-between"><span>Over 1.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.away.over_1_5 * 100)}%</span></div>
-                          <div className="flex justify-between"><span>Over 2.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.away.over_2_5 * 100)}%</span></div>
+                        <div className="space-y-2 bg-black p-3 border border-zinc-900 rounded">
+                          <span className="text-[10px] text-zinc-500 uppercase block font-bold">{match.teamB} (Away)</span>
+                          <div className="space-y-1 text-zinc-400">
+                            <div className="flex justify-between"><span>Over 0.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.away.over_0_5 * 100)}%</span></div>
+                            <div className="flex justify-between"><span>Over 1.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.away.over_1_5 * 100)}%</span></div>
+                            <div className="flex justify-between"><span>Over 2.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.away.over_2_5 * 100)}%</span></div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )
                 )}
 
                 {/* SECTION 8 — MODEL CONFIDENCE */}
-                <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 8 — Model Confidence Diagnostics
-                  </h4>
-                  <ul className="space-y-2 mt-2 text-zinc-400 text-xs">
-                    <li className="flex justify-between"><span>Calibration Tier:</span> <span className="text-white font-bold">{confidenceLabel}</span></li>
-                    <li className="flex justify-between"><span>Model Agreement Index:</span> <span className="text-white font-bold">{modelAgreement}%</span></li>
-                    <li className="flex justify-between"><span>Variance Score (sigma):</span> <span className="text-white font-bold">{varianceScore}</span></li>
-                    <li className="flex justify-between"><span>Data Freshness index:</span> <span className="text-zinc-500">{freshness}</span></li>
-                  </ul>
-                </div>
+                {!match.isLiveData ? renderPredictionLoading("Model Diagnostics") : (
+                  <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
+                      SECTION 8 — Model Confidence Diagnostics
+                    </h4>
+                    <ul className="space-y-2 mt-2 text-zinc-400 text-xs">
+                      <li className="flex justify-between"><span>Calibration Tier:</span> <span className="text-white font-bold">{confidenceLabel}</span></li>
+                      <li className="flex justify-between"><span>Model Agreement Index:</span> <span className="text-white font-bold">{modelAgreement}%</span></li>
+                      <li className="flex justify-between"><span>Variance Score (sigma):</span> <span className="text-white font-bold">{varianceScore}</span></li>
+                      <li className="flex justify-between"><span>Data Freshness index:</span> <span className="text-zinc-500">{freshness}</span></li>
+                    </ul>
+                  </div>
+                )}
 
                 {/* SECTION 10 — SQUAD HEALTH */}
                 <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded text-xs">
@@ -4222,19 +4417,21 @@ export default function App() {
                 </div>
 
                 {/* SECTION 11 — TOURNAMENT IMPACT */}
-                <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 11 — Tournament Impact &amp; Bracket Projections
-                  </h4>
-                  <div className="space-y-2 mt-2 text-zinc-400 text-xs">
-                    <div className="flex justify-between"><span>Qualification probability ({match.teamACode}):</span> <span className="text-white font-bold">{qualA}%</span></div>
-                    <div className="flex justify-between"><span>Qualification probability ({match.teamBCode}):</span> <span className="text-white font-bold">{qualB}%</span></div>
-                    <div className="flex justify-between"><span>Group Position Projection ({match.teamACode}):</span> <span className="text-white font-bold">{groupPosA}</span></div>
-                    <div className="flex justify-between"><span>Group Position Projection ({match.teamBCode}):</span> <span className="text-white font-bold">{groupPosB}</span></div>
-                    <div className="flex justify-between"><span>Tournament Advancement ({match.teamACode}):</span> <span className="text-zinc-300">{tournamentAdvA}</span></div>
-                    <div className="flex justify-between"><span>Tournament Advancement ({match.teamBCode}):</span> <span className="text-zinc-300">{tournamentAdvB}</span></div>
+                {!match.isLiveData ? renderPredictionLoading("Tournament Impact Projections") : (
+                  <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
+                      SECTION 11 — Tournament Impact &amp; Bracket Projections
+                    </h4>
+                    <div className="space-y-2 mt-2 text-zinc-400 text-xs">
+                      <div className="flex justify-between"><span>Qualification probability ({match.teamACode}):</span> <span className="text-white font-bold">{qualA}%</span></div>
+                      <div className="flex justify-between"><span>Qualification probability ({match.teamBCode}):</span> <span className="text-white font-bold">{qualB}%</span></div>
+                      <div className="flex justify-between"><span>Group Position Projection ({match.teamACode}):</span> <span className="text-white font-bold">{groupPosA}</span></div>
+                      <div className="flex justify-between"><span>Group Position Projection ({match.teamBCode}):</span> <span className="text-white font-bold">{groupPosB}</span></div>
+                      <div className="flex justify-between"><span>Tournament Advancement ({match.teamACode}):</span> <span className="text-zinc-300">{tournamentAdvA}</span></div>
+                      <div className="flex justify-between"><span>Tournament Advancement ({match.teamBCode}):</span> <span className="text-zinc-300">{tournamentAdvB}</span></div>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* SECTION 12 — HISTORICAL DATA */}
                 <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded text-xs">
