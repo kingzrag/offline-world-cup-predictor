@@ -16,10 +16,12 @@ import {
   getH2h,
   predictMatch,
   mapBackendPrediction,
+  getTournamentSimulation,
   type GroupStandingTeam,
   type GroupStandings,
   type BracketMatch,
-  type BracketData
+  type BracketData,
+  type TeamSimulationResult
 } from './api';
 import { MatchPrediction, TrophyProbability, IntelligenceInsight } from './types';
 import {
@@ -485,6 +487,7 @@ export default function App() {
   // Tournament progression state variables
   const [standings, setStandings] = useState<GroupStandings>({});
   const [bracket, setBracket] = useState<BracketData>({});
+  const [simulationResults, setSimulationResults] = useState<Record<string, TeamSimulationResult>>({});
   const [loadingTournament, setLoadingTournament] = useState<boolean>(true);
   const [tournamentError, setTournamentError] = useState<string | null>(null);
   const [tournamentSubTab, setTournamentSubTab] = useState<'bracket' | 'standings'>('bracket');
@@ -498,12 +501,14 @@ export default function App() {
   const loadTournamentData = async () => {
     try {
       setLoadingTournament(true);
-      const [standingsData, bracketData] = await Promise.all([
+      const [standingsData, bracketData, simData] = await Promise.all([
         getStandings(),
-        getBracket()
+        getBracket(),
+        getTournamentSimulation().catch(() => ({ results: {} }))
       ]);
       setStandings(standingsData);
       setBracket(bracketData);
+      setSimulationResults(simData.results || {});
       setTournamentError(null);
     } catch (err) {
       console.error("Failed to load tournament standings or bracket:", err);
@@ -975,6 +980,8 @@ export default function App() {
           recentFormA: toFormArr(a?.recent_form).length > 0 ? toFormArr(a?.recent_form) : updated.recentFormA,
           injuriesA:   a?.injuries   ?? updated.injuriesA,
           suspensionsA: a?.suspensions ?? updated.suspensionsA,
+          cleanSheetA: a?.clean_sheet_rate ?? updated.cleanSheetA,
+          bttsRateA:   a?.btts_rate   ?? updated.bttsRateA,
           // Team B real data
           fifaRankB:   b?.fifa_rank  ?? updated.fifaRankB,
           eloRankB:    b?.elo_rank   ?? updated.eloRankB,
@@ -982,6 +989,8 @@ export default function App() {
           recentFormB: toFormArr(b?.recent_form).length > 0 ? toFormArr(b?.recent_form) : updated.recentFormB,
           injuriesB:   b?.injuries   ?? updated.injuriesB,
           suspensionsB: b?.suspensions ?? updated.suspensionsB,
+          cleanSheetB: b?.clean_sheet_rate ?? updated.cleanSheetB,
+          bttsRateB:   b?.btts_rate   ?? updated.bttsRateB,
           // Real H2H data
           h2hPreviousMeetings: h2hData?.previous_meetings ?? updated.h2hPreviousMeetings,
           h2hWinsA:  h2hData?.team_a_wins ?? updated.h2hWinsA,
@@ -2402,9 +2411,10 @@ export default function App() {
               const drawProb = m.probD;
               const label = favA ? m.teamA : m.teamB;
               
+              // Real confidence: max of actual win/draw/loss probabilities, capped at 99
               const confidenceScore = m.modelConfidence !== undefined
-                ? Math.round(m.modelConfidence * 100)
-                : (m.confidence === "High" ? 88 : m.confidence === "Medium" ? 74 : 60);
+                ? Math.min(99, Math.round(m.modelConfidence * 100))
+                : Math.min(99, Math.max(m.probA, m.probD, m.probB));
 
               return {
                 ...m,
@@ -2419,63 +2429,62 @@ export default function App() {
             .sort((a, b) => b.confidenceScore - a.confidenceScore)
             .slice(0, 5);
 
-          // Section 2: GOAL FEST FORECAST
+          // Section 2: GOAL FEST FORECAST — backend data only, no synthetic formulas
           const sortedGoalForecasts = [...enrichedMatches]
             .map(m => {
-              const totalXG = Number((m.xGA + m.xGB).toFixed(2));
-              const over25 = m.overUnder?.["2.5"]
+              // totalExpectedGoals from backend prediction; for COMPLETED matches use actual goals scored
+              const totalXG: number | null = m.totalExpectedGoals
+                ? Number(m.totalExpectedGoals.toFixed(2))
+                : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
+                  ? Number((m.xGA + m.xGB).toFixed(2))
+                  : null;
+              // Backend market only — null signals N/A
+              const over25: number | null = m.overUnder?.["2.5"]
                 ? Math.round((m.overUnder["2.5"].over ?? 0) * 100)
-                : Math.min(95, Math.max(30, Math.round(60 + (totalXG - 3.0) * 15)));
-              const over35 = m.overUnder?.["3.5"]
+                : null;
+              const over35: number | null = m.overUnder?.["3.5"]
                 ? Math.round((m.overUnder["3.5"].over ?? 0) * 100)
-                : Math.min(85, Math.max(15, Math.round(over25 - 25)));
-              
-              const mlScore = m.mostLikelyScore
-                ? m.mostLikelyScore
-                : `${Math.round(m.xGA)}-${Math.round(m.xGB)}`;
+                : null;
+              const mlScore: string | null = m.mostLikelyScore ?? null;
 
-              return {
-                ...m,
-                totalXG,
-                over25,
-                over35,
-                mlScore
-              };
+              return { ...m, totalXG, over25, over35, mlScore };
             })
-            .sort((a, b) => b.totalXG - a.totalXG)
+            .filter(m => m.totalXG !== null)
+            .sort((a, b) => (b.totalXG as number) - (a.totalXG as number))
             .slice(0, 5);
 
-          // Section 3: BTTS WATCH
+          // Section 3: BTTS WATCH — backend bttsMarket only, no Poisson fallback
           const sortedBttsWatch = [...enrichedMatches]
             .map(m => {
-              const bttsYes = m.bttsMarket
+              // null signals N/A — never synthesise BTTS from xG
+              const bttsYes: number | null = m.bttsMarket
                 ? Math.round((m.bttsMarket.yes ?? 0) * 100)
-                : Math.round((1 - Math.exp(-m.xGA)) * (1 - Math.exp(-m.xGB)) * 100);
-              const bttsNo = m.bttsMarket
+                : null;
+              const bttsNo: number | null = m.bttsMarket
                 ? Math.round((m.bttsMarket.no ?? 0) * 100)
-                : 100 - bttsYes;
-              const totalXG = Number((m.xGA + m.xGB).toFixed(2));
+                : null;
+              const totalXG: number | null = m.totalExpectedGoals
+                ? Number(m.totalExpectedGoals.toFixed(2))
+                : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
+                  ? Number((m.xGA + m.xGB).toFixed(2))
+                  : null;
 
-              return {
-                ...m,
-                bttsYes,
-                bttsNo,
-                totalXG
-              };
+              return { ...m, bttsYes, bttsNo, totalXG };
             })
-            .sort((a, b) => b.bttsYes - a.bttsYes)
+            .filter(m => m.bttsYes !== null)
+            .sort((a, b) => (b.bttsYes as number) - (a.bttsYes as number))
             .slice(0, 5);
 
-          // Section 4: CLEAN SHEET LEADERS
+          // Section 4: CLEAN SHEET LEADERS — backend teamGoals.over_0_5 only, no Poisson fallback
           const cleanSheetLeadersList = (() => {
             const teamsMap: { [code: string]: { name: string; rates: number[] } } = {};
             enrichedMatches.forEach(m => {
-              const csA = m.teamGoals
-                ? Math.round((1 - m.teamGoals.away.over_0_5) * 100)
-                : Math.round(Math.exp(-m.xGB) * 100);
-              const csB = m.teamGoals
-                ? Math.round((1 - m.teamGoals.home.over_0_5) * 100)
-                : Math.round(Math.exp(-m.xGA) * 100);
+              // Skip matches without backend team-level goal probability data
+              if (!m.teamGoals) return;
+
+              // Clean sheet % = probability that opponent scores 0 = 1 - P(opponent scores > 0.5)
+              const csA = Math.round((1 - m.teamGoals.away.over_0_5) * 100);
+              const csB = Math.round((1 - m.teamGoals.home.over_0_5) * 100);
 
               if (!teamsMap[m.teamACode]) {
                 teamsMap[m.teamACode] = { name: m.teamA, rates: [] };
@@ -2491,30 +2500,35 @@ export default function App() {
             return Object.entries(teamsMap)
               .map(([code, data]) => {
                 const avgCS = Math.round(data.rates.reduce((a, b) => a + b, 0) / data.rates.length);
-                return {
-                  name: data.name,
-                  code,
-                  cleanSheetProb: avgCS
-                };
+                return { name: data.name, code, cleanSheetProb: avgCS };
               })
               .sort((a, b) => b.cleanSheetProb - a.cleanSheetProb)
               .slice(0, 6)
               .map((team, idx) => ({ ...team, rank: idx + 1 }));
           })();
 
-          // Section 5: MOST LIKELY SCORELINES
-          const poissonScoresList = enrichedMatches.slice(0, 5).map(m => {
-            const topScores = getPoissonTop5(m.xGA, m.xGB, m.teamA, m.teamB);
-            const firstVal = topScores[0];
-            return {
-              matchId: m.id,
-              teamA: m.teamA,
-              teamB: m.teamB,
-              mostLikelyScore: firstVal.score,
-              probability: firstVal.probability,
-              allTopScores: topScores
-            };
-          });
+          // Section 5: MOST LIKELY SCORELINES — backend top_5_scorelines only, no Poisson synthesis
+          const poissonScoresList = enrichedMatches
+            .filter(m => m.top5Scorelines && m.top5Scorelines.length > 0)
+            .slice(0, 5)
+            .map(m => {
+              const topScores = m.top5Scorelines!.map(s => {
+                const parts = s.score.split('-');
+                let label = s.score;
+                if (parts.length === 2) {
+                  const h = parseInt(parts[0], 10);
+                  const a = parseInt(parts[1], 10);
+                  label = h > a ? `${s.score} (${m.teamA})` : a > h ? `${s.score} (${m.teamB})` : `${s.score} (Draw)`;
+                }
+                return { score: label, probability: Math.round(s.probability * 100) };
+              });
+              return {
+                matchId: m.id, teamA: m.teamA, teamB: m.teamB,
+                mostLikelyScore: topScores[0]?.score ?? 'N/A',
+                probability: topScores[0]?.probability ?? 0,
+                allTopScores: topScores
+              };
+            });
 
           // Section 6: UPSET WATCH
           const upsetWatchList = enrichedMatches
@@ -2544,28 +2558,28 @@ export default function App() {
             .sort((a, b) => b.underdogWinProb - a.underdogWinProb)
             .slice(0, 5);
 
-          // Section 8: MATCH INTELLIGENCE LEADERBOARD
+          // Section 8: MATCH INTELLIGENCE LEADERBOARD — backend data only, no synthetic formulas
           const matchIntelligenceResult = [...enrichedMatches]
             .map(m => {
-              const totalXG = Number((m.xGA + m.xGB).toFixed(2));
-              const bttsYes = m.bttsMarket
+              // Real xG from backend; actual goals for COMPLETED; null if unavailable
+              const totalXG: number | null = m.totalExpectedGoals
+                ? Number(m.totalExpectedGoals.toFixed(2))
+                : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
+                  ? Number((m.xGA + m.xGB).toFixed(2))
+                  : null;
+              // Backend markets only — null renders as N/A
+              const bttsYes: number | null = m.bttsMarket
                 ? Math.round((m.bttsMarket.yes ?? 0) * 100)
-                : Math.round((1 - Math.exp(-m.xGA)) * (1 - Math.exp(-m.xGB)) * 100);
-              const over25 = m.overUnder?.["2.5"]
+                : null;
+              const over25: number | null = m.overUnder?.["2.5"]
                 ? Math.round((m.overUnder["2.5"].over ?? 0) * 100)
-                : Math.min(95, Math.max(30, Math.round(60 + (totalXG - 3.0) * 15)));
-              
+                : null;
+              // Real confidence: max of actual probabilities, capped at 99
               const confidenceScore = m.modelConfidence !== undefined
-                ? Math.round(m.modelConfidence * 100)
-                : (m.confidence === "High" ? 88 : m.confidence === "Medium" ? 74 : 60);
+                ? Math.min(99, Math.round(m.modelConfidence * 100))
+                : Math.min(99, Math.max(m.probA, m.probD, m.probB));
 
-              return {
-                ...m,
-                totalXG,
-                bttsYes,
-                over25,
-                confidenceScore
-              };
+              return { ...m, totalXG, bttsYes, over25, confidenceScore };
             })
             .sort((a, b) => b.confidenceScore - a.confidenceScore);
 
@@ -2699,16 +2713,16 @@ export default function App() {
                                 {m.teamA} <span className="text-zinc-500 text-xs font-normal">vs</span> {m.teamB}
                               </td>
                               <td className="py-3 px-5 text-center font-bold text-white">
-                                {m.totalXG}
+                                {m.totalXG ?? 'N/A'}
                               </td>
                               <td className="py-3 px-5 text-center text-green-accent font-bold">
-                                {m.over25}%
+                                {m.over25 !== null ? `${m.over25}%` : 'N/A'}
                               </td>
                               <td className="py-3 px-5 text-center text-zinc-400">
-                                {m.over35}%
+                                {m.over35 !== null ? `${m.over35}%` : 'N/A'}
                               </td>
                               <td className="py-3 px-5 text-right text-white font-bold">
-                                {m.mlScore}
+                                {m.mlScore ?? 'N/A'}
                               </td>
                             </tr>
                           ))}
@@ -2751,13 +2765,13 @@ export default function App() {
                                 {m.teamA} <span className="text-zinc-500 text-xs font-normal">vs</span> {m.teamB}
                               </td>
                               <td className="py-3 px-5 text-center text-green-accent font-bold">
-                                {m.bttsYes}%
+                                {m.bttsYes !== null ? `${m.bttsYes}%` : 'N/A'}
                               </td>
                               <td className="py-3 px-5 text-center text-zinc-500">
-                                {m.bttsNo}%
+                                {m.bttsNo !== null ? `${m.bttsNo}%` : 'N/A'}
                               </td>
                               <td className="py-3 px-5 text-right font-bold text-white">
-                                {m.totalXG}
+                                {m.totalXG ?? 'N/A'}
                               </td>
                             </tr>
                           ))}
@@ -2812,7 +2826,7 @@ export default function App() {
                         <span className="w-1.5 h-1.5 bg-green-accent rounded-sm" />
                         Most Likely Scorelines
                       </h3>
-                      <span className="text-[9px] font-mono text-zinc-550 uppercase">Poisson engine predictions</span>
+                      <span className="text-[9px] font-mono text-zinc-550 uppercase">Backend model predictions</span>
                     </div>
                     <div className="p-5 space-y-4">
                       {poissonScoresList.length === 0 ? (
@@ -2824,7 +2838,7 @@ export default function App() {
                         <div key={m.matchId} className="border border-zinc-900/60 bg-zinc-950/20 p-3 rounded space-y-3 font-mono">
                           <div className="flex items-center justify-between border-b border-zinc-900/40 pb-1.5">
                             <span className="text-[11px] font-sans font-bold text-white">{m.teamA} vs {m.teamB}</span>
-                            <span className="text-[8.5px] uppercase text-zinc-500 tracking-wider">Poisson distribution active</span>
+                            <span className="text-[8.5px] uppercase text-zinc-500 tracking-wider">Backend scorelines</span>
                           </div>
                           
                           {/* Grid of scorelines */}
@@ -2986,13 +3000,13 @@ export default function App() {
                               </span>
                             </td>
                             <td className="py-4 px-5 text-center text-zinc-350">
-                              {m.bttsYes}%
+                              {m.bttsYes !== null ? `${m.bttsYes}%` : 'N/A'}
                             </td>
                             <td className="py-4 px-5 text-center text-zinc-350">
-                              {m.over25}%
+                              {m.over25 !== null ? `${m.over25}%` : 'N/A'}
                             </td>
                             <td className="py-4 px-5 text-center text-white font-bold">
-                              {m.totalXG}
+                              {m.totalXG ?? 'N/A'}
                             </td>
                             <td className="py-4 px-5 text-right font-bold text-green-accent">
                               {m.confidenceScore}%
@@ -3586,11 +3600,14 @@ export default function App() {
                                   <th className="py-1.5 text-center w-6 font-bold">P</th>
                                   <th className="py-1.5 text-center w-8 font-bold">GD</th>
                                   <th className="py-1.5 text-center w-8 font-bold">Pts</th>
+                                  <th className="py-1.5 text-center w-12 font-bold text-green-accent">Proj %</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-zinc-900/40 text-[11px] font-sans text-zinc-300">
                                 {standings[groupKey]?.map((team) => {
                                   const flag = getFlag(team.name);
+                                  const sim = simulationResults[team.name];
+                                  const qualPct = sim ? Math.round(sim.r32) : null;
                                   return (
                                     <tr key={team.id} className="hover:bg-zinc-900/20 transition-colors">
                                       <td className="py-2 text-center font-mono font-bold text-zinc-500">
@@ -3607,6 +3624,9 @@ export default function App() {
                                         {team.goals_difference > 0 ? `+${team.goals_difference}` : team.goals_difference}
                                       </td>
                                       <td className="py-2 text-center font-mono font-bold text-white">{team.points}</td>
+                                      <td className="py-2 text-center font-mono font-bold text-green-accent">
+                                        {qualPct !== null ? `${qualPct}%` : '—'}
+                                      </td>
                                     </tr>
                                   );
                                 })}
@@ -3730,11 +3750,11 @@ export default function App() {
                                                   venue: 'TBD Stadium',
                                                   liveScore: m.home_score !== null && m.away_score !== null ? { home: m.home_score, away: m.away_score, is_live: m.status !== 'FINISHED' } : null,
                                                   winner: m.winner,
-                                                  attackA: 80, attackB: 80, defenceA: 80, defenceB: 80, midfieldA: 80, midfieldB: 80,
-                                                  xGA: 1.5, xGB: 1.5, xGAA: 1.0, xGAB: 1.0, possessionA: 50, possessionB: 50, shotsA: 12.0, shotsB: 12.0,
-                                                  shotsAllowedA: 10.0, shotsAllowedB: 10.0, cleanSheetA: 30, cleanSheetB: 30, bttsRateA: 50, bttsRateB: 50,
+                                                  attackA: 0, attackB: 0, defenceA: 0, defenceB: 0, midfieldA: 0, midfieldB: 0,
+                                                  xGA: 0, xGB: 0, xGAA: 0, xGAB: 0, possessionA: 0, possessionB: 0, shotsA: 0, shotsB: 0,
+                                                  shotsAllowedA: 0, shotsAllowedB: 0, cleanSheetA: 0, cleanSheetB: 0, bttsRateA: 0, bttsRateB: 0,
                                                   recentFormA: [], recentFormB: [], fifaRankA: 0, fifaRankB: 0, eloRankA: 0, eloRankB: 0,
-                                                  squadValueA: '€100M', squadValueB: '€100M', restDaysA: 4, restDaysB: 4, fatigueA: 20, fatigueB: 20,
+                                                  squadValueA: '', squadValueB: '', restDaysA: 0, restDaysB: 0, fatigueA: 0, fatigueB: 0,
                                                   injuriesA: [], injuriesB: [], suspensionsA: [], suspensionsB: [], missingKeyPlayersA: [], missingKeyPlayersB: [],
                                                   impactRatingA: 'Minimal', impactRatingB: 'Minimal', h2hPreviousMeetings: 0, h2hWinsA: 0, h2hWinsB: 0, h2hDraws: 0,
                                                   h2hGoalsA: 0, h2hGoalsB: 0, aiSummary: ''
@@ -4083,44 +4103,33 @@ export default function App() {
           for (let i = 1; i <= k; i++) fact *= i;
           return Math.pow(l, k) * Math.exp(-l) / fact;
         };
-        const lambda = xGA + xGB;
-        const u0 = poisson(0, lambda);
-        const u1 = u0 + poisson(1, lambda);
-        const u2 = u1 + poisson(2, lambda);
-        const u3 = u2 + poisson(3, lambda);
-        const u4 = u3 + poisson(4, lambda);
+        const under0_5 = match.overUnder?.["0.5"] ? Math.round((match.overUnder["0.5"].under ?? 0) * 100) : null;
+        const under1_5 = match.overUnder?.["1.5"] ? Math.round((match.overUnder["1.5"].under ?? 0) * 100) : null;
+        const under2_5 = match.overUnder?.["2.5"] ? Math.round((match.overUnder["2.5"].under ?? 0) * 100) : null;
+        const under3_5 = match.overUnder?.["3.5"] ? Math.round((match.overUnder["3.5"].under ?? 0) * 100) : null;
+        const under4_5 = match.overUnder?.["4.5"] ? Math.round((match.overUnder["4.5"].under ?? 0) * 100) : null;
 
-        const under0_5 = Math.round(u0 * 100);
-        const under1_5 = match.overUnder ? Math.round((match.overUnder["1.5"]?.under ?? 0) * 100) : Math.min(99, Math.round(u1 * 100));
-        const under2_5 = match.overUnder ? Math.round((match.overUnder["2.5"]?.under ?? 0) * 100) : Math.min(99, Math.round(u2 * 100));
-        const under3_5 = match.overUnder ? Math.round((match.overUnder["3.5"]?.under ?? 0) * 100) : Math.min(99, Math.round(u3 * 100));
-        const under4_5 = Math.min(99, Math.round(u4 * 100));
+        const over0_5 = match.overUnder?.["0.5"] ? Math.round((match.overUnder["0.5"].over ?? 0) * 100) : null;
+        const over1_5 = match.overUnder?.["1.5"] ? Math.round((match.overUnder["1.5"].over ?? 0) * 100) : null;
+        const over2_5 = match.overUnder?.["2.5"] ? Math.round((match.overUnder["2.5"].over ?? 0) * 100) : null;
+        const over3_5 = match.overUnder?.["3.5"] ? Math.round((match.overUnder["3.5"].over ?? 0) * 100) : null;
+        const over4_5 = match.overUnder?.["4.5"] ? Math.round((match.overUnder["4.5"].over ?? 0) * 100) : null;
 
-        const over0_5 = 100 - under0_5;
-        const over1_5 = match.overUnder ? Math.round((match.overUnder["1.5"]?.over ?? 0) * 100) : 100 - under1_5;
-        const over2_5 = match.overUnder ? Math.round((match.overUnder["2.5"]?.over ?? 0) * 100) : 100 - under2_5;
-        const over3_5 = match.overUnder ? Math.round((match.overUnder["3.5"]?.over ?? 0) * 100) : 100 - under3_5;
-        const over4_5 = 100 - under4_5;
+        const bttsYes = match.bttsMarket ? Math.round((match.bttsMarket.yes ?? 0) * 100) : null;
+        const bttsNo = match.bttsMarket ? Math.round((match.bttsMarket.no ?? 0) * 100) : null;
 
-        const bttsYes = match.bttsMarket ? Math.round((match.bttsMarket.yes ?? 0) * 100) : Math.round((1 - Math.exp(-xGA)) * (1 - Math.exp(-xGB)) * 100);
-        const bttsNo = match.bttsMarket ? Math.round((match.bttsMarket.no ?? 0) * 100) : 100 - bttsYes;
+        // SECTION 4 — DOUBLE CHANCE (derived mathematically)
+        const dcHD = probA !== null && probD !== null ? Math.min(99, probA + probD) : null;
+        const dcAD = probB !== null && probD !== null ? Math.min(99, probB + probD) : null;
+        const dcHA = probA !== null && probB !== null ? Math.min(99, probA + probB) : null;
 
-        // SECTION 4 — DOUBLE CHANCE
-        const dcHD = Math.min(99, probA + probD);
-        const dcAD = Math.min(99, probB + probD);
-        const dcHA = Math.min(99, probA + probB);
-
-        // SECTION 5 — DRAW NO BET
-        const dnbHome = Math.round((probA / (probA + probB || 1)) * 100);
-        const dnbAway = 100 - dnbHome;
+        // SECTION 5 — DRAW NO BET (derived mathematically)
+        const dnbHome = probA !== null && probB !== null ? Math.round((probA / (probA + probB || 1)) * 100) : null;
+        const dnbAway = dnbHome !== null ? 100 - dnbHome : null;
 
         // SECTION 6 — CLEAN SHEET
-        const csA = match.teamGoals
-          ? Math.round((1 - match.teamGoals.away.over_0_5) * 100)
-          : Math.round(Math.exp(-xGB) * 100);
-        const csB = match.teamGoals
-          ? Math.round((1 - match.teamGoals.home.over_0_5) * 100)
-          : Math.round(Math.exp(-xGA) * 100);
+        const csA = match.teamGoals ? Math.round((1 - match.teamGoals.away.over_0_5) * 100) : null;
+        const csB = match.teamGoals ? Math.round((1 - match.teamGoals.home.over_0_5) * 100) : null;
 
         // SECTION 7 — CORRECT SCORE MATRIX (Top 5 scorelines ranked)
         const formatScorelineLabel = (score: string) => {
@@ -4134,28 +4143,10 @@ export default function App() {
           return `${h}-${a} Draw`;
         };
 
-        const scores: { label: string; prob: number }[] = [];
-        for (let gA = 0; gA <= 4; gA++) {
-          for (let gB = 0; gB <= 4; gB++) {
-            const p = poisson(gA, xGA) * poisson(gB, xGB);
-            let desc = "";
-            if (gA > gB) {
-              desc = `${gA}-${gB} ${match.teamA}`;
-            } else if (gB > gA) {
-              desc = `${gB}-${gA} ${match.teamB}`;
-            } else {
-              desc = `${gA}-${gB} Draw`;
-            }
-            scores.push({ label: desc, prob: p });
-          }
-        }
         const top5Scores = match.top5Scorelines ? match.top5Scorelines.map(s => ({
           scoreline: formatScorelineLabel(s.score),
           pct: Math.round(s.probability * 100)
-        })) : scores.slice(0, 5).map(s => ({
-          scoreline: s.label,
-          pct: Math.max(1, Math.round(s.prob * 100))
-        }));
+        })) : null;
 
         // SECTION 8 — MODEL CONFIDENCE
         const confidenceLabel = match.confidence === 'High' ? 'Elite Confidence' : match.confidence === 'Medium' ? 'Standard Calibration' : 'Experimental Index';
@@ -4220,15 +4211,11 @@ export default function App() {
         };
 
         const isKnockout = !match.stage.toLowerCase().includes("group stage");
-        let qualA = 50;
-        let qualB = 50;
-        if (isKnockout) {
-          qualA = Math.round(probA + 0.5 * probD);
-          qualB = 100 - qualA;
-        } else {
-          qualA = getGroupQualProb(match.eloRankA || match.fifaRankA);
-          qualB = getGroupQualProb(match.eloRankB || match.fifaRankB);
-        }
+        const simA = simulationResults[match.teamA];
+        const simB = simulationResults[match.teamB];
+
+        let qualA = isKnockout ? Math.round(probA + 0.5 * probD) : (simA ? Math.round(simA.r32) : 50);
+        let qualB = isKnockout ? 100 - qualA : (simB ? Math.round(simB.r32) : 50);
 
         const standingA = findStanding(match.teamA);
         const standingB = findStanding(match.teamB);
@@ -4237,16 +4224,20 @@ export default function App() {
           ? "N/A (Knockout stage)"
           : (standingA
             ? `Currently ${standingA.position === 1 ? '1st' : standingA.position === 2 ? '2nd' : standingA.position === 3 ? '3rd' : '4th'} (${standingA.points} pts)`
-            : getProjectedPosition(match.eloRankA || match.fifaRankA));
+            : (simA ? `Projected Group Qualification: ${Math.round(simA.group_stage)}%` : "TBD"));
 
         const groupPosB = isKnockout
           ? "N/A (Knockout stage)"
           : (standingB
             ? `Currently ${standingB.position === 1 ? '1st' : standingB.position === 2 ? '2nd' : standingB.position === 3 ? '3rd' : '4th'} (${standingB.points} pts)`
-            : getProjectedPosition(match.eloRankB || match.fifaRankB));
+            : (simB ? `Projected Group Qualification: ${Math.round(simB.group_stage)}%` : "TBD"));
 
-        const tournamentAdvA = getProjectedAdvancement(match.eloRankA || match.fifaRankA);
-        const tournamentAdvB = getProjectedAdvancement(match.eloRankB || match.fifaRankB);
+        const tournamentAdvA = simA
+          ? `R16: ${Math.round(simA.r16)}% | QF: ${Math.round(simA.qf)}% | SF: ${Math.round(simA.sf)}% | Winner: ${Math.round(simA.winner)}%`
+          : "TBD";
+        const tournamentAdvB = simB
+          ? `R16: ${Math.round(simB.r16)}% | QF: ${Math.round(simB.qf)}% | SF: ${Math.round(simB.sf)}% | Winner: ${Math.round(simB.winner)}%`
+          : "TBD";
 
         return (
           <div id="match-analysis-backdrop" className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end" onClick={() => setSelectedMatch(null)}>
@@ -4444,25 +4435,25 @@ export default function App() {
                     </summary>
                     <div className="p-4 space-y-4 font-mono text-xs text-zinc-400">
                       <div className="bg-black p-3 rounded border border-zinc-900/60 flex justify-between">
-                        <span>BTTS Yes: <strong className="text-white">{bttsYes}%</strong></span>
-                        <span>BTTS No: <strong className="text-white">{bttsNo}%</strong></span>
+                        <span>BTTS Yes: <strong className="text-white">{bttsYes !== null ? `${bttsYes}%` : 'N/A'}</strong></span>
+                        <span>BTTS No: <strong className="text-white">{bttsNo !== null ? `${bttsNo}%` : 'N/A'}</strong></span>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5 p-3 bg-black rounded border border-zinc-900">
                           <div className="text-[10px] text-zinc-500 uppercase font-bold border-b border-zinc-900 pb-1 mb-1.5">Over Probabilities</div>
-                          <div className="flex justify-between"><span>Over 0.5 Goals:</span> <span className="text-white font-bold">{over0_5}%</span></div>
-                          <div className="flex justify-between"><span>Over 1.5 Goals:</span> <span className="text-white font-bold">{over1_5}%</span></div>
-                          <div className="flex justify-between"><span>Over 2.5 Goals:</span> <span className="text-white font-bold">{over2_5}%</span></div>
-                          <div className="flex justify-between"><span>Over 3.5 Goals:</span> <span className="text-white font-bold">{over3_5}%</span></div>
-                          <div className="flex justify-between"><span>Over 4.5 Goals:</span> <span className="text-white font-bold">{over4_5}%</span></div>
+                          <div className="flex justify-between"><span>Over 0.5 Goals:</span> <span className="text-white font-bold">{over0_5 !== null ? `${over0_5}%` : 'N/A'}</span></div>
+                          <div className="flex justify-between"><span>Over 1.5 Goals:</span> <span className="text-white font-bold">{over1_5 !== null ? `${over1_5}%` : 'N/A'}</span></div>
+                          <div className="flex justify-between"><span>Over 2.5 Goals:</span> <span className="text-white font-bold">{over2_5 !== null ? `${over2_5}%` : 'N/A'}</span></div>
+                          <div className="flex justify-between"><span>Over 3.5 Goals:</span> <span className="text-white font-bold">{over3_5 !== null ? `${over3_5}%` : 'N/A'}</span></div>
+                          <div className="flex justify-between"><span>Over 4.5 Goals:</span> <span className="text-white font-bold">{over4_5 !== null ? `${over4_5}%` : 'N/A'}</span></div>
                         </div>
                         <div className="space-y-1.5 p-3 bg-black rounded border border-zinc-900">
                           <div className="text-[10px] text-zinc-500 uppercase font-bold border-b border-zinc-900 pb-1 mb-1.5">Under Probabilities</div>
-                          <div className="flex justify-between"><span>Under 0.5 Goals:</span> <span className="text-white font-bold">{under0_5}%</span></div>
-                          <div className="flex justify-between"><span>Under 1.5 Goals:</span> <span className="text-white font-bold">{under1_5}%</span></div>
-                          <div className="flex justify-between"><span>Under 2.5 Goals:</span> <span className="text-white font-bold">{under2_5}%</span></div>
-                          <div className="flex justify-between"><span>Under 3.5 Goals:</span> <span className="text-white font-bold">{under3_5}%</span></div>
-                          <div className="flex justify-between"><span>Under 4.5 Goals:</span> <span className="text-white font-bold">{under4_5}%</span></div>
+                          <div className="flex justify-between"><span>Under 0.5 Goals:</span> <span className="text-white font-bold">{under0_5 !== null ? `${under0_5}%` : 'N/A'}</span></div>
+                          <div className="flex justify-between"><span>Under 1.5 Goals:</span> <span className="text-white font-bold">{under1_5 !== null ? `${under1_5}%` : 'N/A'}</span></div>
+                          <div className="flex justify-between"><span>Under 2.5 Goals:</span> <span className="text-white font-bold">{under2_5 !== null ? `${under2_5}%` : 'N/A'}</span></div>
+                          <div className="flex justify-between"><span>Under 3.5 Goals:</span> <span className="text-white font-bold">{under3_5 !== null ? `${under3_5}%` : 'N/A'}</span></div>
+                          <div className="flex justify-between"><span>Under 4.5 Goals:</span> <span className="text-white font-bold">{under4_5 !== null ? `${under4_5}%` : 'N/A'}</span></div>
                         </div>
                       </div>
                     </div>
@@ -4478,15 +4469,15 @@ export default function App() {
                     <div className="grid grid-cols-3 gap-2 mt-2 text-center">
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-500 uppercase block">{match.teamA} or Draw</span>
-                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or Draw: {dcHD}%</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or Draw: {dcHD !== null ? `${dcHD}%` : 'N/A'}</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-500 uppercase block">{match.teamB} or Draw</span>
-                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} or Draw: {dcAD}%</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} or Draw: {dcAD !== null ? `${dcAD}%` : 'N/A'}</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-500 uppercase block">{match.teamA} or {match.teamB}</span>
-                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or {match.teamBCode}: {dcHA}%</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or {match.teamBCode}: {dcHA !== null ? `${dcHA}%` : 'N/A'}</span>
                       </div>
                     </div>
                   </div>
@@ -4501,11 +4492,11 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-4 mt-2 text-center">
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-500 block uppercase">{match.teamA} DNB</span>
-                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} DNB: {dnbHome}%</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} DNB: {dnbHome !== null ? `${dnbHome}%` : 'N/A'}</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-500 block uppercase">{match.teamB} DNB</span>
-                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} DNB: {dnbAway}%</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} DNB: {dnbAway !== null ? `${dnbAway}%` : 'N/A'}</span>
                       </div>
                     </div>
                   </div>
@@ -4520,11 +4511,11 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-4 mt-2 text-center">
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-500 block uppercase">{match.teamA} Clean Sheet</span>
-                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} Clean Sheet: {csA}%</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamACode} Clean Sheet: {csA !== null ? `${csA}%` : 'N/A'}</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-500 block uppercase">{match.teamB} Clean Sheet</span>
-                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} Clean Sheet: {csB}%</span>
+                        <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} Clean Sheet: {csB !== null ? `${csB}%` : 'N/A'}</span>
                       </div>
                     </div>
                   </div>
@@ -4537,12 +4528,16 @@ export default function App() {
                       SECTION 7 — Correct Score Matrix (Top 5 Likeliest)
                     </h4>
                     <div className="space-y-2 mt-2">
-                      {top5Scores.map((sc, index) => (
+                      {top5Scores ? top5Scores.map((sc, index) => (
                         <div key={index} className="flex justify-between items-center p-2.5 bg-black border border-zinc-900 rounded text-xs">
                           <span className="text-zinc-450 uppercase">{index + 1}. {sc.scoreline}</span>
                           <span className="text-green-accent font-bold font-mono">{sc.pct}%</span>
                         </div>
-                      ))}
+                      )) : (
+                        <div className="p-3 bg-black border border-zinc-900 rounded text-center text-zinc-550 italic">
+                          No scoreline projections available.
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -4683,6 +4678,18 @@ export default function App() {
                           </span>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-zinc-900 font-mono text-[11px]">
+                    <div className="space-y-1">
+                      <span className="text-zinc-500 block uppercase mb-1">{match.teamA} Stats (Last 10):</span>
+                      <div className="flex justify-between"><span>BTTS Rate:</span> <span className="text-white font-bold">{match.bttsRateA !== undefined && match.bttsRateA !== 0 ? `${match.bttsRateA}%` : 'N/A'}</span></div>
+                      <div className="flex justify-between"><span>Clean Sheet Rate:</span> <span className="text-white font-bold">{match.cleanSheetA !== undefined && match.cleanSheetA !== 0 ? `${match.cleanSheetA}%` : 'N/A'}</span></div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-zinc-500 block uppercase mb-1">{match.teamB} Stats (Last 10):</span>
+                      <div className="flex justify-between"><span>BTTS Rate:</span> <span className="text-white font-bold">{match.bttsRateB !== undefined && match.bttsRateB !== 0 ? `${match.bttsRateB}%` : 'N/A'}</span></div>
+                      <div className="flex justify-between"><span>Clean Sheet Rate:</span> <span className="text-white font-bold">{match.cleanSheetB !== undefined && match.cleanSheetB !== 0 ? `${match.cleanSheetB}%` : 'N/A'}</span></div>
                     </div>
                   </div>
                 </div>

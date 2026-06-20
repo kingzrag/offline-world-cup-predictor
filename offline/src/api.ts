@@ -166,6 +166,8 @@ export interface BackendTeamProfile {
   elo_rating: number | null;
   squad_size: number | null;
   recent_form: BackendFormEntry[];
+  btts_rate?: number | null;
+  clean_sheet_rate?: number | null;
 }
 
 export interface BackendFixtureTeam {
@@ -572,13 +574,13 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     attackA: 80, attackB: 80,
     defenceA: 80, defenceB: 80,
     midfieldA: 80, midfieldB: 80,
-    xGA: f.live_score?.home ?? 1.5, xGB: f.live_score?.away ?? 1.5,
+    xGA: f.live_score?.home ?? 0, xGB: f.live_score?.away ?? 0,
     xGAA: 1.0, xGAB: 1.0,
     possessionA: 50, possessionB: 50,
     shotsA: 12.0, shotsB: 12.0,
     shotsAllowedA: 10.0, shotsAllowedB: 10.0,
-    cleanSheetA: 30, cleanSheetB: 30,
-    bttsRateA: 50, bttsRateB: 50,
+    cleanSheetA: 0, cleanSheetB: 0,
+    bttsRateA: 0, bttsRateB: 0,
     // ── These are now loaded dynamically via getTeamProfile + getH2h ──────────
     recentFormA: [],
     recentFormB: [],
@@ -614,7 +616,19 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
       mostLikelyScore: `${f.live_score?.home ?? 0}-${f.live_score?.away ?? 0}`,
       top5Scorelines: [
         { score: `${f.live_score?.home ?? 0}-${f.live_score?.away ?? 0}`, probability: 1.0 }
-      ]
+      ],
+      teamGoals: {
+        home: {
+          over_0_5: (f.live_score?.home ?? 0) > 0 ? 1 : 0,
+          over_1_5: (f.live_score?.home ?? 0) > 1 ? 1 : 0,
+          over_2_5: (f.live_score?.home ?? 0) > 2 ? 1 : 0,
+        },
+        away: {
+          over_0_5: (f.live_score?.away ?? 0) > 0 ? 1 : 0,
+          over_1_5: (f.live_score?.away ?? 0) > 1 ? 1 : 0,
+          over_2_5: (f.live_score?.away ?? 0) > 2 ? 1 : 0,
+        }
+      }
     })
   };
 }
@@ -1271,5 +1285,28 @@ export async function updateMatchScore(
  */
 export async function getModelPerformance(): Promise<ModelPerformanceStats> {
   return apiFetch<ModelPerformanceStats>("/tournament/model-performance");
+}
+
+export interface TeamSimulationResult {
+  group_stage: number;
+  r32: number;
+  r16: number;
+  qf: number;
+  sf: number;
+  final: number;
+  winner: number;
+}
+
+export interface TournamentSimulationResponse {
+  status: string;
+  simulation_count: number;
+  results: Record<string, TeamSimulationResult>;
+}
+
+/**
+ * GET /fastapi/tournament/simulation
+ */
+export async function getTournamentSimulation(): Promise<TournamentSimulationResponse> {
+  return apiFetch<TournamentSimulationResponse>("/tournament/simulation");
 }
 
