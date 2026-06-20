@@ -14,7 +14,7 @@ All ML inference goes through the ModelService singleton.
 """
 
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -324,19 +324,35 @@ def get_team_profile(
     )
     elo_rating = elo_record.elo_rating if elo_record else None
 
-    # Last 5 finished matches
+    # Last 10 finished matches
     from sqlalchemy import or_ as sql_or, desc
-    recent_matches = (
+    recent_matches_10 = (
         db.query(Match)
         .filter(
             sql_or(Match.home_team_id == team.id, Match.away_team_id == team.id),
             Match.status == "FINISHED",
         )
         .order_by(desc(Match.utc_date))
-        .limit(5)
+        .limit(10)
         .all()
     )
 
+    btts_count = 0
+    clean_sheet_count = 0
+    played_count = len(recent_matches_10)
+    for m in recent_matches_10:
+        if m.home_score is not None and m.away_score is not None:
+            if m.home_score > 0 and m.away_score > 0:
+                btts_count += 1
+            is_home = m.home_team_id == team.id
+            conceded = m.away_score if is_home else m.home_score
+            if conceded == 0:
+                clean_sheet_count += 1
+
+    btts_rate = round((btts_count / played_count) * 100, 1) if played_count > 0 else 0.0
+    clean_sheet_rate = round((clean_sheet_count / played_count) * 100, 1) if played_count > 0 else 0.0
+
+    recent_matches = recent_matches_10[:5]
     form = []
     for m in recent_matches:
         is_home = m.home_team_id == team.id
@@ -349,7 +365,7 @@ def get_team_profile(
 
         opp = m.away_team if is_home else m.home_team
         form.append({
-            "date":     m.utc_date.isoformat() if m.utc_date else None,
+            "date":     m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None,
             "opponent": opp.name if opp else "Unknown",
             "home":     is_home,
             "score":    f"{m.home_score}-{m.away_score}" if m.home_score is not None else None,
@@ -406,6 +422,8 @@ def get_team_profile(
             "suspensions": suspensions_list,
             "squad_size":  len(team.players) if hasattr(team, "players") else None,
             "recent_form": form,
+            "btts_rate":   btts_rate,
+            "clean_sheet_rate": clean_sheet_rate,
         },
     }
 
@@ -499,7 +517,7 @@ def get_h2h(
             result = "L"
 
         recent_matches.append({
-            "date": m.utc_date.isoformat() if m.utc_date else None,
+            "date": m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None,
             "home_team": m.home_team.name if m.home_team else None,
             "away_team": m.away_team.name if m.away_team else None,
             "score": f"{m.home_score}-{m.away_score}" if m.home_score is not None else None,
@@ -711,7 +729,7 @@ def get_fixtures(
     fixtures_out = [
         {
             "id":           m.id,
-            "kickoff_time": m.utc_date.isoformat() if m.utc_date else None,
+            "kickoff_time": m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None,
             "status":       m.status,
             "stage":        m.stage,
             "group":        m.group,
@@ -775,7 +793,7 @@ def debug_live_sync(db: Session = Depends(get_db)):
                 "home_score": m.home_score,
                 "away_score": m.away_score,
                 "live_minute": m.live_minute,
-                "kickoff_time": m.utc_date.isoformat() if m.utc_date else None,
+                "kickoff_time": m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None,
             })
 
     sync_state = get_live_sync_state()

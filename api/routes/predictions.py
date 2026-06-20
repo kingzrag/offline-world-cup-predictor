@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import timezone
 
 from database.connection import get_db
 from models import Prediction
@@ -55,7 +56,7 @@ def read_predictions(
             "id": pred.id,
             "match": {
                 "id": pred.match.id,
-                "utc_date": pred.match.utc_date.isoformat(),
+                "utc_date": pred.match.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
                 "home_team": pred.match.home_team.name,
                 "away_team": pred.match.away_team.name,
                 "status": pred.match.status

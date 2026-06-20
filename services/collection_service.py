@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 
 from utils.config import settings
@@ -268,7 +268,11 @@ class CollectionService:
                 )
 
                 existing_match = db.query(Match).filter_by(api_id=str(m["id"])).first()
-                utc_date = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
+                # Parse as aware UTC datetime, then store as naive UTC.
+                # Explicitly converting to UTC before stripping tzinfo ensures
+                # the value stored is always UTC regardless of server timezone.
+                _aware = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
+                utc_date = _aware.astimezone(timezone.utc).replace(tzinfo=None)
                 score_data = m.get("score", {})
                 full_time = score_data.get("fullTime", {})
                 half_time = score_data.get("halfTime", {})

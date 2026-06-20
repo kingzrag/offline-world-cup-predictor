@@ -399,7 +399,7 @@ def get_bracket(db: Session = Depends(get_db)):
             {
                 "id": m.id,
                 "stage": m.stage,
-                "utc_date": m.utc_date.isoformat(),
+                "utc_date": m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
                 "status": m.status,
                 "home_team": {
                     "id": m.home_team.id if m.home_team else None,
@@ -544,4 +544,243 @@ def get_model_performance(db: Session = Depends(get_db)):
         "last_updated": f"Refreshed dynamically at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC",
         "model_status": "Active",
         "historical_progression": historical_progression
+    }
+
+
+@router.get("/simulation")
+def run_tournament_simulation(db: Session = Depends(get_db)):
+    import random
+    comp = db.query(Competition).filter_by(code="WC").first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="WC Competition not found.")
+
+    # 1. Load team info and ELOs
+    teams = db.query(Team).all()
+    elos = db.query(TeamElo).all()
+    elo_map = {e.team_name: e.elo_rating for e in elos}
+
+    team_info = {}
+    for t in teams:
+        rating = elo_map.get(t.name)
+        if not rating:
+            for name, r in elo_map.items():
+                if name.lower() in t.name.lower() or t.name.lower() in name.lower():
+                    rating = r
+                    break
+        team_info[t.id] = {
+            "id": t.id,
+            "name": t.name,
+            "tla": t.tla,
+            "crest_url": t.crest_url,
+            "elo": rating or 1500,
+            "fifa_rank": t.fifa_ranking or 50,
+            "group": t.standings[0].group if t.standings else "UNKNOWN"
+        }
+
+    # 2. Load matches and predictions
+    all_matches = db.query(Match).filter(
+        Match.competition_id == comp.id,
+        extract('year', Match.utc_date) == 2026
+    ).all()
+
+    predictions = db.query(Prediction).all()
+    pred_map = {p.match_id: (p.home_probability, p.draw_probability, p.away_probability) for p in predictions}
+
+    completed_group_matches = []
+    scheduled_group_matches = []
+
+    for m in all_matches:
+        if m.stage == "GROUP_STAGE":
+            if m.status == "FINISHED" and m.home_score is not None and m.away_score is not None:
+                completed_group_matches.append(m)
+            else:
+                scheduled_group_matches.append(m)
+
+    # 3. Initialize stats trackers
+    sim_counts = {t.id: {
+        "name": t.name,
+        "tla": t.tla,
+        "crest_url": t.crest_url,
+        "group_stage": 0,
+        "r32": 0,
+        "r16": 0,
+        "qf": 0,
+        "sf": 0,
+        "final": 0,
+        "winner": 0
+    } for t in teams}
+
+    num_simulations = 10000
+
+    scheduled_probs = []
+    for m in scheduled_group_matches:
+        probs = pred_map.get(m.id)
+        if not probs:
+            eloA = team_info[m.home_team_id]["elo"]
+            eloB = team_info[m.away_team_id]["elo"]
+            ea = 1 / (1 + 10 ** ((eloB - eloA) / 400))
+            eb = 1 / (1 + 10 ** ((eloA - eloB) / 400))
+            ed = 0.26
+            total = ea + eb + ed
+            probs = (ea / total, ed / total, eb / total)
+        scheduled_probs.append((m, probs))
+
+    for _ in range(num_simulations):
+        team_stats = {t.id: {
+            "id": t.id,
+            "name": t.name,
+            "played_games": 0,
+            "won": 0,
+            "draw": 0,
+            "lost": 0,
+            "points": 0,
+            "goals_for": 0,
+            "goals_against": 0,
+            "goals_difference": 0,
+            "group": team_info[t.id]["group"]
+        } for t in teams}
+
+        for m in completed_group_matches:
+            h = team_stats.get(m.home_team_id)
+            a = team_stats.get(m.away_team_id)
+            if h and a:
+                h["played_games"] += 1
+                a["played_games"] += 1
+                h["goals_for"] += m.home_score
+                h["goals_against"] += m.away_score
+                a["goals_for"] += m.away_score
+                a["goals_against"] += m.home_score
+                if m.winner == "HOME_TEAM":
+                    h["won"] += 1; h["points"] += 3; a["lost"] += 1
+                elif m.winner == "AWAY_TEAM":
+                    a["won"] += 1; a["points"] += 3; h["lost"] += 1
+                else:
+                    h["draw"] += 1; h["points"] += 1; a["draw"] += 1; a["points"] += 1
+
+        for m, probs in scheduled_probs:
+            h = team_stats.get(m.home_team_id)
+            a = team_stats.get(m.away_team_id)
+            if not h or not a:
+                continue
+
+            h["played_games"] += 1
+            a["played_games"] += 1
+
+            r = random.random()
+            if r < probs[0]: # HOME_WIN
+                h["won"] += 1; h["points"] += 3; a["lost"] += 1
+                h_goals = random.choices([1, 2, 3, 4], weights=[0.45, 0.35, 0.15, 0.05])[0]
+                a_goals = random.randint(0, h_goals - 1)
+            elif r < probs[0] + probs[1]: # DRAW
+                h["draw"] += 1; h["points"] += 1; a["draw"] += 1; a["points"] += 1
+                h_goals = a_goals = random.choices([0, 1, 2, 3], weights=[0.35, 0.45, 0.15, 0.05])[0]
+            else: # AWAY_WIN
+                a["won"] += 1; a["points"] += 3; h["lost"] += 1
+                a_goals = random.choices([1, 2, 3, 4], weights=[0.45, 0.35, 0.15, 0.05])[0]
+                h_goals = random.randint(0, a_goals - 1)
+
+            h["goals_for"] += h_goals
+            h["goals_against"] += a_goals
+            a["goals_for"] += a_goals
+            a["goals_against"] += h_goals
+
+        for stats in team_stats.values():
+            stats["goals_difference"] = stats["goals_for"] - stats["goals_against"]
+
+        groups = {}
+        for stats in team_stats.values():
+            grp = stats["group"]
+            if grp not in groups:
+                groups[grp] = []
+            groups[grp].append(stats)
+
+        winners = []
+        runners_up = []
+        third_places = []
+        for grp, grp_teams in groups.items():
+            grp_teams.sort(key=lambda x: (-x["points"], -x["goals_difference"], -x["goals_for"], x["name"]))
+            if len(grp_teams) >= 1: winners.append(grp_teams[0])
+            if len(grp_teams) >= 2: runners_up.append(grp_teams[1])
+            if len(grp_teams) >= 3: third_places.append(grp_teams[2])
+
+        sort_key = lambda x: (-x["points"], -x["goals_difference"], -x["goals_for"], x["name"])
+        winners.sort(key=sort_key)
+        runners_up.sort(key=sort_key)
+        third_places.sort(key=sort_key)
+
+        qualified_thirds = third_places[:8]
+        seeds = winners + runners_up + qualified_thirds
+
+        for s in seeds:
+            sim_counts[s["id"]]["group_stage"] += 1
+            sim_counts[s["id"]]["r32"] += 1
+
+        def sim_ko_winner(t1_id: int, t2_id: int) -> int:
+            elo1 = team_info[t1_id]["elo"]
+            elo2 = team_info[t2_id]["elo"]
+            w1 = 1 / (1 + 10 ** ((elo2 - elo1) / 400))
+            return t1_id if random.random() < w1 else t2_id
+
+        r32_winners = []
+        for i in range(16):
+            if i >= len(seeds) or (31 - i) >= len(seeds):
+                # Safeguard if seeds count < 32
+                break
+            home = seeds[i]["id"]
+            away = seeds[31 - i]["id"]
+            winner = sim_ko_winner(home, away)
+            r32_winners.append(winner)
+            sim_counts[winner]["r16"] += 1
+
+        r16_winners = []
+        for i in range(8):
+            if i >= len(r32_winners) or (15 - i) >= len(r32_winners):
+                break
+            home = r32_winners[i]
+            away = r32_winners[15 - i]
+            winner = sim_ko_winner(home, away)
+            r16_winners.append(winner)
+            sim_counts[winner]["qf"] += 1
+
+        qf_winners = []
+        for i in range(4):
+            if i >= len(r16_winners) or (7 - i) >= len(r16_winners):
+                break
+            home = r16_winners[i]
+            away = r16_winners[7 - i]
+            winner = sim_ko_winner(home, away)
+            qf_winners.append(winner)
+            sim_counts[winner]["sf"] += 1
+
+        sf_winners = []
+        for i in range(2):
+            if i >= len(qf_winners) or (3 - i) >= len(qf_winners):
+                break
+            home = qf_winners[i]
+            away = qf_winners[3 - i]
+            winner = sim_ko_winner(home, away)
+            sf_winners.append(winner)
+            sim_counts[winner]["final"] += 1
+
+        if len(sf_winners) >= 2:
+            champion = sim_ko_winner(sf_winners[0], sf_winners[1])
+            sim_counts[champion]["winner"] += 1
+
+    res_dict = {}
+    for tid, counts in sim_counts.items():
+        name = counts["name"]
+        res_dict[name] = {
+            "group_stage": round((counts["group_stage"] / num_simulations) * 100, 1),
+            "r32": round((counts["r32"] / num_simulations) * 100, 1),
+            "r16": round((counts["r16"] / num_simulations) * 100, 1),
+            "qf": round((counts["qf"] / num_simulations) * 100, 1),
+            "sf": round((counts["sf"] / num_simulations) * 100, 1),
+            "final": round((counts["final"] / num_simulations) * 100, 1),
+            "winner": round((counts["winner"] / num_simulations) * 100, 1)
+        }
+
+    return {
+        "status": "success",
+        "simulation_count": num_simulations,
+        "results": res_dict
     }

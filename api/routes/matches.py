@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 from database.connection import get_db
 from models import Match
@@ -62,7 +62,7 @@ def read_matches(
                 "tla": m.away_team.tla,
                 "crest_url": m.away_team.crest_url
             },
-            "utc_date": m.utc_date.isoformat(),
+            "utc_date": m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
             "status": m.status,
             "stage": m.stage,
             "group": m.group,
