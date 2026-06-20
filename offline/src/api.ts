@@ -598,7 +598,7 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     h2hPreviousMeetings: 0,
     h2hWinsA: 0, h2hWinsB: 0, h2hDraws: 0,
     h2hGoalsA: 0, h2hGoalsB: 0,
-    aiSummary: "The ML analytical pipeline is ready to simulate transition profiles. Click 'View Full Report' to dynamically generate expected goal distributions and ELO metrics.",
+    aiSummary: "",
     
     // If completed, add btts and correct scoreline indicators
     ...(statusMapped === "COMPLETED" && {

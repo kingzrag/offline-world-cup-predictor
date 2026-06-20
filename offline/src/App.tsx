@@ -3865,6 +3865,200 @@ export default function App() {
         const flagA = getFlag(match.teamA);
         const flagB = getFlag(match.teamB);
 
+        const getMatchInsights = (m: MatchPrediction) => {
+          const insights: { label: string; value: string; status: 'advantage' | 'balanced' | 'disadvantage' }[] = [];
+
+          // Determine Favorite
+          const pA = m.probA ?? 0;
+          const pB = m.probB ?? 0;
+          const hasFav = pA !== pB;
+          const favKey = pA >= pB ? 'A' : 'B';
+          const favName = favKey === 'A' ? m.teamA : m.teamB;
+          const favProb = favKey === 'A' ? pA : pB;
+          const oppKey = favKey === 'A' ? 'B' : 'A';
+          const oppName = oppKey === 'A' ? m.teamA : m.teamB;
+
+          // 1. Favorite
+          if (hasFav && favProb > 0) {
+            insights.push({
+              label: 'Favorite',
+              value: `${favName} (${favProb}%)`,
+              status: 'advantage'
+            });
+          }
+
+          // 2. Confidence
+          if (m.confidence) {
+            let status: 'advantage' | 'balanced' | 'disadvantage' = 'balanced';
+            if (m.confidence === 'High') status = 'advantage';
+            if (m.confidence === 'Low') status = 'disadvantage';
+            insights.push({
+              label: 'Confidence',
+              value: m.confidence,
+              status
+            });
+          }
+
+          // 3. ELO Advantage
+          const eloA = m.eloRankA;
+          const eloB = m.eloRankB;
+          if (eloA !== undefined && eloA !== null && eloA > 0 && eloB !== undefined && eloB !== null && eloB > 0) {
+            const eloFav = favKey === 'A' ? eloA : eloB;
+            const eloOpp = favKey === 'A' ? eloB : eloA;
+            if (eloFav < eloOpp) {
+              insights.push({
+                label: 'ELO Advantage',
+                value: `${favName} +${eloOpp - eloFav}`,
+                status: 'advantage'
+              });
+            } else if (eloFav > eloOpp) {
+              insights.push({
+                label: 'ELO Advantage',
+                value: `${oppName} +${eloFav - eloOpp}`,
+                status: 'disadvantage'
+              });
+            } else {
+              insights.push({
+                label: 'ELO Advantage',
+                value: 'Balanced',
+                status: 'balanced'
+              });
+            }
+          }
+
+          // 4. FIFA Advantage
+          const fifaA = m.fifaRankA;
+          const fifaB = m.fifaRankB;
+          if (fifaA !== undefined && fifaA !== null && fifaA > 0 && fifaB !== undefined && fifaB !== null && fifaB > 0) {
+            const fifaFav = favKey === 'A' ? fifaA : fifaB;
+            const fifaOpp = favKey === 'A' ? fifaB : fifaA;
+            if (fifaFav < fifaOpp) {
+              insights.push({
+                label: 'FIFA Advantage',
+                value: `${favName} +${fifaOpp - fifaFav}`,
+                status: 'advantage'
+              });
+            } else if (fifaFav > fifaOpp) {
+              insights.push({
+                label: 'FIFA Advantage',
+                value: `${oppName} +${fifaFav - fifaOpp}`,
+                status: 'disadvantage'
+              });
+            } else {
+              insights.push({
+                label: 'FIFA Advantage',
+                value: 'Balanced',
+                status: 'balanced'
+              });
+            }
+          }
+
+          // 5. Squad Value
+          const parseVal = (val: string | undefined | null) => {
+            if (!val || val === '—' || val === 'Loading...' || val === 'N/A') return null;
+            const clean = val.replace(/[€$£\s]/g, '');
+            if (clean.endsWith('B')) {
+              const num = parseFloat(clean.slice(0, -1));
+              return isNaN(num) ? null : num * 1000;
+            }
+            if (clean.endsWith('M')) {
+              const num = parseFloat(clean.slice(0, -1));
+              return isNaN(num) ? null : num;
+            }
+            if (clean.endsWith('K')) {
+              const num = parseFloat(clean.slice(0, -1));
+              return isNaN(num) ? null : num / 1000;
+            }
+            const num = parseFloat(clean);
+            return isNaN(num) ? null : num;
+          };
+
+          const fmtValDiff = (diff: number) => {
+            if (diff >= 1000) {
+              return `€${Number((diff / 1000).toFixed(2))}B`;
+            }
+            return `€${Number(diff.toFixed(1))}M`;
+          };
+
+          const valA = parseVal(m.squadValueA);
+          const valB = parseVal(m.squadValueB);
+          if (valA !== null && valB !== null) {
+            const valFav = favKey === 'A' ? valA : valB;
+            const valOpp = favKey === 'A' ? valB : valA;
+            if (valFav > valOpp) {
+              insights.push({
+                label: 'Squad Value',
+                value: `${favName} ${fmtValDiff(valFav - valOpp)} higher`,
+                status: 'advantage'
+              });
+            } else if (valFav < valOpp) {
+              insights.push({
+                label: 'Squad Value',
+                value: `${oppName} ${fmtValDiff(valOpp - valFav)} higher`,
+                status: 'disadvantage'
+              });
+            } else {
+              insights.push({
+                label: 'Squad Value',
+                value: 'Equal',
+                status: 'balanced'
+              });
+            }
+          }
+
+          // 6. Recent Form
+          const formFav = favKey === 'A' ? m.recentFormA : m.recentFormB;
+          const formOpp = favKey === 'A' ? m.recentFormB : m.recentFormA;
+          if (formFav && formFav.length > 0) {
+            const scoreFav = formFav.reduce((acc, r) => acc + (r === 'W' ? 3 : r === 'D' ? 1 : 0), 0);
+            const scoreOpp = (formOpp && formOpp.length > 0) ? formOpp.reduce((acc, r) => acc + (r === 'W' ? 3 : r === 'D' ? 1 : 0), 0) : 0;
+            const status = scoreFav > scoreOpp ? 'advantage' : (scoreFav < scoreOpp ? 'disadvantage' : 'balanced');
+            insights.push({
+              label: 'Recent Form',
+              value: formFav.join('-'),
+              status
+            });
+          }
+
+          // 7. Head-to-Head
+          const h2hMeetings = m.h2hPreviousMeetings;
+          if (h2hMeetings !== undefined && h2hMeetings > 0) {
+            const winsFav = favKey === 'A' ? m.h2hWinsA : m.h2hWinsB;
+            const winsOpp = favKey === 'A' ? m.h2hWinsB : m.h2hWinsA;
+            const draws = m.h2hDraws ?? 0;
+            const wFav = winsFav ?? 0;
+            const wOpp = winsOpp ?? 0;
+            const status = wFav > wOpp ? 'advantage' : (wFav < wOpp ? 'disadvantage' : 'balanced');
+            insights.push({
+              label: 'Head-to-Head',
+              value: `${favName} ${wFav}W | ${draws}D | ${wOpp}L`,
+              status
+            });
+          }
+
+          // 8. Injuries
+          const hasInjA = m.injuriesA !== undefined;
+          const hasInjB = m.injuriesB !== undefined;
+          if (hasInjA && hasInjB) {
+            const injFav = favKey === 'A' ? [...(m.injuriesA || []), ...(m.suspensionsA || [])] : [...(m.injuriesB || []), ...(m.suspensionsB || [])];
+            if (injFav.length > 0) {
+              insights.push({
+                label: 'Injuries',
+                value: `${injFav.length} player${injFav.length > 1 ? 's' : ''} unavailable`,
+                status: 'disadvantage'
+              });
+            } else {
+              insights.push({
+                label: 'Injuries',
+                value: 'None',
+                status: 'balanced'
+              });
+            }
+          }
+
+          return insights;
+        };
+
         // Loader helper for loading states
         const renderPredictionLoading = (sectionTitle: string) => (
           <div className="p-5 bg-zinc-950/45 border border-zinc-900 rounded flex flex-col items-center justify-center space-y-2 font-mono">
@@ -4149,23 +4343,49 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* SECTION 9 — TACTICAL AI SUMMARY */}
+                {/* SECTION 9 — MATCH INSIGHTS */}
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2 border-b border-zinc-900 pb-2">
                     <Sparkles className="w-4 h-4 text-green-accent" />
-                    <h4 className="text-xs uppercase font-mono font-bold tracking-widest text-zinc-300">SECTION 9 — Tactical AI Summary</h4>
+                    <h4 className="text-xs uppercase font-mono font-bold tracking-widest text-zinc-300">SECTION 9 — MATCH INSIGHTS</h4>
                   </div>
 
-                  {aiMatchLoading ? (
+                  {drawerTeamLoading ? (
                     <div className="p-8 bg-zinc-900/10 border border-zinc-900 rounded flex flex-col items-center justify-center space-y-4 animate-pulse">
                       <Loader2 className="w-6 h-6 text-green-accent animate-spin" />
-                      <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-550">Querying real-time analytical match modules...</span>
+                      <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-550">Compiling match intelligence metrics...</span>
                     </div>
-                  ) : (
-                    <div className="p-6 bg-green-950/5 border border-green-500/25 rounded-r rounded-l-none border-l-2 border-l-[#1cdb5e] font-serif italic text-sm text-zinc-300 leading-relaxed md:text-base">
-                      "{aiMatchSummaries[match.id] || match.aiSummary}"
-                    </div>
-                  )}
+                  ) : (() => {
+                    const insights = getMatchInsights(match);
+                    if (insights.length === 0) {
+                      return (
+                        <div className="p-6 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs text-zinc-500 italic">
+                          No match intelligence available.
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="p-6 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs space-y-2.5">
+                        <ul className="space-y-2 text-zinc-400">
+                          {insights.map((item, idx) => (
+                            <li key={idx} className="flex items-start space-x-2 leading-relaxed">
+                              <span className="text-zinc-500 select-none">•</span>
+                              <span className="text-zinc-400">
+                                {item.label}:{' '}
+                                <span className={
+                                  item.status === 'advantage' ? 'text-green-accent font-bold' :
+                                  item.status === 'disadvantage' ? 'text-red-400 font-bold' :
+                                  'text-zinc-300 font-bold'
+                                }>
+                                  {item.value}
+                                </span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* SECTION 1 — MATCH OUTCOME */}
@@ -4177,16 +4397,16 @@ export default function App() {
                     </h4>
                     <div className="grid grid-cols-3 gap-4 text-center mt-2 font-mono text-xs">
                       <div className="p-2 bg-black rounded border border-zinc-900">
-                        <span className="text-[10px] text-zinc-500 block uppercase mb-1">Home Win</span>
-                        <span className="text-sm font-bold text-white">Home Win: {probA}%</span>
+                        <span className="text-[10px] text-zinc-500 block uppercase mb-1">{match.teamA} Win</span>
+                        <span className="text-sm font-bold text-white">{match.teamA} Win: {probA}%</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[10px] text-zinc-500 block uppercase mb-1">Draw</span>
                         <span className="text-sm font-bold text-white">Draw: {probD}%</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
-                        <span className="text-[10px] text-zinc-500 block uppercase mb-1">Away Win</span>
-                        <span className="text-sm font-bold text-white">Away Win: {probB}%</span>
+                        <span className="text-[10px] text-zinc-500 block uppercase mb-1">{match.teamB} Win</span>
+                        <span className="text-sm font-bold text-white">{match.teamB} Win: {probB}%</span>
                       </div>
                     </div>
                   </div>
@@ -4257,15 +4477,15 @@ export default function App() {
                     </h4>
                     <div className="grid grid-cols-3 gap-2 mt-2 text-center">
                       <div className="p-2 bg-black rounded border border-zinc-900">
-                        <span className="text-[9px] text-zinc-500 uppercase block">Home or Draw</span>
+                        <span className="text-[9px] text-zinc-500 uppercase block">{match.teamA} or Draw</span>
                         <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or Draw: {dcHD}%</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
-                        <span className="text-[9px] text-zinc-500 uppercase block">Away or Draw</span>
+                        <span className="text-[9px] text-zinc-500 uppercase block">{match.teamB} or Draw</span>
                         <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} or Draw: {dcAD}%</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
-                        <span className="text-[9px] text-zinc-500 uppercase block">Home or Away</span>
+                        <span className="text-[9px] text-zinc-500 uppercase block">{match.teamA} or {match.teamB}</span>
                         <span className="text-xs font-bold text-white block mt-1">{match.teamACode} or {match.teamBCode}: {dcHA}%</span>
                       </div>
                     </div>
@@ -4280,11 +4500,11 @@ export default function App() {
                     </h4>
                     <div className="grid grid-cols-2 gap-4 mt-2 text-center">
                       <div className="p-2 bg-black rounded border border-zinc-900">
-                        <span className="text-[9px] text-zinc-500 block uppercase">Home DNB</span>
+                        <span className="text-[9px] text-zinc-500 block uppercase">{match.teamA} DNB</span>
                         <span className="text-xs font-bold text-white block mt-1">{match.teamACode} DNB: {dnbHome}%</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
-                        <span className="text-[9px] text-zinc-500 block uppercase">Away DNB</span>
+                        <span className="text-[9px] text-zinc-500 block uppercase">{match.teamB} DNB</span>
                         <span className="text-xs font-bold text-white block mt-1">{match.teamBCode} DNB: {dnbAway}%</span>
                       </div>
                     </div>
@@ -4356,7 +4576,7 @@ export default function App() {
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                         <div className="space-y-2 bg-black p-3 border border-zinc-900 rounded">
-                          <span className="text-[10px] text-zinc-500 uppercase block font-bold">{match.teamA} (Home)</span>
+                          <span className="text-[10px] text-zinc-500 uppercase block font-bold">{match.teamA}</span>
                           <div className="space-y-1 text-zinc-400">
                             <div className="flex justify-between"><span>Over 0.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.home.over_0_5 * 100)}%</span></div>
                             <div className="flex justify-between"><span>Over 1.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.home.over_1_5 * 100)}%</span></div>
@@ -4364,7 +4584,7 @@ export default function App() {
                           </div>
                         </div>
                         <div className="space-y-2 bg-black p-3 border border-zinc-900 rounded">
-                          <span className="text-[10px] text-zinc-500 uppercase block font-bold">{match.teamB} (Away)</span>
+                          <span className="text-[10px] text-zinc-500 uppercase block font-bold">{match.teamB}</span>
                           <div className="space-y-1 text-zinc-400">
                             <div className="flex justify-between"><span>Over 0.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.away.over_0_5 * 100)}%</span></div>
                             <div className="flex justify-between"><span>Over 1.5:</span> <span className="text-white font-bold">{Math.round(match.teamGoals.away.over_1_5 * 100)}%</span></div>
