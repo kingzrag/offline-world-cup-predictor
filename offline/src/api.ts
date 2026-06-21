@@ -165,8 +165,18 @@ export interface BackendTeamProfile {
   founded: number | null;
   venue: string | null;
   elo_rating: number | null;
+  /** World ELO ranking position (1 = best) — returned by GET /team/:name */
+  elo_rank: number | null;
+  /** FIFA world ranking — returned by GET /team/:name */
+  fifa_rank: number | null;
   squad_size: number | null;
+  /** Human-readable squad market value string, e.g. "€1.18B" or "N/A" */
+  squad_value: string | null;
   recent_form: BackendFormEntry[];
+  /** Injury list: ["Player Name (description)", …] */
+  injuries: string[];
+  /** Suspension list: ["Player Name (reason)", …] */
+  suspensions: string[];
   btts_rate?: number | null;
   clean_sheet_rate?: number | null;
 }
@@ -520,6 +530,15 @@ export function mapBackendPrediction(
   const confidence: "High" | "Medium" | "Low" =
     o.confidence >= 0.60 ? "High" : o.confidence >= 0.45 ? "Medium" : "Low";
 
+  // Only overwrite xG if the fresh call returns non-zero values.
+  // The single /predict endpoint sometimes returns 0.0 for home goals when the
+  // XGBoost goal model clips a negative prediction to 0.  If the base already
+  // has real enrichment xG (from /fixtures-enriched), keep those values so the
+  // drawer never shows "0.00" when the enriched data was good.
+  const safeXGA = g.expected_home_goals > 0 ? g.expected_home_goals : (base.xGA ?? 0);
+  const safeXGB = g.expected_away_goals > 0 ? g.expected_away_goals : (base.xGB ?? 0);
+  const safeTotalXG = safeXGA + safeXGB;
+
   return {
     ...base,
     // Core prediction
@@ -529,10 +548,10 @@ export function mapBackendPrediction(
     prediction: predictionLabel,
     confidence,
     modelConfidence: o.confidence,
-    // Goals / xG
-    xGA: g.expected_home_goals,
-    xGB: g.expected_away_goals,
-    totalExpectedGoals: g.total_expected_goals,
+    // Goals / xG — guarded to never overwrite real enrichment data with 0
+    xGA: safeXGA,
+    xGB: safeXGB,
+    totalExpectedGoals: g.total_expected_goals > 0 ? g.total_expected_goals : safeTotalXG,
     // Betting markets
     overUnder: m.over_under,
     bttsMarket: m.btts,
@@ -639,10 +658,10 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     possessionA: 50, possessionB: 50,
     shotsA: 12.0, shotsB: 12.0,
     shotsAllowedA: 10.0, shotsAllowedB: 10.0,
-    cleanSheetA: enrichment && enrichment.markets?.clean_sheet ? Math.round(enrichment.markets.clean_sheet.home_clean_sheet * 100) : 0,
-    cleanSheetB: enrichment && enrichment.markets?.clean_sheet ? Math.round(enrichment.markets.clean_sheet.away_clean_sheet * 100) : 0,
-    bttsRateA: enrichment && enrichment.markets?.btts ? Math.round(enrichment.markets.btts.yes * 100) : 0,
-    bttsRateB: enrichment && enrichment.markets?.btts ? Math.round(enrichment.markets.btts.yes * 100) : 0,
+    cleanSheetA: enrichment && enrichment.markets?.clean_sheet ? Math.round(enrichment.markets.clean_sheet.home_clean_sheet * 100) : null,
+    cleanSheetB: enrichment && enrichment.markets?.clean_sheet ? Math.round(enrichment.markets.clean_sheet.away_clean_sheet * 100) : null,
+    bttsRateA: enrichment && enrichment.markets?.btts ? Math.round(enrichment.markets.btts.yes * 100) : null,
+    bttsRateB: enrichment && enrichment.markets?.btts ? Math.round(enrichment.markets.btts.yes * 100) : null,
     // ── These are now loaded dynamically via getTeamProfile + getH2h ──────────
     recentFormA: [],
     recentFormB: [],

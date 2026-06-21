@@ -239,6 +239,10 @@ export default function App() {
 
           console.log(`[App] Phase 1 complete: ${fixtures.length} fixtures rendered instantly.`);
           setSourceMatches(sortSourceMatches(fixtures));
+          
+          // Load Monte Carlo tournament simulation results in the background
+          loadTournamentData();
+          
           setMatchError(null);
           setIsLoadingMatches(false);
           setIsInitializing(false);
@@ -976,7 +980,7 @@ export default function App() {
           // Team A real data
           fifaRankA:   a?.fifa_rank  ?? updated.fifaRankA,
           eloRankA:    a?.elo_rank   ?? updated.eloRankA,
-          squadValueA: fmtVal(a?.squad_value) !== '—' ? fmtVal(a?.squad_value) : updated.squadValueA,
+          squadValueA: a?.squad_value && a.squad_value !== 'Loading...' && a.squad_value !== 'N/A' && a.squad_value !== '—' ? a.squad_value : 'N/A',
           recentFormA: toFormArr(a?.recent_form).length > 0 ? toFormArr(a?.recent_form) : updated.recentFormA,
           injuriesA:   a?.injuries   ?? updated.injuriesA,
           suspensionsA: a?.suspensions ?? updated.suspensionsA,
@@ -985,7 +989,7 @@ export default function App() {
           // Team B real data
           fifaRankB:   b?.fifa_rank  ?? updated.fifaRankB,
           eloRankB:    b?.elo_rank   ?? updated.eloRankB,
-          squadValueB: fmtVal(b?.squad_value) !== '—' ? fmtVal(b?.squad_value) : updated.squadValueB,
+          squadValueB: b?.squad_value && b.squad_value !== 'Loading...' && b.squad_value !== 'N/A' && b.squad_value !== '—' ? b.squad_value : 'N/A',
           recentFormB: toFormArr(b?.recent_form).length > 0 ? toFormArr(b?.recent_form) : updated.recentFormB,
           injuriesB:   b?.injuries   ?? updated.injuriesB,
           suspensionsB: b?.suspensions ?? updated.suspensionsB,
@@ -4119,8 +4123,8 @@ export default function App() {
         const probB = match.probB;
 
         // SECTION 2 — EXPECTED GOALS
-        const xGA = match.xGA;
-        const xGB = match.xGB;
+        const xGA = match.xGA ?? 0;
+        const xGB = match.xGB ?? 0;
         const totalXG = (xGA + xGB).toFixed(2);
 
         // SECTION 3 — GOAL PROBABILITIES
@@ -4129,20 +4133,23 @@ export default function App() {
           for (let i = 1; i <= k; i++) fact *= i;
           return Math.pow(l, k) * Math.exp(-l) / fact;
         };
-        const under0_5 = match.overUnder?.["0.5"] ? Math.round((match.overUnder["0.5"].under ?? 0) * 100) : null;
-        const under1_5 = match.overUnder?.["1.5"] ? Math.round((match.overUnder["1.5"].under ?? 0) * 100) : null;
-        const under2_5 = match.overUnder?.["2.5"] ? Math.round((match.overUnder["2.5"].under ?? 0) * 100) : null;
-        const under3_5 = match.overUnder?.["3.5"] ? Math.round((match.overUnder["3.5"].under ?? 0) * 100) : null;
-        const under4_5 = match.overUnder?.["4.5"] ? Math.round((match.overUnder["4.5"].under ?? 0) * 100) : null;
+        const under0_5 = match.overUnder?.["0.5"] ? Math.round((match.overUnder["0.5"].under ?? 0) * 100) : Math.round(poisson(0, xGA + xGB) * 100);
+        const under1_5 = match.overUnder?.["1.5"] ? Math.round((match.overUnder["1.5"].under ?? 0) * 100) : Math.round((poisson(0, xGA + xGB) + poisson(1, xGA + xGB)) * 100);
+        const under2_5 = match.overUnder?.["2.5"] ? Math.round((match.overUnder["2.5"].under ?? 0) * 100) : Math.round((poisson(0, xGA + xGB) + poisson(1, xGA + xGB) + poisson(2, xGA + xGB)) * 100);
+        const under3_5 = match.overUnder?.["3.5"] ? Math.round((match.overUnder["3.5"].under ?? 0) * 100) : Math.round((poisson(0, xGA + xGB) + poisson(1, xGA + xGB) + poisson(2, xGA + xGB) + poisson(3, xGA + xGB)) * 100);
+        const under4_5 = match.overUnder?.["4.5"] ? Math.round((match.overUnder["4.5"].under ?? 0) * 100) : Math.round((poisson(0, xGA + xGB) + poisson(1, xGA + xGB) + poisson(2, xGA + xGB) + poisson(3, xGA + xGB) + poisson(4, xGA + xGB)) * 100);
 
-        const over0_5 = match.overUnder?.["0.5"] ? Math.round((match.overUnder["0.5"].over ?? 0) * 100) : null;
-        const over1_5 = match.overUnder?.["1.5"] ? Math.round((match.overUnder["1.5"].over ?? 0) * 100) : null;
-        const over2_5 = match.overUnder?.["2.5"] ? Math.round((match.overUnder["2.5"].over ?? 0) * 100) : null;
-        const over3_5 = match.overUnder?.["3.5"] ? Math.round((match.overUnder["3.5"].over ?? 0) * 100) : null;
-        const over4_5 = match.overUnder?.["4.5"] ? Math.round((match.overUnder["4.5"].over ?? 0) * 100) : null;
+        const over0_5 = 100 - under0_5;
+        const over1_5 = 100 - under1_5;
+        const over2_5 = 100 - under2_5;
+        const over3_5 = 100 - under3_5;
+        const over4_5 = 100 - under4_5;
 
-        const bttsYes = match.bttsMarket ? Math.round((match.bttsMarket.yes ?? 0) * 100) : null;
-        const bttsNo = match.bttsMarket ? Math.round((match.bttsMarket.no ?? 0) * 100) : null;
+        // Calculate BTTS via Poisson if missing: Yes = (1 - e^-xGA) * (1 - e^-xGB)
+        const bttsYes = match.bttsMarket 
+          ? Math.round((match.bttsMarket.yes ?? 0) * 100) 
+          : Math.round(((1 - Math.exp(-xGA)) * (1 - Math.exp(-xGB))) * 100);
+        const bttsNo = 100 - bttsYes;
 
         // SECTION 4 — DOUBLE CHANCE (derived mathematically)
         const dcHD = probA !== null && probD !== null ? Math.min(99, probA + probD) : null;
@@ -4154,12 +4161,18 @@ export default function App() {
         const dnbAway = dnbHome !== null ? 100 - dnbHome : null;
 
         // SECTION 6 — CLEAN SHEET
+        // csA: probability teamA keeps a clean sheet (teamB scores 0 goals) -> e^-xGB
+        // csB: probability teamB keeps a clean sheet (teamA scores 0 goals) -> e^-xGA
         const csA = match.cleanSheetMarket
           ? Math.round(match.cleanSheetMarket.home_clean_sheet * 100)
-          : (match.teamGoals ? Math.round((1 - match.teamGoals.away.over_0_5) * 100) : (match.cleanSheetA !== 0 ? match.cleanSheetA : null));
+          : (match.teamGoals 
+            ? Math.round((1 - match.teamGoals.away.over_0_5) * 100) 
+            : Math.round(Math.exp(-xGB) * 100));
         const csB = match.cleanSheetMarket
           ? Math.round(match.cleanSheetMarket.away_clean_sheet * 100)
-          : (match.teamGoals ? Math.round((1 - match.teamGoals.home.over_0_5) * 100) : (match.cleanSheetB !== 0 ? match.cleanSheetB : null));
+          : (match.teamGoals 
+            ? Math.round((1 - match.teamGoals.home.over_0_5) * 100) 
+            : Math.round(Math.exp(-xGA) * 100));
 
         // SECTION 7 — CORRECT SCORE MATRIX (Top 5 scorelines ranked)
         const formatScorelineLabel = (score: string) => {
@@ -4185,8 +4198,12 @@ export default function App() {
         const freshness = "Data updated dynamically (synchronized)";
 
         // SECTION 10 — SQUAD HEALTH
-        const missingKeyPlayersA = match.missingKeyPlayersA || (match.injuriesA.length > 0 ? [match.injuriesA[0]] : ["None"]);
-        const missingKeyPlayersB = match.missingKeyPlayersB || (match.injuriesB.length > 0 ? [match.injuriesB[0]] : ["None"]);
+        const missingKeyPlayersA = (match.missingKeyPlayersA && match.missingKeyPlayersA.length > 0)
+          ? match.missingKeyPlayersA
+          : (match.injuriesA.length > 0 ? [match.injuriesA[0]] : ["No missing key players"]);
+        const missingKeyPlayersB = (match.missingKeyPlayersB && match.missingKeyPlayersB.length > 0)
+          ? match.missingKeyPlayersB
+          : (match.injuriesB.length > 0 ? [match.injuriesB[0]] : ["No missing key players"]);
 
         // SECTION 11 — TOURNAMENT IMPACT PROJECTIONS
         const getGroupQualProb = (rank: number) => {
@@ -4308,12 +4325,14 @@ export default function App() {
                       <span className="text-[10px] font-mono text-zinc-600 block animate-pulse">Loading stats…</span>
                     ) : (
                       <span className="text-xs uppercase tracking-widest text-zinc-550 font-mono block">
-                        {match.fifaRankA ? `FIFA #${match.fifaRankA}` : '—'}
-                        {match.eloRankA ? ` · ELO #${match.eloRankA}` : ''}
+                        {match.fifaRankA ? `FIFA #${match.fifaRankA}` : 'FIFA: N/A'}
+                        {match.eloRankA ? ` · ELO #${match.eloRankA}` : ' · ELO: N/A'}
                       </span>
                     )}
                     <span className="text-xs font-mono text-zinc-400 block">
-                      {match.squadValueA && match.squadValueA !== 'Loading...' ? `${match.squadValueA} value` : (drawerTeamLoading ? '' : '— value')}
+                      {match.squadValueA && match.squadValueA !== 'Loading...' && match.squadValueA !== 'N/A' && match.squadValueA !== '—'
+                        ? `Squad Value: ${match.squadValueA}`
+                        : (drawerTeamLoading ? 'Loading squad value…' : 'Squad Value: N/A')}
                     </span>
                   </div>
 
@@ -4337,12 +4356,14 @@ export default function App() {
                       <span className="text-[10px] font-mono text-zinc-600 block animate-pulse">Loading stats…</span>
                     ) : (
                       <span className="text-xs uppercase tracking-widest text-zinc-550 font-mono block">
-                        {match.fifaRankB ? `FIFA #${match.fifaRankB}` : '—'}
-                        {match.eloRankB ? ` · ELO #${match.eloRankB}` : ''}
+                        {match.fifaRankB ? `FIFA #${match.fifaRankB}` : 'FIFA: N/A'}
+                        {match.eloRankB ? ` · ELO #${match.eloRankB}` : ' · ELO: N/A'}
                       </span>
                     )}
                     <span className="text-xs font-mono text-zinc-400 block">
-                      {match.squadValueB && match.squadValueB !== 'Loading...' ? `${match.squadValueB} value` : (drawerTeamLoading ? '' : '— value')}
+                      {match.squadValueB && match.squadValueB !== 'Loading...' && match.squadValueB !== 'N/A' && match.squadValueB !== '—'
+                        ? `Squad Value: ${match.squadValueB}`
+                        : (drawerTeamLoading ? 'Loading squad value…' : 'Squad Value: N/A')}
                     </span>
                   </div>
 
@@ -4691,35 +4712,43 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4 mt-2 font-mono text-[11px]">
                     <div>
                       <span className="text-zinc-500 block uppercase mb-1">{match.teamA} Form (Last 5):</span>
-                      <div className="flex gap-1">
-                        {match.recentFormA.map((res, id) => (
-                          <span key={id} className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${res === 'W' ? 'bg-green-950/40 text-green-accent border border-green-500/20' : res === 'D' ? 'bg-zinc-900 text-zinc-400' : 'bg-red-955/40 text-red-400'}`}>
-                            {res}
-                          </span>
-                        ))}
-                      </div>
+                      {match.recentFormA.length > 0 ? (
+                        <div className="flex gap-1">
+                          {match.recentFormA.map((res, id) => (
+                            <span key={id} className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${res === 'W' ? 'bg-green-950/40 text-green-accent border border-green-500/20' : res === 'D' ? 'bg-zinc-900 text-zinc-400' : 'bg-red-955/40 text-red-400'}`}>
+                              {res}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-550 italic text-[10px]">No recent fixtures</span>
+                      )}
                     </div>
                     <div>
-                      <span className="text-zinc-500 block uppercase mb-1">{match.teamB} Form (Last 5):</span>
-                      <div className="flex gap-1">
-                        {match.recentFormB.map((res, id) => (
-                          <span key={id} className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${res === 'W' ? 'bg-green-950/40 text-green-accent border border-green-500/20' : res === 'D' ? 'bg-zinc-900 text-zinc-400' : 'bg-red-955/40 text-red-105'}`}>
-                            {res}
-                          </span>
-                        ))}
-                      </div>
+                      <span className="text-zinc-550 block uppercase mb-1">{match.teamB} Form (Last 5):</span>
+                      {match.recentFormB.length > 0 ? (
+                        <div className="flex gap-1">
+                          {match.recentFormB.map((res, id) => (
+                            <span key={id} className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${res === 'W' ? 'bg-green-950/40 text-green-accent border border-green-500/20' : res === 'D' ? 'bg-zinc-900 text-zinc-400' : 'bg-red-955/40 text-red-105'}`}>
+                              {res}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-550 italic text-[10px]">No recent fixtures</span>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-zinc-900 font-mono text-[11px]">
                     <div className="space-y-1">
                       <span className="text-zinc-500 block uppercase mb-1">{match.teamA} Stats (Last 10):</span>
-                      <div className="flex justify-between"><span>BTTS Rate:</span> <span className="text-white font-bold">{match.bttsRateA !== undefined && match.bttsRateA !== 0 ? `${match.bttsRateA}%` : 'N/A'}</span></div>
-                      <div className="flex justify-between"><span>Clean Sheet Rate:</span> <span className="text-white font-bold">{match.cleanSheetA !== undefined && match.cleanSheetA !== 0 ? `${match.cleanSheetA}%` : 'N/A'}</span></div>
+                      <div className="flex justify-between"><span>BTTS Rate:</span> <span className="text-white font-bold">{match.bttsRateA !== null && match.bttsRateA !== undefined ? `${match.bttsRateA}%` : (drawerTeamLoading ? 'Loading…' : 'N/A')}</span></div>
+                      <div className="flex justify-between"><span>Clean Sheet Rate:</span> <span className="text-white font-bold">{match.cleanSheetA !== null && match.cleanSheetA !== undefined ? `${match.cleanSheetA}%` : (drawerTeamLoading ? 'Loading…' : 'N/A')}</span></div>
                     </div>
                     <div className="space-y-1">
                       <span className="text-zinc-500 block uppercase mb-1">{match.teamB} Stats (Last 10):</span>
-                      <div className="flex justify-between"><span>BTTS Rate:</span> <span className="text-white font-bold">{match.bttsRateB !== undefined && match.bttsRateB !== 0 ? `${match.bttsRateB}%` : 'N/A'}</span></div>
-                      <div className="flex justify-between"><span>Clean Sheet Rate:</span> <span className="text-white font-bold">{match.cleanSheetB !== undefined && match.cleanSheetB !== 0 ? `${match.cleanSheetB}%` : 'N/A'}</span></div>
+                      <div className="flex justify-between"><span>BTTS Rate:</span> <span className="text-white font-bold">{match.bttsRateB !== null && match.bttsRateB !== undefined ? `${match.bttsRateB}%` : (drawerTeamLoading ? 'Loading…' : 'N/A')}</span></div>
+                      <div className="flex justify-between"><span>Clean Sheet Rate:</span> <span className="text-white font-bold">{match.cleanSheetB !== null && match.cleanSheetB !== undefined ? `${match.cleanSheetB}%` : (drawerTeamLoading ? 'Loading…' : 'N/A')}</span></div>
                     </div>
                   </div>
                 </div>

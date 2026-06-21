@@ -199,6 +199,37 @@ def get_clean_sheet_probabilities(expected_home_goals: float, expected_away_goal
     }
 
 
+def get_1x2_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
+    """
+    Computes 1X2 probabilities (home win, draw, away win) by summing the joint distribution matrix.
+    """
+    home_win = 0.0
+    draw = 0.0
+    away_win = 0.0
+    for score, p in matrix.items():
+        parts = score.split('-')
+        h = int(parts[0])
+        a = int(parts[1])
+        if h > a:
+            home_win += p
+        elif h < a:
+            away_win += p
+        else:
+            draw += p
+    
+    total = home_win + draw + away_win
+    if total > 0:
+        home_win /= total
+        draw /= total
+        away_win /= total
+        
+    return {
+        "home_win_probability": round(home_win, 4),
+        "draw_probability":     round(draw, 4),
+        "away_win_probability": round(away_win, 4),
+    }
+
+
 def evaluate_poisson_engine(expected_home_goals: float, expected_away_goals: float) -> Dict[str, Any]:
     """
     Main entry point to calculate all markets from expected goals.
@@ -217,6 +248,7 @@ def evaluate_poisson_engine(expected_home_goals: float, expected_away_goals: flo
     asian_handicap  = get_asian_handicap_probabilities(expected_home_goals, expected_away_goals, matrix)
     team_goals      = get_team_goals_probabilities(expected_home_goals, expected_away_goals)
     clean_sheet     = get_clean_sheet_probabilities(expected_home_goals, expected_away_goals)
+    outcome_probs   = get_1x2_probabilities(matrix)
 
     return {
         "probability_matrix": prob_matrix_subset,
@@ -227,4 +259,5 @@ def evaluate_poisson_engine(expected_home_goals: float, expected_away_goals: flo
         "asian_handicap":     asian_handicap,
         "team_goals":         team_goals,
         "clean_sheet":        clean_sheet,
+        "outcome_probabilities": outcome_probs,
     }

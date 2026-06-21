@@ -70,10 +70,10 @@ export interface MatchPrediction {
   shotsB: number;
   shotsAllowedA: number;
   shotsAllowedB: number;
-  cleanSheetA: number; // %
-  cleanSheetB: number; // %
-  bttsRateA: number;   // %
-  bttsRateB: number;   // %
+  cleanSheetA: number | null; // %
+  cleanSheetB: number | null; // %
+  bttsRateA: number | null;   // %
+  bttsRateB: number | null;   // %
 
   // High-level details
   recentFormA: string[]; // e.g. ["W","W","D","W","L"]

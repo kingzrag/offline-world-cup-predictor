@@ -961,6 +961,17 @@ def get_fixtures_enriched(
                             "team_goals":        goals["team_goals"],
                         },
                     }
+                    if not fixture_pred:
+                        try:
+                            pred_1x2 = model_service.predict_1x2(db, home_t.id, away_t.id, match_date, competition_code)
+                            fixture_pred = {
+                                "predicted_outcome":  pred_1x2["predicted_outcome"],
+                                "home_probability":   pred_1x2["home_win_probability"],
+                                "away_probability":   pred_1x2["away_win_probability"],
+                                "draw_probability":   pred_1x2["draw_probability"],
+                            }
+                        except Exception as e1x2:
+                            logger.warning(f"Failed to predict_1x2 on-the-fly for match {m.id}: {e1x2}")
                 else:
                     # ML not ready: fallback to attack/defence rating Poisson only
                     match_date = m.utc_date.replace(tzinfo=timezone.utc) if m.utc_date else now_utc
@@ -988,6 +999,16 @@ def get_fixtures_enriched(
                             "team_goals":        poisson["team_goals"],
                         },
                     }
+                    if not fixture_pred:
+                        op = poisson["outcome_probabilities"]
+                        max_p = max(op["home_win_probability"], op["draw_probability"], op["away_win_probability"])
+                        outcome = "HOME_WIN" if max_p == op["home_win_probability"] else "AWAY_WIN" if max_p == op["away_win_probability"] else "DRAW"
+                        fixture_pred = {
+                            "predicted_outcome":  outcome,
+                            "home_probability":   op["home_win_probability"],
+                            "away_probability":   op["away_win_probability"],
+                            "draw_probability":   op["draw_probability"],
+                        }
             except Exception as exc:
                 logger.warning(f"[fixtures-enriched] enrichment failed for match {m.id}: {exc}")
                 errors += 1
