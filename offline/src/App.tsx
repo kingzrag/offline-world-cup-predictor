@@ -2117,11 +2117,37 @@ export default function App() {
               </div>
 
               {/* Ranks list */}
-              <div className="flex flex-col items-center justify-center py-12 px-4 bg-zinc-950/20 border border-dashed border-zinc-900 rounded-lg text-center">
-                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
-                  World Cup Winner Probabilities Coming Soon
-                </span>
-              </div>
+              {Object.keys(simulationResults).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 bg-zinc-950/20 border border-dashed border-zinc-900 rounded-lg text-center">
+                  <Loader2 className="w-5 h-5 text-green-accent animate-spin mb-2" />
+                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
+                    Loading Winner Probabilities...
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(simulationResults)
+                    .map(([teamName, res]) => ({
+                      name: teamName,
+                      winnerProb: (res as any).winner,
+                    }))
+                    .sort((a, b) => b.winnerProb - a.winnerProb)
+                    .slice(0, 5)
+                    .map((item, idx) => {
+                      const flag = getFlag(item.name);
+                      return (
+                        <div key={item.name} className="flex items-center justify-between font-mono text-[11px] bg-zinc-950/45 border border-zinc-900/60 p-2.5 rounded hover:border-zinc-800 transition-colors">
+                          <div className="flex items-center space-x-2.5">
+                            <span className="text-zinc-500">0{idx + 1}</span>
+                            <span className="text-sm select-none">{flag}</span>
+                            <span className="text-white font-sans font-medium">{item.name}</span>
+                          </div>
+                          <span className="text-green-accent font-bold">{item.winnerProb}%</span>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
 
               {/* Daily Insight Box from prompt */}
               <div className="bg-zinc-950 border border-zinc-900 rounded-lg p-5">
@@ -3607,7 +3633,7 @@ export default function App() {
                                 {standings[groupKey]?.map((team) => {
                                   const flag = getFlag(team.name);
                                   const sim = simulationResults[team.name];
-                                  const qualPct = sim ? Math.round(sim.r32) : null;
+                                  const qualPct = sim ? Math.round(sim.qualify_probability ?? sim.r32) : null;
                                   return (
                                     <tr key={team.id} className="hover:bg-zinc-900/20 transition-colors">
                                       <td className="py-2 text-center font-mono font-bold text-zinc-500">
@@ -4128,8 +4154,12 @@ export default function App() {
         const dnbAway = dnbHome !== null ? 100 - dnbHome : null;
 
         // SECTION 6 — CLEAN SHEET
-        const csA = match.teamGoals ? Math.round((1 - match.teamGoals.away.over_0_5) * 100) : null;
-        const csB = match.teamGoals ? Math.round((1 - match.teamGoals.home.over_0_5) * 100) : null;
+        const csA = match.cleanSheetMarket
+          ? Math.round(match.cleanSheetMarket.home_clean_sheet * 100)
+          : (match.teamGoals ? Math.round((1 - match.teamGoals.away.over_0_5) * 100) : (match.cleanSheetA !== 0 ? match.cleanSheetA : null));
+        const csB = match.cleanSheetMarket
+          ? Math.round(match.cleanSheetMarket.away_clean_sheet * 100)
+          : (match.teamGoals ? Math.round((1 - match.teamGoals.home.over_0_5) * 100) : (match.cleanSheetB !== 0 ? match.cleanSheetB : null));
 
         // SECTION 7 — CORRECT SCORE MATRIX (Top 5 scorelines ranked)
         const formatScorelineLabel = (score: string) => {
@@ -4214,8 +4244,8 @@ export default function App() {
         const simA = simulationResults[match.teamA];
         const simB = simulationResults[match.teamB];
 
-        let qualA = isKnockout ? Math.round(probA + 0.5 * probD) : (simA ? Math.round(simA.r32) : 50);
-        let qualB = isKnockout ? 100 - qualA : (simB ? Math.round(simB.r32) : 50);
+        let qualA = isKnockout ? Math.round(probA + 0.5 * probD) : (simA ? Math.round(simA.qualify_probability ?? simA.r32) : 50);
+        let qualB = isKnockout ? 100 - qualA : (simB ? Math.round(simB.qualify_probability ?? simB.r32) : 50);
 
         const standingA = findStanding(match.teamA);
         const standingB = findStanding(match.teamB);
@@ -4224,13 +4254,13 @@ export default function App() {
           ? "N/A (Knockout stage)"
           : (standingA
             ? `Currently ${standingA.position === 1 ? '1st' : standingA.position === 2 ? '2nd' : standingA.position === 3 ? '3rd' : '4th'} (${standingA.points} pts)`
-            : (simA ? `Projected Group Qualification: ${Math.round(simA.group_stage)}%` : "TBD"));
+            : (simA ? `Projected Group Qualification: ${Math.round(simA.qualify_probability ?? simA.r32)}%` : "TBD"));
 
         const groupPosB = isKnockout
           ? "N/A (Knockout stage)"
           : (standingB
             ? `Currently ${standingB.position === 1 ? '1st' : standingB.position === 2 ? '2nd' : standingB.position === 3 ? '3rd' : '4th'} (${standingB.points} pts)`
-            : (simB ? `Projected Group Qualification: ${Math.round(simB.group_stage)}%` : "TBD"));
+            : (simB ? `Projected Group Qualification: ${Math.round(simB.qualify_probability ?? simB.r32)}%` : "TBD"));
 
         const tournamentAdvA = simA
           ? `R16: ${Math.round(simA.r16)}% | QF: ${Math.round(simA.qf)}% | SF: ${Math.round(simA.sf)}% | Winner: ${Math.round(simA.winner)}%`

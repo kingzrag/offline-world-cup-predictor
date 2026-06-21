@@ -71,28 +71,20 @@ def get_btts_probabilities(expected_home_goals: float, expected_away_goals: floa
 
 def get_over_under_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, Dict[str, float]]:
     """
-    Calculates Over/Under probabilities for 1.5, 2.5, and 3.5 lines.
-    Using total expected goals as lambda since sum of independent Poissons is Poisson.
+    Calculates Over/Under probabilities for 0.5, 1.5, 2.5, 3.5, and 4.5 lines.
+    Uses total expected goals as lambda (sum of independent Poissons is Poisson).
     """
     total_lambda = max(0.0001, expected_home_goals + expected_away_goals)
-    
-    # Under 1.5: H+A <= 1
-    under_1_5 = float(scipy.stats.poisson.cdf(1, total_lambda))
-    over_1_5 = 1.0 - under_1_5
-    
-    # Under 2.5: H+A <= 2
-    under_2_5 = float(scipy.stats.poisson.cdf(2, total_lambda))
-    over_2_5 = 1.0 - under_2_5
-    
-    # Under 3.5: H+A <= 3
-    under_3_5 = float(scipy.stats.poisson.cdf(3, total_lambda))
-    over_3_5 = 1.0 - under_3_5
-    
-    return {
-        "1.5": {"over": round(over_1_5, 4), "under": round(under_1_5, 4)},
-        "2.5": {"over": round(over_2_5, 4), "under": round(under_2_5, 4)},
-        "3.5": {"over": round(over_3_5, 4), "under": round(under_3_5, 4)}
-    }
+
+    results = {}
+    for line in (0.5, 1.5, 2.5, 3.5, 4.5):
+        # Under line: H+A <= floor(line)  (since line is .5, floor == int part)
+        k = int(line)  # 0, 1, 2, 3, 4
+        under = float(scipy.stats.poisson.cdf(k, total_lambda))
+        over  = 1.0 - under
+        results[str(line)] = {"over": round(over, 4), "under": round(under, 4)}
+
+    return results
 
 def get_asian_handicap_probabilities(expected_home_goals: float, expected_away_goals: float, matrix: Dict[str, float]) -> Dict[str, Any]:
     """
@@ -191,30 +183,48 @@ def get_team_goals_probabilities(expected_home_goals: float, expected_away_goals
         }
     }
 
+def get_clean_sheet_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, float]:
+    """
+    Clean sheet probability = P(opponent scores 0 goals) = e^(-lambda).
+    home_clean_sheet: probability the HOME team keeps a clean sheet (away scores 0).
+    away_clean_sheet: probability the AWAY team keeps a clean sheet (home scores 0).
+    """
+    lam_h = max(0.0001, expected_home_goals)
+    lam_a = max(0.0001, expected_away_goals)
+    home_cs = float(scipy.stats.poisson.pmf(0, lam_a))   # away scores 0
+    away_cs = float(scipy.stats.poisson.pmf(0, lam_h))   # home scores 0
+    return {
+        "home_clean_sheet": round(home_cs, 4),
+        "away_clean_sheet": round(away_cs, 4),
+    }
+
+
 def evaluate_poisson_engine(expected_home_goals: float, expected_away_goals: float) -> Dict[str, Any]:
     """
     Main entry point to calculate all markets from expected goals.
+    Returns BTTS, O/U (0.5–4.5), scorelines, clean sheet, team goals, asian handicap.
     """
     matrix = calculate_probability_matrix(expected_home_goals, expected_away_goals)
-    
-    # Filter matrix to the requested scorelines for Step 7:
+
     requested_scores = [
         "0-0", "1-0", "1-1", "2-0", "2-1", "2-2", "3-0", "3-1", "3-2", "3-3", "4-0", "4-1", "4-2", "4-3", "4-4"
     ]
     prob_matrix_subset = {score: round(matrix.get(score, 0.0), 4) for score in requested_scores}
-    
-    correct_scores = get_correct_scores(matrix)
-    btts = get_btts_probabilities(expected_home_goals, expected_away_goals)
-    over_under = get_over_under_probabilities(expected_home_goals, expected_away_goals)
-    asian_handicap = get_asian_handicap_probabilities(expected_home_goals, expected_away_goals, matrix)
-    team_goals = get_team_goals_probabilities(expected_home_goals, expected_away_goals)
-    
+
+    correct_scores  = get_correct_scores(matrix)
+    btts            = get_btts_probabilities(expected_home_goals, expected_away_goals)
+    over_under      = get_over_under_probabilities(expected_home_goals, expected_away_goals)
+    asian_handicap  = get_asian_handicap_probabilities(expected_home_goals, expected_away_goals, matrix)
+    team_goals      = get_team_goals_probabilities(expected_home_goals, expected_away_goals)
+    clean_sheet     = get_clean_sheet_probabilities(expected_home_goals, expected_away_goals)
+
     return {
         "probability_matrix": prob_matrix_subset,
-        "most_likely_score": correct_scores["most_likely_score"],
-        "top_5_scorelines": correct_scores["top_5_scorelines"],
-        "btts": btts,
-        "over_under": over_under,
-        "asian_handicap": asian_handicap,
-        "team_goals": team_goals
+        "most_likely_score":  correct_scores["most_likely_score"],
+        "top_5_scorelines":   correct_scores["top_5_scorelines"],
+        "btts":               btts,
+        "over_under":         over_under,
+        "asian_handicap":     asian_handicap,
+        "team_goals":         team_goals,
+        "clean_sheet":        clean_sheet,
     }

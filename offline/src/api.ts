@@ -30,6 +30,7 @@ import type {
   ScorelineProbability,
   AsianHandicap,
   TeamGoalMarket,
+  CleanSheetMarket,
 } from "./types";
 import { formatKickoffDateLocal } from "./dateTimeUtils";
 import { MOCK_MATCHES } from "./data";
@@ -202,6 +203,30 @@ export interface BackendFixture {
     home_probability: number;
     away_probability: number;
     draw_probability: number;
+  } | null;
+}
+
+export interface BackendFixtureEnriched extends BackendFixture {
+  enrichment?: {
+    goals: {
+      home_xg: number;
+      away_xg: number;
+      total_xg: number;
+    };
+    markets: {
+      btts: BTTSMarket;
+      over_under: {
+        "0.5"?: OverUnderLine;
+        "1.5": OverUnderLine;
+        "2.5": OverUnderLine;
+        "3.5": OverUnderLine;
+        "4.5"?: OverUnderLine;
+      };
+      clean_sheet: CleanSheetMarket;
+      most_likely_score: string;
+      top_5_scorelines: ScorelineProbability[];
+      team_goals: TeamGoalMarket;
+    };
   } | null;
 }
 
@@ -399,6 +424,38 @@ export async function getFixtures(
 }
 
 /**
+ * GET /fastapi/fixtures-enriched?status=&stage=&group=&date_from=&date_to=&limit=&competition_code=
+ *
+ * Defaults: competition_code=WC, limit=200
+ * All parameters are optional.
+ */
+export async function getFixturesEnriched(
+  params: {
+    status?: string;
+    stage?: string;
+    group?: string;
+    date_from?: string;       // YYYY-MM-DD
+    date_to?: string;         // YYYY-MM-DD
+    competition_code?: string;
+    limit?: number;
+    year?: number;
+    show_historical?: boolean;
+  } = {}
+): Promise<{ status: string; competition: string; count: number; fixtures: BackendFixtureEnriched[] }> {
+  const qs = new URLSearchParams();
+  if (params.status)           qs.set("status",           params.status);
+  if (params.stage)            qs.set("stage",            params.stage);
+  if (params.group)            qs.set("group",            params.group);
+  if (params.date_from)        qs.set("date_from",        params.date_from);
+  if (params.date_to)          qs.set("date_to",          params.date_to);
+  if (params.competition_code) qs.set("competition_code", params.competition_code);
+  if (params.limit != null)    qs.set("limit",            String(params.limit));
+  if (params.year != null)     qs.set("year",             String(params.year));
+  if (params.show_historical !== undefined) qs.set("show_historical", String(params.show_historical));
+  return apiFetch(`/fixtures-enriched?${qs.toString()}`);
+}
+
+/**
  * GET /fastapi/health
  */
 export async function checkHealth(signal?: AbortSignal): Promise<BackendHealth> {
@@ -490,7 +547,7 @@ export function mapBackendPrediction(
 
 // ── Primary consumer: load all predictions ────────────────────────────────────
 
-export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
+export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriched): MatchPrediction {
   const teamA = f.home_team?.name ?? "Unknown";
   const teamB = f.away_team?.name ?? "Unknown";
   const teamACode = f.home_team?.tla || f.home_team?.short_name || teamA.substring(0, 3).toUpperCase();
@@ -548,7 +605,9 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     modelConfidence = 1.0;
   }
 
-  return {
+  const enrichment = (f as any).enrichment;
+
+  const predictionObj: MatchPrediction = {
     id: String(f.id),
     teamA,
     teamB,
@@ -568,19 +627,22 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     liveScore: f.live_score ?? null,
     winner: f.winner,
     minute: f.live_minute ?? null,
-    ...(f.prediction ? { isLiveData: true } : {}),
+    ...(f.prediction || enrichment ? { isLiveData: true } : {}),
 
     // Default neutral placeholders for stats loaded dynamically in the match drawer
     attackA: 80, attackB: 80,
     defenceA: 80, defenceB: 80,
     midfieldA: 80, midfieldB: 80,
-    xGA: f.live_score?.home ?? 0, xGB: f.live_score?.away ?? 0,
+    xGA: enrichment ? enrichment.goals.home_xg : (f.live_score?.home ?? 0),
+    xGB: enrichment ? enrichment.goals.away_xg : (f.live_score?.away ?? 0),
     xGAA: 1.0, xGAB: 1.0,
     possessionA: 50, possessionB: 50,
     shotsA: 12.0, shotsB: 12.0,
     shotsAllowedA: 10.0, shotsAllowedB: 10.0,
-    cleanSheetA: 0, cleanSheetB: 0,
-    bttsRateA: 0, bttsRateB: 0,
+    cleanSheetA: enrichment && enrichment.markets?.clean_sheet ? Math.round(enrichment.markets.clean_sheet.home_clean_sheet * 100) : 0,
+    cleanSheetB: enrichment && enrichment.markets?.clean_sheet ? Math.round(enrichment.markets.clean_sheet.away_clean_sheet * 100) : 0,
+    bttsRateA: enrichment && enrichment.markets?.btts ? Math.round(enrichment.markets.btts.yes * 100) : 0,
+    bttsRateB: enrichment && enrichment.markets?.btts ? Math.round(enrichment.markets.btts.yes * 100) : 0,
     // ── These are now loaded dynamically via getTeamProfile + getH2h ──────────
     recentFormA: [],
     recentFormB: [],
@@ -605,9 +667,11 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
     // If completed, add btts and correct scoreline indicators
     ...(statusMapped === "COMPLETED" && {
       overUnder: {
+        "0.5": { over: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 0.5 ? 1 : 0, under: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 0.5 ? 0 : 1 },
         "1.5": { over: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 1.5 ? 1 : 0, under: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 1.5 ? 0 : 1 },
         "2.5": { over: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 2.5 ? 1 : 0, under: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 2.5 ? 0 : 1 },
         "3.5": { over: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 3.5 ? 1 : 0, under: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 3.5 ? 0 : 1 },
+        "4.5": { over: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 4.5 ? 1 : 0, under: (f.live_score?.home ?? 0) + (f.live_score?.away ?? 0) > 4.5 ? 0 : 1 },
       },
       bttsMarket: {
         yes: (f.live_score?.home ?? 0) > 0 && (f.live_score?.away ?? 0) > 0 ? 1 : 0,
@@ -631,6 +695,18 @@ export function mapFixtureToPrediction(f: BackendFixture): MatchPrediction {
       }
     })
   };
+
+  if (enrichment) {
+    predictionObj.totalExpectedGoals = enrichment.goals.total_xg;
+    predictionObj.overUnder = enrichment.markets.over_under;
+    predictionObj.bttsMarket = enrichment.markets.btts;
+    predictionObj.mostLikelyScore = enrichment.markets.most_likely_score;
+    predictionObj.top5Scorelines = enrichment.markets.top_5_scorelines;
+    predictionObj.cleanSheetMarket = enrichment.markets.clean_sheet;
+    predictionObj.teamGoals = enrichment.markets.team_goals;
+  }
+
+  return predictionObj;
 }
 
 
@@ -844,13 +920,26 @@ export async function loadFixturesInstant(
   const t0 = performance.now();
 
   console.log("[perf] ► fixtures fetch start");
-  const fixturesResponse = await getFixtures({
-    competition_code: "WC",
-    limit: 500,
-    year,
-    show_historical: showHistorical,
-  });
-  const fixtures = fixturesResponse.fixtures || [];
+  let fixtures: (BackendFixture | BackendFixtureEnriched)[] = [];
+  try {
+    const fixturesResponse = await getFixturesEnriched({
+      competition_code: "WC",
+      limit: 500,
+      year,
+      show_historical: showHistorical,
+    });
+    fixtures = fixturesResponse.fixtures || [];
+  } catch (err: any) {
+    console.warn("[api] getFixturesEnriched failed, falling back to standard getFixtures:", err?.message);
+    if (signal?.aborted) throw err;
+    const fixturesResponse = await getFixtures({
+      competition_code: "WC",
+      limit: 500,
+      year,
+      show_historical: showHistorical,
+    });
+    fixtures = fixturesResponse.fixtures || [];
+  }
   const t1 = performance.now();
   console.log(`[perf] fixtures fetch time: ${(t1 - t0).toFixed(0)} ms  (${fixtures.length} fixtures)`);
 
@@ -1289,6 +1378,7 @@ export async function getModelPerformance(): Promise<ModelPerformanceStats> {
 
 export interface TeamSimulationResult {
   group_stage: number;
+  qualify_probability?: number;
   r32: number;
   r16: number;
   qf: number;

@@ -817,3 +817,210 @@ def api_health():
         "model_versions": versions,
         "timestamp":   time.time(),
     }
+
+
+@router.get("/fixtures-enriched", summary="Fixtures with pre-computed Poisson markets for all matches")
+def get_fixtures_enriched(
+    competition_code: str = Query("WC", description="Competition code"),
+    limit: int = Query(200, ge=1, le=500, description="Max fixtures to return"),
+    year: Optional[int] = Query(None, description="Filter by kickoff year, e.g. 2026"),
+    show_historical: bool = Query(False, description="Include historical matches"),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns fixtures with embedded Poisson-derived market data for every match.
+
+    For UPCOMING/TIMED matches: runs ML goal model + Poisson engine to produce:
+      - goals.home_xg, goals.away_xg, goals.total_xg
+      - markets.btts (yes/no)
+      - markets.over_under (0.5 – 4.5)
+      - markets.clean_sheet (home/away)
+      - markets.top_5_scorelines
+      - markets.most_likely_score
+
+    For FINISHED matches: actual score is used, markets are computed from real goals.
+
+    This endpoint replaces the need for a separate /predict-batch call for the
+    Intelligence Hub and match cards — all data is returned in a single request.
+    """
+    from models import Match, Competition, Team
+    from ml.features import get_attack_rating, get_defence_rating
+    from services.poisson_engine import evaluate_poisson_engine
+    from sqlalchemy import extract
+    from sqlalchemy.orm import joinedload, selectinload
+
+    t_start = time.perf_counter()
+
+    comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail=f"Competition '{competition_code}' not found.")
+
+    query = (
+        db.query(Match)
+        .options(joinedload(Match.home_team), joinedload(Match.away_team), selectinload(Match.predictions))
+        .filter(Match.competition_id == comp.id)
+    )
+
+    if year:
+        query = query.filter(extract("year", Match.utc_date) == year)
+    elif not show_historical:
+        query = query.filter(extract("year", Match.utc_date) >= 2026)
+
+    from sqlalchemy import case
+    m_year = extract("year", Match.utc_date)
+    tier_case = case(
+        (Match.status.in_({"IN_PLAY", "PAUSED"}), 0),
+        ((m_year >= 2026) & (Match.status != "FINISHED"), 1),
+        ((m_year >= 2026) & (Match.status == "FINISHED"), 2),
+        else_=3,
+    )
+    asc_date  = case((tier_case.in_({0, 1}), Match.utc_date), else_=None)
+    desc_date = case((tier_case.in_({2, 3}), Match.utc_date), else_=None)
+    query = query.order_by(tier_case.asc(), asc_date.asc(), desc_date.desc())
+
+    matches = query.limit(limit).all()
+
+    now_utc = datetime.now(timezone.utc)
+    live_statuses  = {"IN_PLAY", "PAUSED"}
+    score_statuses = live_statuses | {"FINISHED"}
+
+    fixtures_out = []
+    errors = 0
+
+    for m in matches:
+        # ── Base fixture fields ───────────────────────────────────────────────
+        kt = m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None
+
+        home_t = m.home_team
+        away_t = m.away_team
+
+        def _team(t):
+            if not t:
+                return None
+            return {"id": t.id, "name": t.name, "short_name": t.short_name, "tla": t.tla, "crest_url": t.crest_url}
+
+        live_score = None
+        if m.status in score_statuses and m.home_score is not None and m.away_score is not None:
+            live_score = {"home": m.home_score, "away": m.away_score, "is_live": m.status in live_statuses}
+
+        stored_pred = m.predictions[0] if m.predictions else None
+        fixture_pred = None
+        if stored_pred:
+            fixture_pred = {
+                "predicted_outcome":  stored_pred.predicted_outcome,
+                "home_probability":   stored_pred.home_probability,
+                "away_probability":   stored_pred.away_probability,
+                "draw_probability":   stored_pred.draw_probability,
+            }
+
+        # ── Compute enrichment ────────────────────────────────────────────────
+        enrichment = None
+        if home_t and away_t:
+            try:
+                if m.status == "FINISHED" and m.home_score is not None and m.away_score is not None:
+                    # Use actual goals as xG for completed matches
+                    h_xg = float(m.home_score)
+                    a_xg = float(m.away_score)
+                    total_xg = h_xg + a_xg
+                    poisson = evaluate_poisson_engine(max(h_xg, 0.01), max(a_xg, 0.01))
+                    enrichment = {
+                        "goals": {
+                            "home_xg":   h_xg,
+                            "away_xg":   a_xg,
+                            "total_xg":  total_xg,
+                        },
+                        "markets": {
+                            "btts":              poisson["btts"],
+                            "over_under":        poisson["over_under"],
+                            "clean_sheet":       poisson["clean_sheet"],
+                            "most_likely_score": f"{m.home_score}-{m.away_score}",
+                            "top_5_scorelines":  poisson["top_5_scorelines"],
+                            "team_goals":        poisson["team_goals"],
+                        },
+                    }
+                elif model_service.is_ready:
+                    # Use ML goal model for upcoming/live matches
+                    match_date = m.utc_date.replace(tzinfo=timezone.utc) if m.utc_date else now_utc
+                    goals = model_service.predict_goals(db, home_t.id, away_t.id, match_date, competition_code)
+                    poisson_data = evaluate_poisson_engine(
+                        max(goals["expected_home_goals"], 0.01),
+                        max(goals["expected_away_goals"], 0.01),
+                    )
+                    enrichment = {
+                        "goals": {
+                            "home_xg":   goals["expected_home_goals"],
+                            "away_xg":   goals["expected_away_goals"],
+                            "total_xg":  goals["total_expected_goals"],
+                        },
+                        "markets": {
+                            "btts":              goals["btts"],
+                            "over_under":        goals["over_under"],
+                            "clean_sheet":       goals["clean_sheet"],
+                            "most_likely_score": goals["most_likely_score"],
+                            "top_5_scorelines":  goals["top_5_scorelines"],
+                            "team_goals":        goals["team_goals"],
+                        },
+                    }
+                else:
+                    # ML not ready: fallback to attack/defence rating Poisson only
+                    match_date = m.utc_date.replace(tzinfo=timezone.utc) if m.utc_date else now_utc
+                    h_atk = get_attack_rating(db, home_t.id, match_date)
+                    a_atk = get_attack_rating(db, away_t.id, match_date)
+                    h_def = get_defence_rating(db, home_t.id, match_date)
+                    a_def = get_defence_rating(db, away_t.id, match_date)
+                    # xG = attacker's avg goals, adjusted by opponent defence
+                    league_avg = 1.35
+                    h_xg = max(0.3, h_atk * (a_def / league_avg) if a_def > 0 else h_atk)
+                    a_xg = max(0.3, a_atk * (h_def / league_avg) if h_def > 0 else a_atk)
+                    poisson = evaluate_poisson_engine(h_xg, a_xg)
+                    enrichment = {
+                        "goals": {
+                            "home_xg":   round(h_xg, 4),
+                            "away_xg":   round(a_xg, 4),
+                            "total_xg":  round(h_xg + a_xg, 4),
+                        },
+                        "markets": {
+                            "btts":              poisson["btts"],
+                            "over_under":        poisson["over_under"],
+                            "clean_sheet":       poisson["clean_sheet"],
+                            "most_likely_score": poisson["most_likely_score"],
+                            "top_5_scorelines":  poisson["top_5_scorelines"],
+                            "team_goals":        poisson["team_goals"],
+                        },
+                    }
+            except Exception as exc:
+                logger.warning(f"[fixtures-enriched] enrichment failed for match {m.id}: {exc}")
+                errors += 1
+
+        fixture = {
+            "id":            m.id,
+            "kickoff_time":  kt,
+            "status":        m.status,
+            "stage":         m.stage,
+            "group":         m.group,
+            "venue":         home_t.venue if home_t else None,
+            "competition":   comp.name,
+            "home_team":     _team(home_t),
+            "away_team":     _team(away_t),
+            "live_score":    live_score,
+            "winner":        m.winner,
+            "live_minute":   m.live_minute,
+            "prediction":    fixture_pred,
+            "enrichment":    enrichment,  # null if teams unknown
+        }
+        fixtures_out.append(fixture)
+
+    elapsed_ms = int((time.perf_counter() - t_start) * 1000)
+    logger.info(
+        f"GET /fixtures-enriched  {len(fixtures_out)} fixtures in {elapsed_ms}ms "
+        f"({errors} enrichment errors)"
+    )
+
+    return {
+        "status":      "success",
+        "competition": comp.name,
+        "count":       len(fixtures_out),
+        "elapsed_ms":  elapsed_ms,
+        "fixtures":    fixtures_out,
+    }
+

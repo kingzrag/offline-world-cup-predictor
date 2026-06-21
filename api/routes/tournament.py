@@ -602,6 +602,7 @@ def run_tournament_simulation(db: Session = Depends(get_db)):
         "tla": t.tla,
         "crest_url": t.crest_url,
         "group_stage": 0,
+        "qualify": 0,   # finished top-2 in group (qualified for R32)
         "r32": 0,
         "r16": 0,
         "qf": 0,
@@ -713,6 +714,7 @@ def run_tournament_simulation(db: Session = Depends(get_db)):
 
         for s in seeds:
             sim_counts[s["id"]]["group_stage"] += 1
+            sim_counts[s["id"]]["qualify"] += 1
             sim_counts[s["id"]]["r32"] += 1
 
         def sim_ko_winner(t1_id: int, t2_id: int) -> int:
@@ -770,13 +772,14 @@ def run_tournament_simulation(db: Session = Depends(get_db)):
     for tid, counts in sim_counts.items():
         name = counts["name"]
         res_dict[name] = {
-            "group_stage": round((counts["group_stage"] / num_simulations) * 100, 1),
-            "r32": round((counts["r32"] / num_simulations) * 100, 1),
-            "r16": round((counts["r16"] / num_simulations) * 100, 1),
-            "qf": round((counts["qf"] / num_simulations) * 100, 1),
-            "sf": round((counts["sf"] / num_simulations) * 100, 1),
-            "final": round((counts["final"] / num_simulations) * 100, 1),
-            "winner": round((counts["winner"] / num_simulations) * 100, 1)
+            "group_stage":        round((counts["group_stage"] / num_simulations) * 100, 1),
+            "qualify_probability": round((counts["qualify"]     / num_simulations) * 100, 1),
+            "r32":                round((counts["r32"]          / num_simulations) * 100, 1),
+            "r16":                round((counts["r16"]          / num_simulations) * 100, 1),
+            "qf":                 round((counts["qf"]           / num_simulations) * 100, 1),
+            "sf":                 round((counts["sf"]           / num_simulations) * 100, 1),
+            "final":              round((counts["final"]        / num_simulations) * 100, 1),
+            "winner":             round((counts["winner"]       / num_simulations) * 100, 1),
         }
 
     return {

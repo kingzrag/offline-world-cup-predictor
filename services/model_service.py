@@ -203,12 +203,8 @@ class ModelService:
             "expected_home_goals":  round(expected_home, 4),
             "expected_away_goals":  round(expected_away, 4),
             "total_expected_goals": round(total_goals, 4),
-            # Over / Under
-            "over_under": {
-                "1.5": ou["1.5"],
-                "2.5": ou["2.5"],
-                "3.5": ou["3.5"],
-            },
+            # Over / Under (0.5 – 4.5)
+            "over_under": poisson["over_under"],
             # BTTS
             "btts": {
                 "yes": btts["btts_yes"],
@@ -219,12 +215,14 @@ class ModelService:
             "top_5_scorelines":   poisson["top_5_scorelines"],
             # Asian handicap
             "asian_handicap": {
-                "label":       asian_handicap_label,
-                "lines":       poisson["asian_handicap"]["suggested_lines"],
+                "label":        asian_handicap_label,
+                "lines":        poisson["asian_handicap"]["suggested_lines"],
                 "favored_team": poisson["asian_handicap"]["favored_team_prefix"],
             },
             # Team goals
             "team_goals":          poisson["team_goals"],
+            # Clean sheet (Poisson P(0) = e^(-lambda))
+            "clean_sheet":         poisson["clean_sheet"],
             # Full probability matrix
             "probability_matrix":  poisson["probability_matrix"],
             "model_version":       self._goal_bundle.get("version", "v1.0"),
@@ -374,7 +372,7 @@ class ModelService:
                     "predicted_result":     predicted_result,
                     "confidence":           1.0,
                 },
-                # Goals
+                # Goals (actual score used as xG for completed matches)
                 "goals": {
                     "expected_home_goals":  float(home_score),
                     "expected_away_goals":  float(away_score),
@@ -389,6 +387,11 @@ class ModelService:
                     "asian_handicap":      asian_handicap,
                     "team_goals":          team_goals,
                     "probability_matrix":  prob_matrix,
+                    # Clean sheet — binary for completed matches
+                    "clean_sheet": {
+                        "home_clean_sheet": 1.0 if away_score == 0 else 0.0,
+                        "away_clean_sheet": 1.0 if home_score == 0 else 0.0,
+                    },
                 },
                 "model_versions": {
                     "wc_model":   "actual_result_override",
@@ -417,7 +420,7 @@ class ModelService:
                 "expected_away_goals":  result_goals["expected_away_goals"],
                 "total_expected_goals": result_goals["total_expected_goals"],
             },
-            # Markets
+            # Markets (now includes clean_sheet and O/U 0.5–4.5)
             "markets": {
                 "over_under":          result_goals["over_under"],
                 "btts":                result_goals["btts"],
@@ -426,6 +429,7 @@ class ModelService:
                 "asian_handicap":      result_goals["asian_handicap"],
                 "team_goals":          result_goals["team_goals"],
                 "probability_matrix":  result_goals["probability_matrix"],
+                "clean_sheet":         result_goals["clean_sheet"],
             },
             "model_versions": {
                 "wc_model":   result_1x2["model_version"],

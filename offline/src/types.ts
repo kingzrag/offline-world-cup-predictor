@@ -10,6 +10,11 @@ export interface BTTSMarket {
   no: number;   // probability 0–1
 }
 
+export interface CleanSheetMarket {
+  home_clean_sheet: number;  // P(away scores 0) — 0–1
+  away_clean_sheet: number;  // P(home scores 0) — 0–1
+}
+
 export interface ScorelineProbability {
   score: string;       // e.g. "1-0"
   probability: number; // 0–1
@@ -107,11 +112,14 @@ export interface MatchPrediction {
 
   // ── Live backend market fields (populated when FastAPI responds) ─────────────
   overUnder?: {
+    "0.5"?: OverUnderLine;
     "1.5": OverUnderLine;
     "2.5": OverUnderLine;
     "3.5": OverUnderLine;
+    "4.5"?: OverUnderLine;
   };
   bttsMarket?: BTTSMarket;
+  cleanSheetMarket?: CleanSheetMarket;  // Poisson-derived clean sheet probabilities
   mostLikelyScore?: string;
   top5Scorelines?: ScorelineProbability[];
   asianHandicap?: AsianHandicap;
@@ -121,6 +129,16 @@ export interface MatchPrediction {
   };
   totalExpectedGoals?: number;
   modelConfidence?: number;
+
+  // Monte Carlo qualification & advancement (from /tournament/simulation)
+  qualifyProbA?: number;  // 0–100 probability teamA qualifies from group
+  qualifyProbB?: number;  // 0–100 probability teamB qualifies from group
+  advancementA?: {
+    r32: number; r16: number; qf: number; sf: number; final: number; champion: number;
+  };
+  advancementB?: {
+    r32: number; r16: number; qf: number; sf: number; final: number; champion: number;
+  };
 
   /** Set to true when this record was enriched by the live FastAPI model */
   isLiveData?: boolean;
