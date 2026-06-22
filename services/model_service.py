@@ -202,8 +202,36 @@ class ModelService:
 
         feature_vec = np.array([feature_vals])
 
-        expected_home = max(0.0, float(home_model.predict(feature_vec)[0]))
-        expected_away = max(0.0, float(away_model.predict(feature_vec)[0]))
+        raw_home = float(home_model.predict(feature_vec)[0])
+        raw_away = float(away_model.predict(feature_vec)[0])
+        logger.info(
+            f"[predict_goals] RAW OUTPUTS: "
+            f"{_home_name}={raw_home:.4f}, "
+            f"{_away_name}={raw_away:.4f}"
+        )
+
+        expected_home = max(0.0, raw_home)
+        expected_away = max(0.0, raw_away)
+        clipped_home = raw_home != expected_home
+        clipped_away = raw_away != expected_away
+
+        logger.info(
+            f"[predict_goals] CLIPPED OUTPUTS: "
+            f"{_home_name}={expected_home:.4f}, "
+            f"{_away_name}={expected_away:.4f}"
+        )
+        if clipped_home or clipped_away:
+            logger.info(
+                f"[predict_goals] Clipping occurred: "
+                f"home={'yes' if clipped_home else 'no'}, "
+                f"away={'yes' if clipped_away else 'no'}"
+            )
+        if raw_home < 0 or raw_away < 0:
+            logger.warning(
+                f"[predict_goals] Negative prediction detected before clipping: "
+                f"home={raw_home:.4f}, away={raw_away:.4f}"
+            )
+
         total_goals   = expected_home + expected_away
 
         logger.info(f"[predict_goals] Expected Goals predicted: {_home_name}={expected_home:.4f}, {_away_name}={expected_away:.4f}, Total={total_goals:.4f}")
