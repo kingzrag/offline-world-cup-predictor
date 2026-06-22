@@ -62,6 +62,80 @@ class BatchPredictRequest(BaseModel):
 # Key: "home_team|away_team|competition_code"   Value: (result_dict, expiry_ts)
 PREDICTION_CACHE_TTL_SECONDS: int = 15 * 60   # 15 minutes
 _prediction_cache: Dict[str, Tuple[Any, float]] = {}
+# Key: match_id (int)   Value: (enrichment_dict, expiry_ts) — populated by /predict-batch
+_enrichment_cache_by_match_id: Dict[int, Tuple[Any, float]] = {}
+
+
+def _build_enrichment_from_xg(
+    h_xg: float,
+    a_xg: float,
+    *,
+    most_likely_score: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build response enrichment from stored xG using fast Poisson math (no ML)."""
+    from services.poisson_engine import evaluate_poisson_engine
+
+    poisson = evaluate_poisson_engine(max(h_xg, 0.01), max(a_xg, 0.01))
+    return {
+        "goals": {
+            "home_xg":  h_xg,
+            "away_xg":  a_xg,
+            "total_xg": round(h_xg + a_xg, 4),
+        },
+        "markets": {
+            "btts":              poisson["btts"],
+            "over_under":        poisson["over_under"],
+            "clean_sheet":       poisson["clean_sheet"],
+            "most_likely_score": most_likely_score or poisson["most_likely_score"],
+            "top_5_scorelines":  poisson["top_5_scorelines"],
+            "team_goals":        poisson["team_goals"],
+        },
+    }
+
+
+def _build_enrichment_from_prediction(pred_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a full model_service.predict() payload to fixtures-enriched enrichment."""
+    goals = pred_dict["goals"]
+    markets = pred_dict["markets"]
+    return {
+        "goals": {
+            "home_xg":  goals["expected_home_goals"],
+            "away_xg":  goals["expected_away_goals"],
+            "total_xg": goals["total_expected_goals"],
+        },
+        "markets": {
+            "btts":              markets["btts"],
+            "over_under":        markets["over_under"],
+            "clean_sheet":       markets.get("clean_sheet"),
+            "most_likely_score": markets["most_likely_score"],
+            "top_5_scorelines":  markets["top_5_scorelines"],
+            "team_goals":        markets["team_goals"],
+        },
+    }
+
+
+def _lookup_cached_enrichment(
+    match_id: int,
+    home_name: str,
+    away_name: str,
+    competition_code: str,
+    now: float,
+) -> Optional[Dict[str, Any]]:
+    """Return in-memory cached enrichment if still valid (fallback when DB xG absent)."""
+    cached_by_id = _enrichment_cache_by_match_id.get(match_id)
+    if cached_by_id:
+        enrichment, expiry = cached_by_id
+        if now <= expiry:
+            return enrichment
+        del _enrichment_cache_by_match_id[match_id]
+
+    cache_key = f"{home_name.strip()}|{away_name.strip()}|{competition_code}"
+    cached_entry = _prediction_cache.get(cache_key)
+    if cached_entry:
+        pred_dict, expiry = cached_entry
+        if now <= expiry:
+            return _build_enrichment_from_prediction(pred_dict)
+    return None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -197,6 +271,16 @@ def predict_batch(
             )
             # Store in cache
             _prediction_cache[cache_key] = (prediction, now + PREDICTION_CACHE_TTL_SECONDS)
+            enrichment_payload = _build_enrichment_from_prediction(prediction)
+            if item.match_id is not None:
+                try:
+                    mid = int(item.match_id)
+                    _enrichment_cache_by_match_id[mid] = (
+                        enrichment_payload,
+                        now + PREDICTION_CACHE_TTL_SECONDS,
+                    )
+                except (TypeError, ValueError):
+                    pass
             results.append({
                 "home_team":  item.home_team,
                 "away_team":  item.away_team,
@@ -830,22 +914,10 @@ def get_fixtures_enriched(
     """
     Returns fixtures with embedded Poisson-derived market data for every match.
 
-    For UPCOMING/TIMED matches: runs ML goal model + Poisson engine to produce:
-      - goals.home_xg, goals.away_xg, goals.total_xg
-      - markets.btts (yes/no)
-      - markets.over_under (0.5 – 4.5)
-      - markets.clean_sheet (home/away)
-      - markets.top_5_scorelines
-      - markets.most_likely_score
-
-    For FINISHED matches: actual score is used, markets are computed from real goals.
-
-    This endpoint replaces the need for a separate /predict-batch call for the
-    Intelligence Hub and match cards — all data is returned in a single request.
+    Enrichment is read from pre-computed Prediction rows (expected goals) or the
+    in-memory cache populated by /predict-batch. ML inference is never run here.
     """
-    from models import Match, Competition, Team
-    from ml.features import get_attack_rating, get_defence_rating
-    from services.poisson_engine import evaluate_poisson_engine
+    from models import Match, Competition
     from sqlalchemy import extract
     from sqlalchemy.orm import joinedload, selectinload
 
@@ -879,8 +951,11 @@ def get_fixtures_enriched(
     query = query.order_by(tier_case.asc(), asc_date.asc(), desc_date.desc())
 
     matches = query.limit(limit).all()
+    t_query = time.perf_counter()
+    query_time_ms = round((t_query - t_start) * 1000, 2)
 
     now_utc = datetime.now(timezone.utc)
+    cache_now = time.time()
     live_statuses  = {"IN_PLAY", "PAUSED"}
     score_statuses = live_statuses | {"FINISHED"}
 
@@ -918,97 +993,30 @@ def get_fixtures_enriched(
         if home_t and away_t:
             try:
                 if m.status == "FINISHED" and m.home_score is not None and m.away_score is not None:
-                    # Use actual goals as xG for completed matches
                     h_xg = float(m.home_score)
                     a_xg = float(m.away_score)
-                    total_xg = h_xg + a_xg
-                    poisson = evaluate_poisson_engine(max(h_xg, 0.01), max(a_xg, 0.01))
-                    enrichment = {
-                        "goals": {
-                            "home_xg":   h_xg,
-                            "away_xg":   a_xg,
-                            "total_xg":  total_xg,
-                        },
-                        "markets": {
-                            "btts":              poisson["btts"],
-                            "over_under":        poisson["over_under"],
-                            "clean_sheet":       poisson["clean_sheet"],
-                            "most_likely_score": f"{m.home_score}-{m.away_score}",
-                            "top_5_scorelines":  poisson["top_5_scorelines"],
-                            "team_goals":        poisson["team_goals"],
-                        },
-                    }
-                elif model_service.is_ready:
-                    # Use ML goal model for upcoming/live matches
-                    match_date = m.utc_date.replace(tzinfo=timezone.utc) if m.utc_date else now_utc
-                    goals = model_service.predict_goals(db, home_t.id, away_t.id, match_date, competition_code)
-                    poisson_data = evaluate_poisson_engine(
-                        max(goals["expected_home_goals"], 0.01),
-                        max(goals["expected_away_goals"], 0.01),
+                    enrichment = _build_enrichment_from_xg(
+                        h_xg,
+                        a_xg,
+                        most_likely_score=f"{m.home_score}-{m.away_score}",
                     )
-                    enrichment = {
-                        "goals": {
-                            "home_xg":   goals["expected_home_goals"],
-                            "away_xg":   goals["expected_away_goals"],
-                            "total_xg":  goals["total_expected_goals"],
-                        },
-                        "markets": {
-                            "btts":              goals["btts"],
-                            "over_under":        goals["over_under"],
-                            "clean_sheet":       goals["clean_sheet"],
-                            "most_likely_score": goals["most_likely_score"],
-                            "top_5_scorelines":  goals["top_5_scorelines"],
-                            "team_goals":        goals["team_goals"],
-                        },
-                    }
-                    if not fixture_pred:
-                        try:
-                            pred_1x2 = model_service.predict_1x2(db, home_t.id, away_t.id, match_date, competition_code)
-                            fixture_pred = {
-                                "predicted_outcome":  pred_1x2["predicted_outcome"],
-                                "home_probability":   pred_1x2["home_win_probability"],
-                                "away_probability":   pred_1x2["away_win_probability"],
-                                "draw_probability":   pred_1x2["draw_probability"],
-                            }
-                        except Exception as e1x2:
-                            logger.warning(f"Failed to predict_1x2 on-the-fly for match {m.id}: {e1x2}")
+                elif (
+                    stored_pred
+                    and stored_pred.expected_home_goals is not None
+                    and stored_pred.expected_away_goals is not None
+                ):
+                    enrichment = _build_enrichment_from_xg(
+                        float(stored_pred.expected_home_goals),
+                        float(stored_pred.expected_away_goals),
+                    )
                 else:
-                    # ML not ready: fallback to attack/defence rating Poisson only
-                    match_date = m.utc_date.replace(tzinfo=timezone.utc) if m.utc_date else now_utc
-                    h_atk = get_attack_rating(db, home_t.id, match_date)
-                    a_atk = get_attack_rating(db, away_t.id, match_date)
-                    h_def = get_defence_rating(db, home_t.id, match_date)
-                    a_def = get_defence_rating(db, away_t.id, match_date)
-                    # xG = attacker's avg goals, adjusted by opponent defence
-                    league_avg = 1.35
-                    h_xg = max(0.3, h_atk * (a_def / league_avg) if a_def > 0 else h_atk)
-                    a_xg = max(0.3, a_atk * (h_def / league_avg) if h_def > 0 else a_atk)
-                    poisson = evaluate_poisson_engine(h_xg, a_xg)
-                    enrichment = {
-                        "goals": {
-                            "home_xg":   round(h_xg, 4),
-                            "away_xg":   round(a_xg, 4),
-                            "total_xg":  round(h_xg + a_xg, 4),
-                        },
-                        "markets": {
-                            "btts":              poisson["btts"],
-                            "over_under":        poisson["over_under"],
-                            "clean_sheet":       poisson["clean_sheet"],
-                            "most_likely_score": poisson["most_likely_score"],
-                            "top_5_scorelines":  poisson["top_5_scorelines"],
-                            "team_goals":        poisson["team_goals"],
-                        },
-                    }
-                    if not fixture_pred:
-                        op = poisson["outcome_probabilities"]
-                        max_p = max(op["home_win_probability"], op["draw_probability"], op["away_win_probability"])
-                        outcome = "HOME_WIN" if max_p == op["home_win_probability"] else "AWAY_WIN" if max_p == op["away_win_probability"] else "DRAW"
-                        fixture_pred = {
-                            "predicted_outcome":  outcome,
-                            "home_probability":   op["home_win_probability"],
-                            "away_probability":   op["away_win_probability"],
-                            "draw_probability":   op["draw_probability"],
-                        }
+                    enrichment = _lookup_cached_enrichment(
+                        m.id,
+                        home_t.name,
+                        away_t.name,
+                        competition_code,
+                        cache_now,
+                    )
             except Exception as exc:
                 logger.warning(f"[fixtures-enriched] enrichment failed for match {m.id}: {exc}")
                 errors += 1
@@ -1031,17 +1039,20 @@ def get_fixtures_enriched(
         }
         fixtures_out.append(fixture)
 
-    elapsed_ms = int((time.perf_counter() - t_start) * 1000)
+    t_end = time.perf_counter()
+    enrichment_time_ms = round((t_end - t_query) * 1000, 2)
+    total_time_ms = round((t_end - t_start) * 1000, 2)
+
     logger.info(
-        f"GET /fixtures-enriched  {len(fixtures_out)} fixtures in {elapsed_ms}ms "
-        f"({errors} enrichment errors)"
+        f"GET /fixtures-enriched  {len(fixtures_out)} fixtures in {total_time_ms}ms "
+        f"(Query={query_time_ms}ms, Enrichment={enrichment_time_ms}ms, Errors={errors})"
     )
 
     return {
         "status":      "success",
         "competition": comp.name,
         "count":       len(fixtures_out),
-        "elapsed_ms":  elapsed_ms,
+        "elapsed_ms":  int(total_time_ms),
         "fixtures":    fixtures_out,
     }
 

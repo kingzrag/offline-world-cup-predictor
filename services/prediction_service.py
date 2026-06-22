@@ -2,7 +2,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from ml.predictor import FootballPredictor
-from models import Match, Prediction
+from models import Match, Prediction, Competition
+from services.model_service import model_service
 from utils.logger import logger
 
 class PredictionService:
@@ -86,6 +87,71 @@ class PredictionService:
         db.commit()
         logger.info(f"Successfully calculated and committed {len(predictions_created)} match predictions.")
         return predictions_created
+
+    def generate_enrichment_for_fixtures(
+        self,
+        db: Session,
+        competition_id: Optional[int] = None,
+        *,
+        statuses: Optional[List[str]] = None,
+    ) -> int:
+        """
+        Pre-compute expected goals for fixtures and persist on Prediction rows.
+        Runs ML inference offline — never on the request path.
+        """
+        if not model_service.is_ready:
+            model_service.load_models()
+
+        status_filter = statuses or ["SCHEDULED", "TIMED", "IN_PLAY", "PAUSED"]
+        query = db.query(Match).filter(Match.status.in_(status_filter))
+        if competition_id:
+            query = query.filter(Match.competition_id == competition_id)
+
+        matches = query.all()
+        logger.info(f"Enrichment pipeline: {len(matches)} fixtures to process.")
+
+        updated = 0
+        for match in matches:
+            try:
+                comp_code = "WC"
+                if match.competition_id:
+                    comp = db.query(Competition).filter_by(id=match.competition_id).first()
+                    if comp and comp.code:
+                        comp_code = comp.code
+
+                goals = model_service.predict_goals(
+                    db=db,
+                    home_team_id=match.home_team_id,
+                    away_team_id=match.away_team_id,
+                    match_date=match.utc_date,
+                    competition_code=comp_code,
+                )
+
+                existing_pred = db.query(Prediction).filter_by(match_id=match.id).first()
+                if not existing_pred:
+                    existing_pred = Prediction(
+                        match_id=match.id,
+                        predicted_outcome="DRAW",
+                        home_probability=0.33,
+                        away_probability=0.33,
+                        draw_probability=0.34,
+                        model_version="pending",
+                    )
+                    db.add(existing_pred)
+
+                existing_pred.expected_home_goals = goals["expected_home_goals"]
+                existing_pred.expected_away_goals = goals["expected_away_goals"]
+                updated += 1
+            except Exception as e:
+                logger.error(
+                    f"Failed to generate enrichment for Match ID {match.id} "
+                    f"(API ID {match.api_id}): {e}"
+                )
+                continue
+
+        db.commit()
+        logger.info(f"Enrichment pipeline complete — {updated} fixtures updated.")
+        return updated
 
     def get_predictions_history(self, db: Session, limit: int = 50) -> List[Prediction]:
         """

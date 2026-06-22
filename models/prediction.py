@@ -13,6 +13,8 @@ class Prediction(Base):
     away_probability = Column(Float, nullable=False)
     draw_probability = Column(Float, nullable=False)
     model_version = Column(String(50), nullable=False, default="v1.0")
+    expected_home_goals = Column(Float, nullable=True)
+    expected_away_goals = Column(Float, nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
