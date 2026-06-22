@@ -238,6 +238,8 @@ async def run_daily_scheduler():
                     pred_service = PredictionService()
                     preds = pred_service.generate_predictions_for_fixtures(db)
                     logger.info(f"Scheduler: Prediction generation completed — {len(preds)} predictions upserted.")
+                    enriched = pred_service.generate_enrichment_for_fixtures(db)
+                    logger.info(f"Scheduler: Enrichment generation completed — {enriched} fixtures enriched.")
                 except Exception as pred_err:
                     logger.error(f"Scheduler: Automatic prediction generation failed: {pred_err}", exc_info=True)
                 # -------------------------------------------------------
@@ -292,6 +294,8 @@ async def startup_event():
                 pred_service = PredictionService()
                 preds = pred_service.generate_predictions_for_fixtures(_db)
                 logger.info(f"Startup: bootstrap predictions complete — {len(preds)} predictions upserted.")
+                enriched = pred_service.generate_enrichment_for_fixtures(_db)
+                logger.info(f"Startup: bootstrap enrichment complete — {enriched} fixtures enriched.")
             except Exception as _e:
                 logger.error(f"Startup: prediction bootstrap failed — {_e}", exc_info=True)
             finally:

@@ -11,7 +11,12 @@ from typing import Dict, Any, List, Tuple
 
 def get_poisson_probability(lmbda: float, k: int) -> float:
     """Calculates Poisson probability for k events with mean lmbda."""
-    return float(scipy.stats.poisson.pmf(k, lmbda))
+    if lmbda <= 0:
+        return 1.0 if k == 0 else 0.0
+    try:
+        return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
+    except OverflowError:
+        return 0.0
 
 def calculate_probability_matrix(expected_home_goals: float, expected_away_goals: float, max_goals: int = 10) -> Dict[str, float]:
     """
@@ -80,7 +85,7 @@ def get_over_under_probabilities(expected_home_goals: float, expected_away_goals
     for line in (0.5, 1.5, 2.5, 3.5, 4.5):
         # Under line: H+A <= floor(line)  (since line is .5, floor == int part)
         k = int(line)  # 0, 1, 2, 3, 4
-        under = float(scipy.stats.poisson.cdf(k, total_lambda))
+        under = sum(get_poisson_probability(total_lambda, i) for i in range(k + 1))
         over  = 1.0 - under
         results[str(line)] = {"over": round(over, 4), "under": round(under, 4)}
 
@@ -161,14 +166,14 @@ def get_team_goals_probabilities(expected_home_goals: float, expected_away_goals
     lam_a = max(0.0001, expected_away_goals)
     
     # Home Team Over
-    home_over_0_5 = 1.0 - float(scipy.stats.poisson.cdf(0, lam_h))
-    home_over_1_5 = 1.0 - float(scipy.stats.poisson.cdf(1, lam_h))
-    home_over_2_5 = 1.0 - float(scipy.stats.poisson.cdf(2, lam_h))
+    home_over_0_5 = 1.0 - sum(get_poisson_probability(lam_h, i) for i in range(1))
+    home_over_1_5 = 1.0 - sum(get_poisson_probability(lam_h, i) for i in range(2))
+    home_over_2_5 = 1.0 - sum(get_poisson_probability(lam_h, i) for i in range(3))
     
     # Away Team Over
-    away_over_0_5 = 1.0 - float(scipy.stats.poisson.cdf(0, lam_a))
-    away_over_1_5 = 1.0 - float(scipy.stats.poisson.cdf(1, lam_a))
-    away_over_2_5 = 1.0 - float(scipy.stats.poisson.cdf(2, lam_a))
+    away_over_0_5 = 1.0 - sum(get_poisson_probability(lam_a, i) for i in range(1))
+    away_over_1_5 = 1.0 - sum(get_poisson_probability(lam_a, i) for i in range(2))
+    away_over_2_5 = 1.0 - sum(get_poisson_probability(lam_a, i) for i in range(3))
     
     return {
         "home": {
@@ -191,8 +196,8 @@ def get_clean_sheet_probabilities(expected_home_goals: float, expected_away_goal
     """
     lam_h = max(0.0001, expected_home_goals)
     lam_a = max(0.0001, expected_away_goals)
-    home_cs = float(scipy.stats.poisson.pmf(0, lam_a))   # away scores 0
-    away_cs = float(scipy.stats.poisson.pmf(0, lam_h))   # home scores 0
+    home_cs = get_poisson_probability(lam_a, 0)   # away scores 0
+    away_cs = get_poisson_probability(lam_h, 0)   # home scores 0
     return {
         "home_clean_sheet": round(home_cs, 4),
         "away_clean_sheet": round(away_cs, 4),
