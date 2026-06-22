@@ -28,6 +28,46 @@ from utils.logger import logger
 router = APIRouter(prefix="/api", tags=["Predictions API"])
 
 
+def _compile_team_injuries_and_suspensions(db, team_id: int) -> tuple[list[str], list[str]]:
+    """Load injury/suspension records from all four intel tables for a team."""
+    from models import Injury, Suspension, NationalTeamInjury, NationalTeamSuspension
+
+    injuries: list[str] = []
+    suspensions: list[str] = []
+    seen_injuries: set[tuple[str, str]] = set()
+    seen_suspensions: set[tuple[str, str]] = set()
+
+    def _add_injury(player_name: str, description: str) -> None:
+        key = (player_name, description)
+        if key not in seen_injuries:
+            seen_injuries.add(key)
+            injuries.append(f"{player_name} ({description})")
+
+    def _add_suspension(player_name: str, reason: str) -> None:
+        key = (player_name, reason)
+        if key not in seen_suspensions:
+            seen_suspensions.add(key)
+            suspensions.append(f"{player_name} ({reason})")
+
+    for inj in db.query(NationalTeamInjury).filter_by(team_id=team_id).all():
+        description = inj.injury_description or inj.injury_status or "Injured"
+        _add_injury(inj.player_name, description)
+
+    for inj in db.query(Injury).filter_by(team_id=team_id).all():
+        description = inj.injury_type or "Injured"
+        _add_injury(inj.player_name, description)
+
+    for susp in db.query(NationalTeamSuspension).filter_by(team_id=team_id).all():
+        reason = susp.suspension_reason or "Suspended"
+        _add_suspension(susp.player_name, reason)
+
+    for susp in db.query(Suspension).filter_by(team_id=team_id).all():
+        reason = susp.suspension_reason or "Suspended"
+        _add_suspension(susp.player_name, reason)
+
+    return injuries, suspensions
+
+
 # ── Request / Response schemas ────────────────────────────────────────────────
 
 class PredictRequest(BaseModel):
@@ -380,6 +420,7 @@ def get_team_profile(
     - Squad size
     """
     from models import Team, Match, TeamElo
+    from sqlalchemy.orm import selectinload
 
     # Resolve team name aliases for United States
     aliases = {
@@ -392,11 +433,27 @@ def get_team_profile(
 
     # Exact match first, then TLA/short_name/fuzzy fallback
     from sqlalchemy import or_ as sql_or
+    _team_load_options = (
+        selectinload(Team.injuries),
+        selectinload(Team.suspensions),
+        selectinload(Team.national_team_injuries),
+        selectinload(Team.national_team_suspensions),
+        selectinload(Team.players),
+    )
+
+    def _find_team(name_filter):
+        return (
+            db.query(Team)
+            .options(*_team_load_options)
+            .filter(name_filter)
+            .first()
+        )
+
     team = (
-        db.query(Team).filter(Team.name.ilike(resolved_name)).first()
-        or db.query(Team).filter(Team.tla.ilike(resolved_name)).first()
-        or db.query(Team).filter(Team.short_name.ilike(resolved_name)).first()
-        or db.query(Team).filter(Team.name.ilike(f"%{resolved_name}%")).first()
+        _find_team(Team.name.ilike(resolved_name))
+        or _find_team(Team.tla.ilike(resolved_name))
+        or _find_team(Team.short_name.ilike(resolved_name))
+        or _find_team(Team.name.ilike(f"%{resolved_name}%"))
     )
     if not team:
         raise HTTPException(status_code=404, detail=f"Team '{team_name}' not found.")
@@ -470,23 +527,7 @@ def get_team_profile(
     else:
         val_str = "N/A"
 
-    # Compile injuries
-    injuries_list = []
-    if hasattr(team, "national_team_injuries"):
-        for inj in (team.national_team_injuries or []):
-            injuries_list.append(f"{inj.player_name} ({inj.injury_description or inj.injury_status or 'Injured'})")
-    if hasattr(team, "injuries"):
-        for inj in (team.injuries or []):
-            injuries_list.append(f"{inj.player_name} ({inj.reason or 'Injured'})")
-
-    # Compile suspensions
-    suspensions_list = []
-    if hasattr(team, "national_team_suspensions"):
-        for susp in (team.national_team_suspensions or []):
-            suspensions_list.append(f"{susp.player_name} ({susp.suspension_reason or 'Suspended'})")
-    if hasattr(team, "suspensions"):
-        for susp in (team.suspensions or []):
-            suspensions_list.append(f"{susp.player_name} ({susp.reason or 'Suspended'})")
+    injuries_list, suspensions_list = _compile_team_injuries_and_suspensions(db, team.id)
 
     return {
         "status": "success",
