@@ -168,17 +168,45 @@ class ModelService:
             raise RuntimeError("ModelService not initialised – call load_models() first.")
 
         match_date = match_date or datetime.now(timezone.utc)
+
+        # ── Resolve team names for logging ───────────────────────────────────
+        from models import Team as _Team
+        _home = db.query(_Team).filter_by(id=home_team_id).first()
+        _away = db.query(_Team).filter_by(id=away_team_id).first()
+        _home_name = _home.name if _home else str(home_team_id)
+        _away_name = _away.name if _away else str(away_team_id)
+        logger.info(f"[predict_goals] {_home_name} vs {_away_name} [{competition_code}]")
+
         features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code)
 
         goal_features: list = self._goal_bundle.get("features", [])
         home_model: xgb.XGBRegressor = self._goal_bundle["home_model"]
         away_model: xgb.XGBRegressor = self._goal_bundle["away_model"]
 
-        feature_vec = np.array([[features.get(f, 0.0) for f in goal_features]])
+        feature_vals = [features.get(f, 0.0) for f in goal_features]
+
+        # ── Log full feature dict and final vector ────────────────────────────
+        logger.info(f"[predict_goals] Extracted features for {_home_name} vs {_away_name}:")
+        for k, v in features.items():
+            logger.info(f"  {k:<40} = {v}")
+        logger.info(f"[predict_goals] Feature vector ({len(feature_vals)} values) for goal models: {[round(v, 4) if isinstance(v, (int, float)) else v for v in feature_vals]}")
+
+        # Check for NaN or zero-only vectors
+        import math
+        has_nan = any(isinstance(v, float) and math.isnan(v) for v in feature_vals)
+        all_zeros = all(v == 0.0 for v in feature_vals)
+        if has_nan:
+            logger.warning(f"[predict_goals] NaN detected in feature vector for {_home_name} vs {_away_name}!")
+        if all_zeros:
+            logger.warning(f"[predict_goals] Zero-only feature vector detected for {_home_name} vs {_away_name}!")
+
+        feature_vec = np.array([feature_vals])
 
         expected_home = max(0.0, float(home_model.predict(feature_vec)[0]))
         expected_away = max(0.0, float(away_model.predict(feature_vec)[0]))
         total_goals   = expected_home + expected_away
+
+        logger.info(f"[predict_goals] Expected Goals predicted: {_home_name}={expected_home:.4f}, {_away_name}={expected_away:.4f}, Total={total_goals:.4f}")
 
         # ── Poisson markets ───────────────────────────────────────────────────
         from services.poisson_engine import evaluate_poisson_engine

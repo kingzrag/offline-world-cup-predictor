@@ -105,9 +105,11 @@ export interface BackendTeamGoals {
 
 export interface BackendMarkets {
   over_under: {
+    "0.5"?: BackendOverUnderLine;
     "1.5": BackendOverUnderLine;
     "2.5": BackendOverUnderLine;
     "3.5": BackendOverUnderLine;
+    "4.5"?: BackendOverUnderLine;
   };
   btts: BackendBTTS;
   most_likely_score: string;
@@ -115,6 +117,7 @@ export interface BackendMarkets {
   asian_handicap: BackendAsianHandicap;
   team_goals: BackendTeamGoals;
   probability_matrix: Record<string, number>;
+  clean_sheet?: CleanSheetMarket;
 }
 
 export interface BackendModelVersions {
@@ -555,6 +558,11 @@ export function mapBackendPrediction(
     // Betting markets
     overUnder: m.over_under,
     bttsMarket: m.btts,
+    cleanSheetMarket: m.clean_sheet || base.cleanSheetMarket,
+    cleanSheetA: m.clean_sheet ? Math.round(m.clean_sheet.home_clean_sheet * 100) : base.cleanSheetA,
+    cleanSheetB: m.clean_sheet ? Math.round(m.clean_sheet.away_clean_sheet * 100) : base.cleanSheetB,
+    bttsRateA: m.btts ? Math.round(m.btts.yes * 100) : base.bttsRateA,
+    bttsRateB: m.btts ? Math.round(m.btts.yes * 100) : base.bttsRateB,
     mostLikelyScore: m.most_likely_score,
     top5Scorelines: m.top_5_scorelines,
     asianHandicap: m.asian_handicap,
