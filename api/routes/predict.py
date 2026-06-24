@@ -1035,6 +1035,7 @@ def get_fixtures_enriched(
 
     fixtures_out = []
     errors = 0
+    enrichment_source_counts = {"finished_score": 0, "stored_prediction": 0, "cache": 0, "missing": 0}
 
     for m in matches:
         # ── Base fixture fields ───────────────────────────────────────────────
@@ -1069,14 +1070,28 @@ def get_fixtures_enriched(
                         a_xg,
                         most_likely_score=f"{m.home_score}-{m.away_score}",
                     )
+                    enrichment_source_counts["finished_score"] += 1
+                    logger.info(
+                        f"[fixtures-enriched] match_id={m.id} source=finished_score "
+                        f"{home_t.name} vs {away_t.name} "
+                        f"xg=({h_xg:.4f}, {a_xg:.4f})"
+                    )
                 elif (
                     stored_pred
                     and stored_pred.expected_home_goals is not None
                     and stored_pred.expected_away_goals is not None
                 ):
+                    h_xg = float(stored_pred.expected_home_goals)
+                    a_xg = float(stored_pred.expected_away_goals)
                     enrichment = _build_enrichment_from_xg(
-                        float(stored_pred.expected_home_goals),
-                        float(stored_pred.expected_away_goals),
+                        h_xg,
+                        a_xg,
+                    )
+                    enrichment_source_counts["stored_prediction"] += 1
+                    logger.info(
+                        f"[fixtures-enriched] match_id={m.id} source=stored_prediction "
+                        f"{home_t.name} vs {away_t.name} "
+                        f"xg=({h_xg:.4f}, {a_xg:.4f})"
                     )
                 else:
                     enrichment = _lookup_cached_enrichment(
@@ -1086,6 +1101,20 @@ def get_fixtures_enriched(
                         competition_code,
                         cache_now,
                     )
+                    if enrichment is not None:
+                        goals = enrichment.get("goals", {})
+                        enrichment_source_counts["cache"] += 1
+                        logger.info(
+                            f"[fixtures-enriched] match_id={m.id} source=cache "
+                            f"{home_t.name} vs {away_t.name} "
+                            f"xg=({float(goals.get('home_xg', 0.0)):.4f}, {float(goals.get('away_xg', 0.0)):.4f})"
+                        )
+                    else:
+                        enrichment_source_counts["missing"] += 1
+                        logger.info(
+                            f"[fixtures-enriched] match_id={m.id} source=missing "
+                            f"{home_t.name} vs {away_t.name}"
+                        )
             except Exception as exc:
                 logger.warning(f"[fixtures-enriched] enrichment failed for match {m.id}: {exc}")
                 errors += 1
@@ -1116,6 +1145,13 @@ def get_fixtures_enriched(
         f"GET /fixtures-enriched  {len(fixtures_out)} fixtures in {total_time_ms}ms "
         f"(Query={query_time_ms}ms, Enrichment={enrichment_time_ms}ms, Errors={errors})"
     )
+    logger.info(
+        "[fixtures-enriched] source summary: "
+        f"finished_score={enrichment_source_counts['finished_score']} "
+        f"stored_prediction={enrichment_source_counts['stored_prediction']} "
+        f"cache={enrichment_source_counts['cache']} "
+        f"missing={enrichment_source_counts['missing']}"
+    )
 
     return {
         "status":      "success",
@@ -1124,4 +1160,3 @@ def get_fixtures_enriched(
         "elapsed_ms":  int(total_time_ms),
         "fixtures":    fixtures_out,
     }
-

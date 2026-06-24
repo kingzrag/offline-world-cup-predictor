@@ -141,6 +141,13 @@ class PredictionService:
 
                 existing_pred.expected_home_goals = goals["expected_home_goals"]
                 existing_pred.expected_away_goals = goals["expected_away_goals"]
+                logger.info(
+                    f"[enrichment-store] match_id={match.id} "
+                    f"{match.home_team.name} vs {match.away_team.name} "
+                    f"stored_xg=({existing_pred.expected_home_goals:.4f}, {existing_pred.expected_away_goals:.4f}) "
+                    f"total_xg={goals['total_expected_goals']:.4f} "
+                    f"goal_model_version={goals.get('model_version', 'unknown')}"
+                )
                 updated += 1
             except Exception as e:
                 logger.error(
@@ -158,4 +165,3 @@ class PredictionService:
         Serving pre-calculated prediction history entries.
         """
         return db.query(Prediction).order_by(Prediction.created_at.desc()).limit(limit).all()
-
