@@ -10,7 +10,6 @@ import {
   API_BASE,
   getStandings,
   getBracket,
-  updateMatchScore,
   getModelPerformance,
   getTeamProfile,
   getH2h,
@@ -496,11 +495,6 @@ export default function App() {
   const [tournamentError, setTournamentError] = useState<string | null>(null);
   const [tournamentSubTab, setTournamentSubTab] = useState<'bracket' | 'standings'>('bracket');
 
-  // Score editing modal state variables
-  const [editingMatch, setEditingMatch] = useState<MatchPrediction | null>(null);
-  const [simHomeScore, setSimHomeScore] = useState<number>(0);
-  const [simAwayScore, setSimAwayScore] = useState<number>(0);
-  const [simStatus, setSimStatus] = useState<string>('FINISHED');
 
   const loadTournamentData = async () => {
     try {
@@ -522,28 +516,6 @@ export default function App() {
     }
   };
 
-  const openSetScoreModal = (match: MatchPrediction) => {
-    setEditingMatch(match);
-    setSimHomeScore(match.liveScore?.home ?? 0);
-    setSimAwayScore(match.liveScore?.away ?? 0);
-    setSimStatus(match.status === 'COMPLETED' ? 'FINISHED' : match.status === 'LIVE' ? 'IN_PLAY' : 'FINISHED');
-  };
-
-  const submitMatchScore = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingMatch) return;
-    
-    try {
-      await updateMatchScore(Number(editingMatch.id), simHomeScore, simAwayScore, simStatus);
-      const updatedFixtures = await getPredictions(undefined, showHistorical);
-      setSourceMatches(sortSourceMatches(updatedFixtures));
-      await loadTournamentData();
-      setEditingMatch(null);
-    } catch (err) {
-      console.error("Failed to update match score:", err);
-      alert("Error updating match score. Please verify database connection.");
-    }
-  };
 
   const [perfLoading, setPerfLoading] = useState(false);
 
@@ -1975,12 +1947,6 @@ export default function App() {
                                     className="w-full lg:w-auto px-5 py-2 bg-zinc-900 hover:bg-zinc-850 hover:text-green-accent border border-zinc-800 hover:border-zinc-700 rounded text-xs font-mono font-bold tracking-widest text-[#1cdb5e] uppercase transition duration-300 flex items-center justify-center gap-2 select-none cursor-pointer"
                                   >
                                     View Analysis <ArrowRight className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => openSetScoreModal(match)}
-                                    className="w-full lg:w-auto px-5 py-2 bg-zinc-950 hover:bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-900 hover:border-zinc-800 rounded text-xs font-mono uppercase tracking-widest transition duration-305 flex items-center justify-center gap-2 cursor-pointer select-none"
-                                  >
-                                    Set Score
                                   </button>
                                 </div>
 
@@ -3762,41 +3728,6 @@ export default function App() {
                                             <span className="text-[8.5px] font-mono uppercase text-zinc-600">
                                               {m.stage === 'GROUP_STAGE' ? 'Group Stage' : m.stage.replace(/_/g, ' ')}
                                             </span>
-                                            <button
-                                              onClick={() => {
-                                                const mappedMatch: MatchPrediction = {
-                                                  id: String(m.id),
-                                                  teamA: m.home_team.name,
-                                                  teamB: m.away_team.name,
-                                                  teamACode: m.home_team.tla || m.home_team.name.substring(0, 3).toUpperCase(),
-                                                  teamBCode: m.away_team.tla || m.away_team.name.substring(0, 3).toUpperCase(),
-                                                  date: formatKickoffDateLocal(m.utc_date),
-                                                  kickoffTime: m.utc_date,
-                                                  stage: m.stage,
-                                                  status: m.status === 'FINISHED' ? 'COMPLETED' : m.status === 'IN_PLAY' || m.status === 'PAUSED' ? 'LIVE' : 'UPCOMING',
-                                                  prediction: m.winner === 'HOME_TEAM' ? `${m.home_team.name} Win` : m.winner === 'AWAY_TEAM' ? `${m.away_team.name} Win` : 'Draw',
-                                                  confidence: 'High',
-                                                  probA: m.winner === 'HOME_TEAM' ? 100 : 0,
-                                                  probD: m.winner === 'DRAW' ? 100 : 0,
-                                                  probB: m.winner === 'AWAY_TEAM' ? 100 : 0,
-                                                  venue: null,
-                                                  liveScore: m.home_score !== null && m.away_score !== null ? { home: m.home_score, away: m.away_score, is_live: m.status !== 'FINISHED' } : null,
-                                                  winner: m.winner,
-                                                  attackA: 0, attackB: 0, defenceA: 0, defenceB: 0, midfieldA: 0, midfieldB: 0,
-                                                  xGA: 0, xGB: 0, xGAA: 0, xGAB: 0, possessionA: 0, possessionB: 0, shotsA: 0, shotsB: 0,
-                                                  shotsAllowedA: 0, shotsAllowedB: 0, cleanSheetA: 0, cleanSheetB: 0, bttsRateA: 0, bttsRateB: 0,
-                                                  recentFormA: [], recentFormB: [], fifaRankA: 0, fifaRankB: 0, eloRankA: 0, eloRankB: 0,
-                                                  squadValueA: '', squadValueB: '', restDaysA: 0, restDaysB: 0, fatigueA: 0, fatigueB: 0,
-                                                  injuriesA: [], injuriesB: [], suspensionsA: [], suspensionsB: [], missingKeyPlayersA: [], missingKeyPlayersB: [],
-                                                  impactRatingA: 'Minimal', impactRatingB: 'Minimal', h2hPreviousMeetings: 0, h2hWinsA: 0, h2hWinsB: 0, h2hDraws: 0,
-                                                  h2hGoalsA: 0, h2hGoalsB: 0, aiSummary: ''
-                                                };
-                                                openSetScoreModal(mappedMatch);
-                                              }}
-                                              className="px-3 py-1 bg-zinc-900 hover:bg-zinc-800 text-green-accent text-[9px] font-mono uppercase rounded transition cursor-pointer select-none"
-                                            >
-                                              Set Score
-                                            </button>
                                           </div>
                                         )}
                                       </div>
@@ -5160,107 +5091,6 @@ export default function App() {
         </div>
       )}
 
-      {/* SCORE SIMULATION / EDITING MODAL */}
-      {editingMatch && (() => {
-        const flagA = getFlag(editingMatch.teamA);
-        const flagB = getFlag(editingMatch.teamB);
-        return (
-          <div id="set-score-overlay" className="fixed inset-0 z-50 overflow-y-auto bg-black/95 backdrop-blur-md flex items-center justify-center p-4 select-none">
-            <div 
-              className="bg-zinc-950 border border-zinc-900 rounded w-full max-w-md overflow-hidden shadow-2xl animate-fade-in text-left"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal header */}
-              <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center bg-zinc-950">
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-green-accent font-bold">Simulator Panel</span>
-                  <h4 className="text-sm font-mono uppercase tracking-[0.1em] text-white font-bold">Simulate Match Score</h4>
-                </div>
-                <button
-                  onClick={() => setEditingMatch(null)}
-                  className="p-1 px-2.5 hover:bg-zinc-900 border border-zinc-900 rounded text-[10px] font-mono uppercase text-zinc-400 hover:text-white cursor-pointer select-none"
-                >
-                  Close
-                </button>
-              </div>
-
-              {/* Form content */}
-              <form onSubmit={submitMatchScore} className="p-6 space-y-6">
-                <div className="text-[11px] text-zinc-400 leading-relaxed text-center font-sans">
-                  Update score/status for <span className="text-white font-bold">{editingMatch.teamA}</span> vs <span className="text-white font-bold">{editingMatch.teamB}</span>.
-                  This will instantly trigger group standings updates and advance teams in the knockout stages.
-                </div>
-
-                <div className="grid grid-cols-7 gap-4 items-center">
-                  {/* Home team */}
-                  <div className="col-span-3 text-center space-y-2">
-                    <span className="text-2xl select-none block">{flagA}</span>
-                    <span className="text-xs font-bold text-white uppercase block truncate">{editingMatch.teamA}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="20"
-                      value={simHomeScore}
-                      onChange={(e) => setSimHomeScore(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-16 h-12 bg-zinc-900 border border-zinc-800 rounded font-mono text-xl text-center text-white focus:outline-none focus:border-green-accent mx-auto"
-                    />
-                  </div>
-
-                  {/* VS separator */}
-                  <div className="col-span-1 text-center text-zinc-650 font-mono text-xs font-bold">
-                    VS
-                  </div>
-
-                  {/* Away team */}
-                  <div className="col-span-3 text-center space-y-2">
-                    <span className="text-2xl select-none block">{flagB}</span>
-                    <span className="text-xs font-bold text-white uppercase block truncate">{editingMatch.teamB}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="20"
-                      value={simAwayScore}
-                      onChange={(e) => setSimAwayScore(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-16 h-12 bg-zinc-900 border border-zinc-800 rounded font-mono text-xl text-center text-white focus:outline-none focus:border-green-accent mx-auto"
-                    />
-                  </div>
-                </div>
-
-                {/* Match Status Select */}
-                <div className="flex flex-col space-y-2">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Match Status</label>
-                  <select
-                    value={simStatus}
-                    onChange={(e) => setSimStatus(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded p-2.5 text-xs text-white focus:outline-none focus:border-green-accent cursor-pointer"
-                  >
-                    <option value="FINISHED">FINISHED (Official / Completed)</option>
-                    <option value="IN_PLAY">IN PLAY (Live)</option>
-                    <option value="SCHEDULED">SCHEDULED (Upcoming / Reset)</option>
-                  </select>
-                </div>
-
-                {/* Submit button */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingMatch(null)}
-                    className="flex-1 py-3 bg-transparent border border-zinc-900 hover:border-zinc-800 text-zinc-400 hover:text-white rounded text-xs font-mono font-bold tracking-widest uppercase transition duration-200 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 bg-green-accent hover:bg-green-600 text-black rounded text-xs font-mono font-bold tracking-widest uppercase transition duration-200 cursor-pointer font-bold"
-                  >
-                    Confirm Score
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        );
-      })()}
 
     </div>
   );

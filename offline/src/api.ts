@@ -1344,12 +1344,6 @@ export interface BracketMatch {
 
 export type BracketData = Record<string, BracketMatch[]>;
 
-export interface ScoreUpdateResponse {
-  status: string;
-  match_id: number;
-  winner: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null;
-  status_code: string;
-}
 
 export interface HistoricalProgressionEntry {
   fixture: number;
@@ -1381,24 +1375,6 @@ export async function getBracket(): Promise<BracketData> {
   return apiFetch<BracketData>("/tournament/bracket");
 }
 
-/**
- * PUT /fastapi/tournament/fixtures/{matchId}/score
- */
-export async function updateMatchScore(
-  matchId: number,
-  homeScore: number,
-  awayScore: number,
-  status: string
-): Promise<ScoreUpdateResponse> {
-  return apiFetch<ScoreUpdateResponse>(`/tournament/fixtures/${matchId}/score`, {
-    method: "PUT",
-    body: JSON.stringify({
-      home_score: homeScore,
-      away_score: awayScore,
-      status: status,
-    }),
-  });
-}
 
 /**
  * GET /fastapi/tournament/model-performance
