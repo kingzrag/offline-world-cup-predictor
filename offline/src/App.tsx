@@ -4197,13 +4197,6 @@ export default function App() {
         const stageParts = match.stage.split(' • ');
         const tournamentStageLabel = stageParts[0]?.trim() || match.stage;
         const groupLabel = stageParts.length > 1 ? stageParts.slice(1).join(' • ').trim() : null;
-        const verifiedVenue = (() => {
-          const v = match.venue?.trim();
-          if (!v) return null;
-          const lower = v.toLowerCase();
-          if (lower === 'tbd' || lower === 'tbd stadium' || lower.startsWith('tbd ')) return null;
-          return v;
-        })();
 
         const confidenceLabel = match.confidence === 'High' ? 'Elite Confidence' : match.confidence === 'Medium' ? 'Standard Calibration' : 'Experimental Index';
         const modelAgreement = match.confidence === 'High' ? 88 + (probA % 9) : match.confidence === 'Medium' ? 76 + (probA % 9) : 61 + (probA % 9);
@@ -4420,12 +4413,7 @@ export default function App() {
                       Confidence: {match.confidence}
                     </div>
                     <div className="text-xs text-zinc-500 normal-case">50,051 Simulations</div>
-                    {verifiedVenue && (
-                      <div className="pt-2 mt-1 border-t border-zinc-900/80 text-[10px] text-zinc-550 normal-case">
-                        <span className="uppercase tracking-widest block mb-0.5">Venue</span>
-                        <span className="text-zinc-300">{verifiedVenue}</span>
-                      </div>
-                    )}
+
                   </div>
                 </div>
 
