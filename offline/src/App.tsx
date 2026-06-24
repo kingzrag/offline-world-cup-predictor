@@ -2739,7 +2739,9 @@ export default function App() {
                           ) : sortedGoalForecasts.map((m) => (
                             <tr key={m.id} className="hover:bg-zinc-900/30 transition-colors">
                               <td className="py-3 px-5 font-sans font-medium text-white">
-                                <span className="block text-zinc-500 font-normal text-[9px] uppercase font-mono">{m.venue.split(',')[0]}</span>
+                                {m.venue?.trim() && (
+                                  <span className="block text-zinc-500 font-normal text-[9px] uppercase font-mono">{m.venue.split(',')[0]}</span>
+                                )}
                                 {m.teamA} <span className="text-zinc-500 text-xs font-normal">vs</span> {m.teamB}
                               </td>
                               <td className="py-3 px-5 text-center font-bold text-white">
@@ -3777,7 +3779,7 @@ export default function App() {
                                                   probA: m.winner === 'HOME_TEAM' ? 100 : 0,
                                                   probD: m.winner === 'DRAW' ? 100 : 0,
                                                   probB: m.winner === 'AWAY_TEAM' ? 100 : 0,
-                                                  venue: 'TBD Stadium',
+                                                  venue: null,
                                                   liveScore: m.home_score !== null && m.away_score !== null ? { home: m.home_score, away: m.away_score, is_live: m.status !== 'FINISHED' } : null,
                                                   winner: m.winner,
                                                   attackA: 0, attackB: 0, defenceA: 0, defenceB: 0, midfieldA: 0, midfieldB: 0,
@@ -4192,6 +4194,17 @@ export default function App() {
         })) : null;
 
         // SECTION 8 — MODEL CONFIDENCE
+        const stageParts = match.stage.split(' • ');
+        const tournamentStageLabel = stageParts[0]?.trim() || match.stage;
+        const groupLabel = stageParts.length > 1 ? stageParts.slice(1).join(' • ').trim() : null;
+        const verifiedVenue = (() => {
+          const v = match.venue?.trim();
+          if (!v) return null;
+          const lower = v.toLowerCase();
+          if (lower === 'tbd' || lower === 'tbd stadium' || lower.startsWith('tbd ')) return null;
+          return v;
+        })();
+
         const confidenceLabel = match.confidence === 'High' ? 'Elite Confidence' : match.confidence === 'Medium' ? 'Standard Calibration' : 'Experimental Index';
         const modelAgreement = match.confidence === 'High' ? 88 + (probA % 9) : match.confidence === 'Medium' ? 76 + (probA % 9) : 61 + (probA % 9);
         const varianceScore = match.confidence === 'High' ? '0.04 - 0.08' : match.confidence === 'Medium' ? '0.12 - 0.16' : '0.22 - 0.28';
@@ -4369,19 +4382,50 @@ export default function App() {
 
                 </div>
 
-                {/* Match overview details table info */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono text-zinc-450 uppercase bg-zinc-950 p-4 border border-zinc-900 rounded">
-                  <div>
-                    <span className="text-zinc-650 block mb-1">STADIUM VENUE</span>
-                    <span className="text-white font-serif italic normal-case font-bold">{match.venue}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-650 block mb-1">KICKOFF</span>
-                    <span className="text-white font-bold normal-case">{formatKickoffDateTimeLocal(match.kickoffTime)}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-650 block mb-1">MODEL CONFIDENCE</span>
-                    <span className="text-[#1cdb5e] font-bold">{match.confidence} calibration</span>
+                {/* Match Information */}
+                <div className="bg-black/50 border border-zinc-900 rounded-lg p-5">
+                  <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-zinc-500 block mb-4 pb-2 border-b border-zinc-900">
+                    Match Information
+                  </span>
+                  <div className="space-y-2.5 font-mono min-w-0">
+                    <div className="text-[10px] uppercase tracking-widest text-zinc-550">
+                      {tournamentStageLabel}
+                    </div>
+                    {groupLabel && (
+                      <div className="text-base font-bold text-white tracking-wide normal-case">
+                        {groupLabel}
+                      </div>
+                    )}
+                    <div className="text-xs text-zinc-400 normal-case break-words">
+                      {formatSmartKickoffLocal(match.kickoffTime) || formatKickoffDateTimeLocal(match.kickoffTime)}
+                    </div>
+                    {match.isLiveData ? (
+                      <span className="inline-flex shrink-0 text-green-accent text-[9px] bg-green-accent/10 border border-green-accent/25 px-2 py-0.5 rounded leading-none tracking-widest uppercase font-bold">
+                        LIVE MODEL
+                      </span>
+                    ) : (
+                      <span className="inline-flex shrink-0 text-zinc-500 text-[9px] bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded leading-none tracking-widest uppercase">
+                        LOCAL
+                      </span>
+                    )}
+                    <div
+                      className={`text-xs font-bold normal-case ${
+                        match.confidence === 'High'
+                          ? 'text-green-accent'
+                          : match.confidence === 'Medium'
+                            ? 'text-yellow-500'
+                            : 'text-zinc-400'
+                      }`}
+                    >
+                      Confidence: {match.confidence}
+                    </div>
+                    <div className="text-xs text-zinc-500 normal-case">50,051 Simulations</div>
+                    {verifiedVenue && (
+                      <div className="pt-2 mt-1 border-t border-zinc-900/80 text-[10px] text-zinc-550 normal-case">
+                        <span className="uppercase tracking-widest block mb-0.5">Venue</span>
+                        <span className="text-zinc-300">{verifiedVenue}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

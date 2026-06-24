@@ -60,43 +60,48 @@ function PredictionCard({ match, isActive, onViewAnalysis }: PredictionCardProps
 
   return (
     <div
-      className={`bg-zinc-950 border rounded p-6 flex flex-col justify-between h-[370px] transition-colors duration-300 ${
+      className={`bg-zinc-950 border rounded-lg px-7 py-6 flex flex-col justify-between min-h-[400px] h-full transition-colors duration-300 ${
         isActive
           ? "border-zinc-700 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.85)]"
           : "border-zinc-900 hover:border-zinc-800"
       }`}
     >
-      <div className="flex justify-between items-center text-[10px] font-mono">
-        <div className="flex items-center gap-1.5">
-          <span className="text-zinc-500 tracking-wider uppercase">{match.stage}</span>
+      {/* Header: stage + badge left, kickoff right — responsive, no overlap */}
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 mb-1 min-w-0">
+        <div className="flex flex-col items-start gap-1.5 min-w-0 flex-1">
+          <span className="text-[10px] font-mono text-zinc-500 tracking-wider uppercase leading-snug break-words">
+            {match.stage}
+          </span>
           {match.isLiveData ? (
-            <span className="text-green-accent text-[8px] bg-green-accent/10 border border-green-accent/25 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase font-bold">
+            <span className="inline-flex shrink-0 text-green-accent text-[8px] bg-green-accent/10 border border-green-accent/25 px-2 py-0.5 rounded leading-none select-none tracking-widest uppercase font-bold">
               LIVE MODEL
             </span>
           ) : (
-            <span className="text-zinc-500 text-[8px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase">
+            <span className="inline-flex shrink-0 text-zinc-500 text-[8px] bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded leading-none select-none tracking-widest uppercase">
               LOCAL
             </span>
           )}
         </div>
-        <MatchTimeDisplay match={match} />
+        <div className="shrink-0 text-left sm:text-right min-w-[7.5rem] sm:min-w-[8.5rem] text-[10px] font-mono self-start sm:self-auto">
+          <MatchTimeDisplay match={match} />
+        </div>
       </div>
 
-      <div className="my-2">
-        <div className="text-lg font-bold text-white uppercase tracking-normal space-y-2">
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl leading-none select-none">{flagA}</span>
-            <span>{match.teamA}</span>
+      <div className="flex-1 flex flex-col justify-center my-3 min-h-0">
+        <div className="text-xl font-bold text-white uppercase tracking-normal space-y-2.5">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl leading-none select-none shrink-0">{flagA}</span>
+            <span className="truncate leading-tight">{match.teamA}</span>
           </div>
-          <div className="text-zinc-500 text-[10px] font-mono uppercase pl-8 font-medium">vs</div>
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl leading-none select-none">{flagB}</span>
-            <span>{match.teamB}</span>
+          <div className="text-zinc-500 text-[10px] font-mono uppercase pl-11 font-medium">vs</div>
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl leading-none select-none shrink-0">{flagB}</span>
+            <span className="truncate leading-tight">{match.teamB}</span>
           </div>
         </div>
 
         {match.status === "LIVE" ? (
-          <div className="mt-5 flex flex-col justify-center items-start gap-1">
+          <div className="mt-6 flex flex-col justify-center items-start gap-1.5">
             <span className="text-[9px] font-mono uppercase tracking-widest text-red-500 block animate-pulse font-bold">
               Live Score
             </span>
@@ -113,8 +118,8 @@ function PredictionCard({ match, isActive, onViewAnalysis }: PredictionCardProps
               (match.prediction === `${match.teamB} Win` && match.winner === "AWAY_TEAM") ||
               (match.prediction === "Draw" && match.winner === "DRAW");
             return (
-              <div className="mt-5 flex flex-col justify-center items-start gap-1">
-                <div className="flex items-center gap-2">
+              <div className="mt-6 flex flex-col justify-center items-start gap-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 block font-bold">
                     Final Score
                   </span>
@@ -137,38 +142,38 @@ function PredictionCard({ match, isActive, onViewAnalysis }: PredictionCardProps
             );
           })()
         ) : (
-          <div className="mt-5 space-y-1">
-            <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-600 block">
+          <div className="mt-6 space-y-1.5">
+            <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 block">
               Assessment
             </span>
-            <span className="text-white text-[15px] font-medium tracking-normal leading-snug block">
+            <span className="text-white text-base font-medium tracking-normal leading-snug block">
               {match.prediction}
             </span>
           </div>
         )}
       </div>
 
-      <div>
+      <div className="mt-auto pt-1">
         <div className="mb-4">
-          <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 mb-1.5">
-            <span>
+          <div className="flex justify-between items-center gap-2 text-[11px] font-mono text-zinc-400 mb-2 min-w-0">
+            <span className="truncate font-semibold text-zinc-300">
               {match.teamACode} {match.probA}%
             </span>
-            <span>Draw {match.probD}%</span>
-            <span>
+            <span className="shrink-0 font-semibold text-zinc-400">Draw {match.probD}%</span>
+            <span className="truncate font-semibold text-zinc-300 text-right">
               {match.teamBCode} {match.probB}%
             </span>
           </div>
-          <div className="h-1 w-full bg-zinc-900 flex rounded overflow-hidden">
+          <div className="h-1.5 w-full bg-zinc-900 flex rounded overflow-hidden">
             <div className="h-full bg-green-accent" style={{ width: `${match.probA}%` }} />
             <div className="h-full bg-zinc-750" style={{ width: `${match.probD}%` }} />
             <div className="h-full bg-zinc-800" style={{ width: `${match.probB}%` }} />
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-2.5 border-t border-zinc-900">
+        <div className="flex items-center justify-between pt-3 border-t border-zinc-900 gap-3">
           <span
-            className={`text-[10px] font-mono uppercase tracking-widest font-bold ${
+            className={`text-[10px] font-mono uppercase tracking-widest font-bold shrink-0 ${
               match.confidence === "High" ? "text-green-accent" : "text-yellow-500"
             }`}
           >
@@ -180,7 +185,7 @@ function PredictionCard({ match, isActive, onViewAnalysis }: PredictionCardProps
               onViewAnalysis(match);
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="text-xs font-mono font-bold text-white hover:text-green-accent flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="text-xs font-mono font-bold text-white hover:text-green-accent flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
           >
             View Analysis <ArrowRight className="w-3.5 h-3.5" />
           </button>
@@ -322,7 +327,7 @@ export function BestPredictionsCarousel({
           {Array.from({ length: 3 }).map((_, idx) => (
             <div
               key={idx}
-              className={`shrink-0 bg-zinc-950 border border-zinc-900 rounded p-6 flex flex-col justify-between h-[370px] animate-pulse ${
+              className={`shrink-0 bg-zinc-950 border border-zinc-900 rounded-lg p-7 flex flex-col justify-between min-h-[400px] animate-pulse ${
                 idx === 1 ? "w-[36%] opacity-100" : "w-[30%] opacity-70 hidden lg:flex"
               } ${idx === 0 ? "lg:flex" : ""}`}
             >
@@ -375,7 +380,7 @@ export function BestPredictionsCarousel({
 
           <motion.div
             ref={containerRef}
-            className="relative h-[390px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y"
+            className="relative h-[420px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y"
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.12}

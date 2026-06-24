@@ -652,7 +652,7 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     probA,
     probD,
     probB,
-    venue: f.venue || "TBD Stadium",
+    venue: f.venue?.trim() || null,
     liveScore: f.live_score ?? null,
     winner: f.winner,
     minute: f.live_minute ?? null,

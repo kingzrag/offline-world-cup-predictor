@@ -48,7 +48,8 @@ export interface MatchPrediction {
   probA: number; // probability of teamA win (0-100)
   probD: number; // probability of draw (0-100)
   probB: number; // probability of teamB win (0-100)
-  venue: string;
+  /** Home stadium — only present when verified in backend data */
+  venue?: string | null;
   winner?: 'HOME_TEAM' | 'AWAY_TEAM' | 'DRAW' | null;
 
   // Tactical ratings (0-99 scale)
