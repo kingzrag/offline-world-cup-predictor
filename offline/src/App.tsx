@@ -1240,7 +1240,7 @@ export default function App() {
             {/* Fully Responsive & Cinematic 100% Width editorial-hero */}
             <div 
               id="editorial-hero" 
-              className="relative w-full h-[calc(82vh-80px)] min-h-[520px] max-h-[700px] lg:max-h-[740px] flex flex-col justify-between bg-black overflow-hidden border-b border-zinc-900"
+              className="relative w-full h-[calc(100dvh-80px)] min-h-[560px] flex flex-col justify-between bg-black overflow-hidden border-b border-zinc-900"
               style={{
                 transform: `translateY(${scrollY * -0.15}px)`,
                 opacity: Math.max(0, 1 - scrollY / 600),
