@@ -37,6 +37,7 @@ import {
   isKickoffToday,
   isKickoffTomorrow,
 } from './dateTimeUtils';
+import { formatXG } from './xgUtils';
 import { motion } from 'motion/react';
 import { BestPredictionsCarousel } from './components/BestPredictionsCarousel';
 import {
@@ -2430,9 +2431,9 @@ export default function App() {
             .map(m => {
               // totalExpectedGoals from backend prediction; for COMPLETED matches use actual goals scored
               const totalXG: number | null = m.totalExpectedGoals
-                ? Number(m.totalExpectedGoals.toFixed(2))
+                ? m.totalExpectedGoals
                 : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
-                  ? Number((m.xGA + m.xGB).toFixed(2))
+                  ? (m.xGA + m.xGB)
                   : null;
               // Backend market only — null signals N/A
               const over25: number | null = m.overUnder?.["2.5"]
@@ -2460,9 +2461,9 @@ export default function App() {
                 ? Math.round((m.bttsMarket.no ?? 0) * 100)
                 : null;
               const totalXG: number | null = m.totalExpectedGoals
-                ? Number(m.totalExpectedGoals.toFixed(2))
+                ? m.totalExpectedGoals
                 : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
-                  ? Number((m.xGA + m.xGB).toFixed(2))
+                  ? (m.xGA + m.xGB)
                   : null;
 
               return { ...m, bttsYes, bttsNo, totalXG };
@@ -2559,9 +2560,9 @@ export default function App() {
             .map(m => {
               // Real xG from backend; actual goals for COMPLETED; null if unavailable
               const totalXG: number | null = m.totalExpectedGoals
-                ? Number(m.totalExpectedGoals.toFixed(2))
+                ? m.totalExpectedGoals
                 : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
-                  ? Number((m.xGA + m.xGB).toFixed(2))
+                  ? (m.xGA + m.xGB)
                   : null;
               // Backend markets only — null renders as N/A
               const bttsYes: number | null = m.bttsMarket
@@ -2711,7 +2712,7 @@ export default function App() {
                                 {m.teamA} <span className="text-zinc-500 text-xs font-normal">vs</span> {m.teamB}
                               </td>
                               <td className="py-3 px-5 text-center font-bold text-white">
-                                {m.totalXG ?? 'N/A'}
+                                {m.totalXG !== null ? formatXG(m.totalXG) : 'N/A'}
                               </td>
                               <td className="py-3 px-5 text-center text-green-accent font-bold">
                                 {m.over25 !== null ? `${m.over25}%` : 'N/A'}
@@ -2769,7 +2770,7 @@ export default function App() {
                                 {m.bttsNo !== null ? `${m.bttsNo}%` : 'N/A'}
                               </td>
                               <td className="py-3 px-5 text-right font-bold text-white">
-                                {m.totalXG ?? 'N/A'}
+                                {m.totalXG !== null ? formatXG(m.totalXG) : 'N/A'}
                               </td>
                             </tr>
                           ))}
@@ -3004,7 +3005,7 @@ export default function App() {
                               {m.over25 !== null ? `${m.over25}%` : 'N/A'}
                             </td>
                             <td className="py-4 px-5 text-center text-white font-bold">
-                              {m.totalXG ?? 'N/A'}
+                              {m.totalXG !== null ? formatXG(m.totalXG) : 'N/A'}
                             </td>
                             <td className="py-4 px-5 text-right font-bold text-green-accent">
                               {m.confidenceScore}%
@@ -4058,7 +4059,7 @@ export default function App() {
         // SECTION 2 — EXPECTED GOALS
         const xGA = match.xGA ?? 0;
         const xGB = match.xGB ?? 0;
-        const totalXG = (xGA + xGB).toFixed(2);
+        const totalXG = formatXG(xGA + xGB);
 
         // SECTION 3 — GOAL PROBABILITIES
         const poisson = (k: number, l: number) => {
@@ -4426,11 +4427,11 @@ export default function App() {
                     <div className="grid grid-cols-3 gap-4 text-center mt-2 font-mono text-xs">
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-500 block uppercase mb-1">{match.teamA} xG</span>
-                        <span className="text-sm font-bold text-white">{match.teamACode} xG: {xGA.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-white">{match.teamACode} xG: {formatXG(xGA)}</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-zinc-900">
                         <span className="text-[9px] text-zinc-550 block uppercase mb-1">{match.teamB} xG</span>
-                        <span className="text-sm font-bold text-white">{match.teamBCode} xG: {xGB.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-white">{match.teamBCode} xG: {formatXG(xGB)}</span>
                       </div>
                       <div className="p-2 bg-black rounded border border-[#1cdb5e]/40">
                         <span className="text-[9px] text-green-accent block uppercase mb-1">Total xG</span>
