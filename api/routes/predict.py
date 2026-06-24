@@ -29,8 +29,8 @@ router = APIRouter(prefix="/api", tags=["Predictions API"])
 
 
 def _compile_team_injuries_and_suspensions(db, team_id: int) -> tuple[list[str], list[str]]:
-    """Load injury/suspension records from all four intel tables for a team."""
-    from models import Injury, Suspension, NationalTeamInjury, NationalTeamSuspension
+    """Load injury/suspension records for a team."""
+    from models import Injury, Suspension
 
     injuries: list[str] = []
     suspensions: list[str] = []
@@ -49,17 +49,9 @@ def _compile_team_injuries_and_suspensions(db, team_id: int) -> tuple[list[str],
             seen_suspensions.add(key)
             suspensions.append(f"{player_name} ({reason})")
 
-    for inj in db.query(NationalTeamInjury).filter_by(team_id=team_id).all():
-        description = inj.injury_description or inj.injury_status or "Injured"
-        _add_injury(inj.player_name, description)
-
     for inj in db.query(Injury).filter_by(team_id=team_id).all():
         description = inj.injury_type or "Injured"
         _add_injury(inj.player_name, description)
-
-    for susp in db.query(NationalTeamSuspension).filter_by(team_id=team_id).all():
-        reason = susp.suspension_reason or "Suspended"
-        _add_suspension(susp.player_name, reason)
 
     for susp in db.query(Suspension).filter_by(team_id=team_id).all():
         reason = susp.suspension_reason or "Suspended"
@@ -995,6 +987,47 @@ def get_fixtures_enriched(
     t_query = time.perf_counter()
     query_time_ms = round((t_query - t_start) * 1000, 2)
 
+    # ── Bulk-load injury/suspension data for all teams in fixture set ──────────
+    # Collects all unique team IDs, then fires 4 queries total (no N+1).
+    from models import Injury, Suspension
+    from collections import defaultdict
+
+    _team_ids: set = set()
+    for _m in matches:
+        if _m.home_team_id:
+            _team_ids.add(_m.home_team_id)
+        if _m.away_team_id:
+            _team_ids.add(_m.away_team_id)
+
+    _inj_map: dict  = defaultdict(list)   # team_id → ["Player (desc)", …]
+    _susp_map: dict = defaultdict(list)   # team_id → ["Player (reason)", …]
+
+    if _team_ids:
+        for _i in db.query(Injury).filter(Injury.team_id.in_(_team_ids)).all():
+            _desc = _i.injury_type or "Injured"
+            _inj_map[_i.team_id].append(f"{_i.player_name} ({_desc})")
+        for _s in db.query(Suspension).filter(Suspension.team_id.in_(_team_ids)).all():
+            _reason = _s.suspension_reason or "Suspended"
+            _susp_map[_s.team_id].append(f"{_s.player_name} ({_reason})")
+
+    # Deduplicate while preserving order
+    def _dedup(lst: list) -> list:
+        return list(dict.fromkeys(lst))
+
+    # ── Serialise helpers ──────────────────────────────────────────────────────
+    def _team(t):
+        if not t:
+            return None
+        return {
+            "id":          t.id,
+            "name":        t.name,
+            "short_name":  t.short_name,
+            "tla":         t.tla,
+            "crest_url":   t.crest_url,
+            "injuries":    _dedup(_inj_map.get(t.id, [])),
+            "suspensions": _dedup(_susp_map.get(t.id, [])),
+        }
+
     now_utc = datetime.now(timezone.utc)
     cache_now = time.time()
     live_statuses  = {"IN_PLAY", "PAUSED"}
@@ -1009,11 +1042,6 @@ def get_fixtures_enriched(
 
         home_t = m.home_team
         away_t = m.away_team
-
-        def _team(t):
-            if not t:
-                return None
-            return {"id": t.id, "name": t.name, "short_name": t.short_name, "tla": t.tla, "crest_url": t.crest_url}
 
         live_score = None
         if m.status in score_statuses and m.home_score is not None and m.away_score is not None:

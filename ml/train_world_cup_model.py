@@ -68,6 +68,13 @@ FEATURES = [
     "world_cup_matches_played_diff",
     "major_tournament_matches_diff",
     "knockout_matches_diff",
+    # Injury & Suspension counts & absolute market-value loss
+    "home_injury_count",
+    "away_injury_count",
+    "home_suspension_count",
+    "away_suspension_count",
+    "home_injury_market_value_loss",
+    "away_injury_market_value_loss",
 ]
 TARGET = "target"
 

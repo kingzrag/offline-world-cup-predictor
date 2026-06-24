@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import text, func
 from database.connection import SessionLocal
-from models import Match, Competition, Team, NationalTeamInjury, NationalTeamSuspension
+from models import Match, Competition, Team, Injury, Suspension
 from ml.features import extract_ml_features
 from utils.logger import logger
 
@@ -113,15 +113,15 @@ def build_dataset():
                     if away_team and (away_team.squad_market_value is None or away_team.squad_market_value == 0.0):
                         logger.warning(f"Missing squad market value for team: {away_team.name}")
                         
-                    home_inj_count = db.query(NationalTeamInjury).filter_by(team_id=m.home_team_id).count()
-                    away_inj_count = db.query(NationalTeamInjury).filter_by(team_id=m.away_team_id).count()
+                    home_inj_count = db.query(Injury).filter_by(team_id=m.home_team_id).count()
+                    away_inj_count = db.query(Injury).filter_by(team_id=m.away_team_id).count()
                     if home_inj_count == 0 and home_team:
                         logger.info(f"Missing injury data (0 active injuries) for team: {home_team.name}")
                     if away_inj_count == 0 and away_team:
                         logger.info(f"Missing injury data (0 active injuries) for team: {away_team.name}")
                         
-                    home_susp_count = db.query(NationalTeamSuspension).filter_by(team_id=m.home_team_id).count()
-                    away_susp_count = db.query(NationalTeamSuspension).filter_by(team_id=m.away_team_id).count()
+                    home_susp_count = db.query(Suspension).filter_by(team_id=m.home_team_id).count()
+                    away_susp_count = db.query(Suspension).filter_by(team_id=m.away_team_id).count()
                     if home_susp_count == 0 and home_team:
                         logger.info(f"Missing suspension data (0 active suspensions) for team: {home_team.name}")
                     if away_susp_count == 0 and away_team:

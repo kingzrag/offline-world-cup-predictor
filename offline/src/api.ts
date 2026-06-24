@@ -190,6 +190,8 @@ export interface BackendFixtureTeam {
   short_name: string | null;
   tla: string | null;
   crest_url: string | null;
+  injuries?: string[];
+  suspensions?: string[];
 }
 
 export interface BackendFixtureLiveScore {
@@ -682,8 +684,10 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     // ─────────────────────────────────────────────────────────────────────────
     restDaysA: 4, restDaysB: 4,
     fatigueA: 20, fatigueB: 20,
-    injuriesA: [], injuriesB: [],
-    suspensionsA: [], suspensionsB: [],
+    injuriesA: f.home_team?.injuries || [],
+    injuriesB: f.away_team?.injuries || [],
+    suspensionsA: f.home_team?.suspensions || [],
+    suspensionsB: f.away_team?.suspensions || [],
     missingKeyPlayersA: [], missingKeyPlayersB: [],
     impactRatingA: "Minimal", impactRatingB: "Minimal",
     h2hPreviousMeetings: 0,

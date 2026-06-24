@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 from sqlalchemy import desc, or_, and_
-from models import Match, Team, TeamElo, Competition, Injury, Suspension, NationalTeamInjury, NationalTeamSuspension, NationalTeamPlayer
+from models import Match, Team, TeamElo, Competition, Injury, Suspension, NationalTeamPlayer
 
 def get_team_elo(db, team_name: str) -> int:
     """Retrieves the ELO rating for a team, falling back to 1500 if not found."""
@@ -322,19 +322,31 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
     logger.debug(f"Form diff: {form_diff}, GS diff: {gs_diff}, GC diff: {gc_diff}")
 
     # 5. Injury & suspension market‑value impacts (existing diff features)
-    home_injuries = db.query(NationalTeamInjury).filter_by(team_id=home_team_id).all()
-    away_injuries = db.query(NationalTeamInjury).filter_by(team_id=away_team_id).all()
-    home_inj_mv = sum(i.market_value_impact or 0.0 for i in home_injuries)
-    away_inj_mv = sum(i.market_value_impact or 0.0 for i in away_injuries)
+    home_injuries = db.query(Injury).filter_by(team_id=home_team_id).all()
+    away_injuries = db.query(Injury).filter_by(team_id=away_team_id).all()
+    home_inj_mv = sum(i.player_market_value or 0.0 for i in home_injuries)
+    away_inj_mv = sum(i.player_market_value or 0.0 for i in away_injuries)
     inj_diff = away_inj_mv - home_inj_mv  # positive = away worse off
     logger.debug(f"Injury impact: home €{home_inj_mv}M, away €{away_inj_mv}M, diff={inj_diff}")
 
-    home_suspensions = db.query(NationalTeamSuspension).filter_by(team_id=home_team_id).all()
-    away_suspensions = db.query(NationalTeamSuspension).filter_by(team_id=away_team_id).all()
-    home_susp_mv = sum(s.market_value_impact or 0.0 for s in home_suspensions)
-    away_susp_mv = sum(s.market_value_impact or 0.0 for s in away_suspensions)
+    home_suspensions = db.query(Suspension).filter_by(team_id=home_team_id).all()
+    away_suspensions = db.query(Suspension).filter_by(team_id=away_team_id).all()
+    home_susp_mv = sum(s.player_market_value or 0.0 for s in home_suspensions)
+    away_susp_mv = sum(s.player_market_value or 0.0 for s in away_suspensions)
     susp_diff = away_susp_mv - home_susp_mv  # positive = away worse off
     logger.debug(f"Suspension impact: home €{home_susp_mv}M, away €{away_susp_mv}M, diff={susp_diff}")
+
+    # 5b. Raw count & absolute market-value loss features (new — Step 6)
+    home_injury_count = len(home_injuries)
+    away_injury_count = len(away_injuries)
+    home_suspension_count = len(home_suspensions)
+    away_suspension_count = len(away_suspensions)
+    home_injury_market_value_loss = home_inj_mv
+    away_injury_market_value_loss = away_inj_mv
+    logger.debug(
+        f"Injury counts: home={home_injury_count}, away={away_injury_count}; "
+        f"Suspension counts: home={home_suspension_count}, away={away_suspension_count}"
+    )
 
     # ------------------------------------------------------------
     # Phase 2 player‑intelligence calculations
@@ -509,4 +521,11 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
         "home_btts_rate":                 home_btts_rate,
         "away_btts_rate":                 away_btts_rate,
         "btts_rate_diff":                 btts_rate_diff,
+        # ---- Injury & Suspension counts & absolute market-value loss ----
+        "home_injury_count":              home_injury_count,
+        "away_injury_count":              away_injury_count,
+        "home_suspension_count":          home_suspension_count,
+        "away_suspension_count":          away_suspension_count,
+        "home_injury_market_value_loss": home_injury_market_value_loss,
+        "away_injury_market_value_loss": away_injury_market_value_loss,
     }

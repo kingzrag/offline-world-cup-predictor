@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import text, func
 from database.connection import SessionLocal
-from models import Match, Competition, Team, NationalTeamInjury, NationalTeamSuspension
+from models import Match, Competition, Team, Injury, Suspension
 from ml.features import extract_ml_features
 from utils.logger import logger
 
