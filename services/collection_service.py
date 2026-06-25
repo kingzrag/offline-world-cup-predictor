@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 from utils.config import settings
 from utils.logger import logger
 from collectors import FootballDataCollector
+from collectors.api_football import APIFootballCollector
 from models import Competition, Team, Player, Injury, Match, Standing
 
 class CollectionService:
@@ -14,6 +15,7 @@ class CollectionService:
 
     Supported data sources:
       - Football-Data.org  (competitions, standings, matches)
+      - API-Football       (live match data, red cards, current minute)
       - Transfermarkt      (injuries, suspensions, squad values)
       - FIFA Rankings      (fifa rankings service)
       - Elo Ratings        (elo service)
@@ -21,6 +23,7 @@ class CollectionService:
     """
     def __init__(self):
         self.fd_collector = FootballDataCollector(settings.FOOTBALL_DATA_API_KEY)
+        self.api_football_collector = APIFootballCollector(settings.API_FOOTBALL_KEY)
 
     def _get_or_create_team(self, db: Session, api_id: str, name: str, short_name: str = None, tla: str = None, crest_url: str = None) -> Team:
         """
@@ -380,6 +383,123 @@ class CollectionService:
             db.rollback()
             logger.error(f"Error during Matches Ingestion: {str(e)}")
             raise e
+
+    async def ingest_api_football_live(self, db: Session) -> Dict[str, Any]:
+        """
+        Ingest live match data from API-Football:
+        - Fetches live matches
+        - Tries to match to existing Match records
+        - Updates current_minute, api_football_id, home/away red/yellow cards
+        """
+        logger.info("Starting API-Football live data ingestion...")
+        summary = {
+            "live_matches_fetched": 0,
+            "matches_updated": 0,
+            "red_cards_found": 0,
+            "minutes_updated": 0,
+            "updated_match_ids": [],
+        }
+        
+        try:
+            # Fetch all live fixtures
+            live_fixtures = await self.api_football_collector.fetch_live_matches()
+            summary["live_matches_fetched"] = len(live_fixtures)
+            logger.info(f"Fetched {len(live_fixtures)} live matches from API-Football")
+
+            for fixture_data in live_fixtures:
+                # First, get events for this fixture to get red/yellow cards
+                fixture_id = fixture_data.get("fixture", {}).get("id")
+                if not fixture_id:
+                    try:
+                        events = await self.api_football_collector.fetch_fixture_events(fixture_id)
+                        fixture_data["events"] = events
+                    except Exception as e:
+                            logger.debug(f"Could not fetch events for fixture {fixture_id}: {e}")
+                    
+                parsed = self.api_football_collector.parse_live_fixture(fixture_data)
+                
+                # Try to match the match in our DB
+                # Try to match using team names
+                home_team_name = parsed["home_team"].get("name")
+                away_team_name = parsed["away_team"].get("name")
+
+                # Find matches with same home/away team
+                home_team = db.query(Team).filter(Team.name.ilike(home_team_name)).first()
+                away_team = db.query(Team).filter(Team.name.ilike(away_team_name)).first()
+                if not home_team or not away_team:
+                    continue
+                
+                # Now find the actual match (latest match between these teams that's not finished
+                match = (
+                    db.query(Match)
+                    .filter(
+                        Match.home_team_id == home_team.id,
+                        Match.away_team_id == away_team.id,
+                        Match.status != "FINISHED"
+                    )
+                    .order_by(Match.utc_date.desc())
+                    .first()
+                )
+                
+                if not match:
+                    continue  # Skip if we don't have this match in DB
+                
+                # Okay, we found a match to update!
+                updated = False
+                
+                # Update api_football_id
+                if match.api_football_id != parsed["api_football_id"]:
+                    match.api_football_id = parsed["api_football_id"]
+                    updated = True
+                
+                # Update current minute
+                if parsed["current_minute"] is not None:
+                    if match.current_minute != parsed["current_minute"]:
+                        match.current_minute = parsed["current_minute"]
+                        summary["minutes_updated"] += 1
+                        updated = True
+                
+                # Update red/yellow cards
+                old_home_red = match.home_red_cards
+                old_away_red = match.away_red_cards
+                
+                match.home_red_cards = parsed["home_red_cards"]
+                match.away_red_cards = parsed["away_red_cards"]
+                match.home_yellow_cards = parsed["home_yellow_cards"]
+                match.away_yellow_cards = parsed["away_yellow_cards"]
+                
+                if old_home_red != match.home_red_cards or old_away_red != match.away_red_cards:
+                    summary["red_cards_found"] += (
+                        (match.home_red_cards + match.away_red_cards) - (old_home_red + old_away_red)
+                    )
+                    updated = True
+                
+                # Update current scores too!
+                if parsed["current_home_score"] is not None:
+                    match.current_home_score = parsed["current_home_score"]
+                    updated = True
+                if parsed["current_away_score"] is not None:
+                    match.current_away_score = parsed["current_away_score"]
+                    updated = True
+                
+                if updated:
+                    summary["matches_updated"] += 1
+                    summary["updated_match_ids"].append(match.id)
+                    logger.info(
+                        f"Updated match {match.id} ({home_team_name} vs {away_team_name}: "
+                        f"min: {match.current_minute}, "
+                        f"home red: {match.home_red_cards}, away red: {match.away_red_cards}"
+                    )
+            
+            db.commit()
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error in API-Football live ingestion: {str(e)}", exc_info=True)
+            raise
+        
+        logger.info(f"API-Football live data ingestion complete: {summary}")
+        return summary
 
     async def ingest_football_data(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
         """

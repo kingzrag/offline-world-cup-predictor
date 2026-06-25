@@ -7,6 +7,7 @@ class Match(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     api_id = Column(String(50), unique=True, index=True, nullable=True)
+    api_football_id = Column(String(50), unique=True, index=True, nullable=True)
     competition_id = Column(Integer, ForeignKey("competitions.id", ondelete="CASCADE"), nullable=False, index=True)
     home_team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
     away_team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
@@ -18,6 +19,15 @@ class Match(Base):
     away_score = Column(Integer, nullable=True)
     winner = Column(String(50), nullable=True)  # e.g., "HOME_TEAM", "AWAY_TEAM", "DRAW"
     live_minute = Column(Integer, nullable=True)
+    
+    # New live fields
+    current_minute = Column(Integer, nullable=True)
+    home_red_cards = Column(Integer, nullable=True, default=0)
+    away_red_cards = Column(Integer, nullable=True, default=0)
+    home_yellow_cards = Column(Integer, nullable=True, default=0)
+    away_yellow_cards = Column(Integer, nullable=True, default=0)
+    current_home_score = Column(Integer, nullable=True)
+    current_away_score = Column(Integer, nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

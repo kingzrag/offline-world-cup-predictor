@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # --- API Keys ---
     FOOTBALL_DATA_API_KEY: str = Field(default="mock_football_data_key", env="FOOTBALL_DATA_API_KEY")
     ODDS_API_KEY: str = Field(default="", env="ODDS_API_KEY")
+    API_FOOTBALL_KEY: str = Field(default="", env="API_FOOTBALL_KEY")
 
     # --- Database ---
     DATABASE_HOST: str = Field(default_factory=lambda: "db" if is_running_in_docker() else "localhost", env="DATABASE_HOST")

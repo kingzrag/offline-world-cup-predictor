@@ -103,7 +103,8 @@ app.include_router(admin_router)
 
 async def run_live_match_sync():
     """
-    Poll football-data.org every 30 seconds so live scores stay current during matches.
+    Poll football-data.org and API-Football every 30 seconds
+    so live scores stay current during matches.
     """
     from services.live_sync_state import (
         mark_task_initialized,
@@ -128,24 +129,34 @@ async def run_live_match_sync():
             db = SessionLocal()
             try:
                 service = CollectionService()
-                summary = await service.ingest_matches(db, "WC")
-                record_sync_complete(started_at, summary)
+                # First, ingest from football-data.org as before
+                fd_summary = await service.ingest_matches(db, "WC")
                 logger.info(
-                    f"Live sync completed — processed={summary.get('matches', 0)} "
-                    f"updated={summary.get('updated_count', 0)} "
-                    f"updated_ids={summary.get('updated_match_ids', [])}"
+                    f"Football-Data sync completed - processed={fd_summary.get('matches', 0)} "
+                    f"updated={fd_summary.get('updated_count', 0)} "
                 )
-                if summary.get("changes"):
-                    for change in summary["changes"]:
-                        logger.info(
-                            f"  ↳ {change['fixture']}: "
-                            f"{change['old_score']} → {change['new_score']} "
-                            f"({change['old_status']} → {change['new_status']}, "
-                            f"min {change['old_minute']} → {change['new_minute']})"
-                        )
+                
+                # Now, ingest live data from API-Football
+                af_summary = await service.ingest_api_football_live(db)
+                logger.info(
+                    f"API-Football sync completed - "
+                    f"live matches fetched: {af_summary.get('live_matches_fetched', 0)}, "
+                    f"matches updated: {af_summary.get('matches_updated', 0)}, "
+                    f"red cards found: {af_summary.get('red_cards_found', 0)}, "
+                    f"minutes updated: {af_summary.get('minutes_updated', 0)}"
+                )
+                
+                # Combine both summaries
+                combined_summary = {
+                    **fd_summary,
+                    **af_summary,
+                }
+                
+                record_sync_complete(started_at, combined_summary)
+                
             except Exception as e:
                 record_sync_error(str(e))
-                logger.error(f"Live sync failed during ingest_matches: {e}", exc_info=True)
+                logger.error(f"Live sync failed: {e}", exc_info=True)
             finally:
                 db.close()
         except asyncio.CancelledError:

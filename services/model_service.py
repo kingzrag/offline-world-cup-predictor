@@ -85,17 +85,19 @@ class ModelService:
     # ── Internal: extract features ────────────────────────────────────────────
     def _get_features(self, db, home_team_id: int, away_team_id: int,
                       match_date, competition_code: str = "WC",
-                      match_stage: Optional[str] = None) -> Dict[str, float]:
+                      match_stage: Optional[str] = None,
+                      match=None) -> Dict[str, float]:
         from ml.features import extract_ml_features
         return extract_ml_features(
             db, home_team_id, away_team_id, match_date,
             competition_code=competition_code,
             match_stage=match_stage,
+            match=match,
         )
 
     # ── 1X2 Prediction ────────────────────────────────────────────────────────
     def predict_1x2(self, db, home_team_id: int, away_team_id: int,
-                    match_date=None, competition_code: str = "WC") -> Dict[str, Any]:
+                    match_date=None, competition_code: str = "WC", match=None) -> Dict[str, Any]:
         """
         Returns Home Win / Draw / Away Win probabilities using world_cup_predictor.pkl.
         """
@@ -112,7 +114,7 @@ class ModelService:
         _away_name = _away.name if _away else str(away_team_id)
         logger.info(f"[predict_1x2] {_home_name} vs {_away_name} [{competition_code}]")
 
-        features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code)
+        features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
 
         wc_features: list = self._wc_bundle.get("features", [])
         model: xgb.XGBClassifier = self._wc_bundle["model"]
@@ -160,7 +162,7 @@ class ModelService:
 
     # ── Goal Prediction ───────────────────────────────────────────────────────
     def predict_goals(self, db, home_team_id: int, away_team_id: int,
-                      match_date=None, competition_code: str = "WC") -> Dict[str, Any]:
+                      match_date=None, competition_code: str = "WC", match=None) -> Dict[str, Any]:
         """
         Returns expected goals + full betting market suite via Poisson engine.
         """
@@ -177,7 +179,7 @@ class ModelService:
         _away_name = _away.name if _away else str(away_team_id)
         logger.info(f"[predict_goals] {_home_name} vs {_away_name} [{competition_code}]")
 
-        features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code)
+        features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
 
         goal_features: list = self._goal_bundle.get("features", [])
         home_model: xgb.XGBRegressor = self._goal_bundle["home_model"]
@@ -455,8 +457,8 @@ class ModelService:
                 },
             }
 
-        result_1x2   = self.predict_1x2(db, home.id, away.id, now, competition_code)
-        result_goals = self.predict_goals(db, home.id, away.id, now, competition_code)
+        result_1x2   = self.predict_1x2(db, home.id, away.id, now, competition_code, match_record)
+        result_goals = self.predict_goals(db, home.id, away.id, now, competition_code, match_record)
 
         return {
             "home_team":  home.name,

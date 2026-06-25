@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 from sqlalchemy import desc, or_, and_
-from models import Match, Team, TeamElo, Competition, Injury, Suspension, NationalTeamPlayer
+from models import Match, Team, TeamElo, Competition, Injury, Suspension, NationalTeamPlayer, Standing, BookmakerOdds
 
 def get_team_elo(db, team_name: str) -> int:
     """Retrieves the ELO rating for a team, falling back to 1500 if not found."""
@@ -285,9 +285,9 @@ def get_btts_rate(db, team_id: int, match_date) -> float:
 
     return btts_count / len(matches) if matches else 0.0
 
-def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, competition_code: str = "WC", match_stage: str = None) -> dict:
+def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, competition_code: str = "WC", match_stage: str = None, match: Match = None) -> dict:
     """
-    Generates all predictive match features for the home and away team pair, now including Phase 2 player‑intelligence features.
+    Generates all predictive match features for the home and away team pair, with live data integration!
     """
     home_team = db.query(Team).filter_by(id=home_team_id).first()
     away_team = db.query(Team).filter_by(id=away_team_id).first()
@@ -480,6 +480,82 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
     away_btts_rate = get_btts_rate(db, away_team_id, match_date)
     btts_rate_diff = home_btts_rate - away_btts_rate
 
+    # ------------------------------------------------------------
+    # NEW: LIVE FEATURES!
+    # ------------------------------------------------------------
+    # Standings features
+    competition = None
+    if match and match.competition_id:
+        competition = db.query(Competition).filter_by(id=match.competition_id).first()
+
+    home_group_position = 0
+    away_group_position = 0
+    home_points = 0
+    away_points = 0
+    home_goals_difference = 0
+    away_goals_difference = 0
+
+    if competition:
+        home_standing = db.query(Standing).filter_by(team_id=home_team_id, competition_id=competition.id).first()
+        away_standing = db.query(Standing).filter_by(team_id=away_team_id, competition_id=competition.id).first()
+        if home_standing:
+            home_group_position = home_standing.position
+            home_points = home_standing.points
+            home_goals_difference = home_standing.goals_difference
+        if away_standing:
+            away_group_position = away_standing.position
+            away_points = away_standing.points
+            away_goals_difference = away_standing.goals_difference
+    group_position_diff = away_group_position - home_group_position  # Lower position number = better!
+    points_diff = home_points - away_points
+    goal_difference_diff = home_goals_difference - away_goals_difference
+
+    # Betting odds features
+    home_implied_probability = 0.333
+    draw_implied_probability = 0.333
+    away_implied_probability = 0.333
+    
+    if match:
+        latest_odds = db.query(BookmakerOdds).filter_by(match_id=match.id).order_by(desc(BookmakerOdds.last_updated)).first()
+        if latest_odds:
+            home_odds = latest_odds.home_odds
+            draw_odds = latest_odds.draw_odds if latest_odds.draw_odds else 3.0
+            away_odds = latest_odds.away_odds
+            
+            home_implied = 1 / home_odds
+            draw_implied = 1 / draw_odds
+            away_implied = 1 / away_odds
+            total_implied = home_implied + draw_implied + away_implied
+            home_implied_probability = home_implied / total_implied
+            draw_implied_probability = draw_implied / total_implied
+            away_implied_probability = away_implied / total_implied
+
+    # Live match events
+    current_minute = 0
+    time_remaining = 90
+    current_home_score = None
+    current_away_score = None
+    current_score_diff = 0
+    home_red_cards = 0
+    away_red_cards = 0
+    red_card_diff = 0
+    
+    if match:
+        if match.current_minute:
+            current_minute = match.current_minute
+            time_remaining = max(0, 90 - match.current_minute)
+        if match.current_home_score is not None:
+            current_home_score = match.current_home_score
+        if match.current_away_score is not None:
+            current_away_score = match.current_away_score
+        if current_home_score is not None and current_away_score is not None:
+            current_score_diff = current_home_score - current_away_score
+        if match.home_red_cards:
+            home_red_cards = match.home_red_cards
+        if match.away_red_cards:
+            away_red_cards = match.away_red_cards
+        red_card_diff = home_red_cards - away_red_cards
+
     return {
         # ---- Phase 1 core features ----
         "elo_diff":                       elo_diff,
@@ -528,4 +604,23 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
         "away_suspension_count":          away_suspension_count,
         "home_injury_market_value_loss": home_injury_market_value_loss,
         "away_injury_market_value_loss": away_injury_market_value_loss,
+        # ---- NEW: Standings features ----
+        "home_group_position":            home_group_position,
+        "away_group_position":            away_group_position,
+        "group_position_diff":            group_position_diff,
+        "home_points":                    home_points,
+        "away_points":                    away_points,
+        "points_diff":                    points_diff,
+        "goal_difference_diff":           goal_difference_diff,
+        # ---- NEW: Betting odds features ----
+        "home_implied_probability":       home_implied_probability,
+        "draw_implied_probability":       draw_implied_probability,
+        "away_implied_probability":       away_implied_probability,
+        # ---- NEW: Live match features ----
+        "current_minute":                 current_minute,
+        "time_remaining":                 time_remaining,
+        "current_score_diff":             current_score_diff,
+        "home_red_cards":                 home_red_cards,
+        "away_red_cards":                 away_red_cards,
+        "red_card_diff":                  red_card_diff,
     }

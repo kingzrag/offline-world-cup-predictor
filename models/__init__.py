@@ -8,6 +8,7 @@ from models.match import Match
 from models.standing import Standing
 from models.prediction import Prediction
 from models.team_elo import TeamElo
+from models.bookmaker_odds import BookmakerOdds
 from models.national_team_player import NationalTeamPlayer
 from models.national_team_injury import NationalTeamInjury
 from models.national_team_suspension import NationalTeamSuspension
