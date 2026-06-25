@@ -18,19 +18,20 @@ from utils.logger import logger
 
 # Real injuries to seed
 KNOWN_INJURIES = {
-    "Neymar": ("Knee Injury", "ACL Tear", 300),
-    "Bukayo Saka": ("Hamstring Injury", "Strain", 20),
-    "Reece James": ("Thigh Injury", "Hamstring tear", 45),
-    "Lucas Hernandez": ("Knee Injury", "ACL Tear", 240),
-    "Kevin De Bruyne": ("Groin Injury", "Muscle tear", 30),
-    "Virgil van Dijk": ("Ankle Injury", "Knock", 10),
-    "Paulo Dybala": ("Thigh Injury", "Muscle pull", 14),
-    "Luis Diaz": ("Knee Injury", "Knock", 7),
-    "Takehiro Tomiyasu": ("Knee Injury", "Ligament damage", 90),
-    "Sadio Mane": ("Leg Injury", "Fibular head fracture", 60),
-    "Luka Modric": ("Muscle Injury", "Overload", 5),
-    "Darwin Nunez": ("Hamstring Injury", "Strain", 15),
-    "Granit Xhaka": ("Knee Injury", "Knock", 12)
+    "Neymar": ("Injured", "Knee Injury", 300),
+    "Bukayo Saka": ("Injured", "Hamstring Injury", 20),
+    "Reece James": ("Injured", "Hamstring Tear", 45),
+    "Lucas Hernandez": ("Injured", "Knee Injury", 240),
+    "Kevin De Bruyne": ("Injured", "Groin Injury", 30),
+    "Virgil van Dijk": ("Injured", "Ankle Injury", 10),
+    "Paulo Dybala": ("Injured", "Thigh Injury", 14),
+    "Luis Diaz": ("Injured", "Knee Injury", 7),
+    "Takehiro Tomiyasu": ("Injured", "Knee Injury", 90),
+    "Sadio Mane": ("Injured", "Leg Injury", 60),
+    "Luka Modric": ("Injured", "Muscle Injury", 5),
+    "Darwin Nunez": ("Injured", "Hamstring Injury", 15),
+    "Granit Xhaka": ("Injured", "Knee Injury", 12),
+    "Nico Schlotterbeck": ("Injured", "Ankle Sprain", 3),
 }
 
 INJURY_STATUSES = ["Injured", "Doubtful", "Knock", "Out Indefinitely"]

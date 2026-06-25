@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api", tags=["Predictions API"])
 
 def _compile_team_injuries_and_suspensions(db, team_id: int) -> tuple[list[str], list[str]]:
     """Load injury/suspension records for a team."""
-    from models import Injury, Suspension
+    from models import Injury, Suspension, NationalTeamInjury, NationalTeamSuspension
 
     injuries: list[str] = []
     suspensions: list[str] = []
@@ -52,8 +52,16 @@ def _compile_team_injuries_and_suspensions(db, team_id: int) -> tuple[list[str],
     for inj in db.query(Injury).filter_by(team_id=team_id).all():
         description = inj.injury_type or "Injured"
         _add_injury(inj.player_name, description)
+        
+    for inj in db.query(NationalTeamInjury).filter_by(team_id=team_id).all():
+        description = inj.injury_description or "Injured"
+        _add_injury(inj.player_name, description)
 
     for susp in db.query(Suspension).filter_by(team_id=team_id).all():
+        reason = susp.suspension_reason or "Suspended"
+        _add_suspension(susp.player_name, reason)
+        
+    for susp in db.query(NationalTeamSuspension).filter_by(team_id=team_id).all():
         reason = susp.suspension_reason or "Suspended"
         _add_suspension(susp.player_name, reason)
 
@@ -989,7 +997,7 @@ def get_fixtures_enriched(
 
     # ── Bulk-load injury/suspension data for all teams in fixture set ──────────
     # Collects all unique team IDs, then fires 4 queries total (no N+1).
-    from models import Injury, Suspension
+    from models import Injury, Suspension, NationalTeamInjury, NationalTeamSuspension
     from collections import defaultdict
 
     _team_ids: set = set()
@@ -1006,7 +1014,13 @@ def get_fixtures_enriched(
         for _i in db.query(Injury).filter(Injury.team_id.in_(_team_ids)).all():
             _desc = _i.injury_type or "Injured"
             _inj_map[_i.team_id].append(f"{_i.player_name} ({_desc})")
+        for _i in db.query(NationalTeamInjury).filter(NationalTeamInjury.team_id.in_(_team_ids)).all():
+            _desc = _i.injury_description or "Injured"
+            _inj_map[_i.team_id].append(f"{_i.player_name} ({_desc})")
         for _s in db.query(Suspension).filter(Suspension.team_id.in_(_team_ids)).all():
+            _reason = _s.suspension_reason or "Suspended"
+            _susp_map[_s.team_id].append(f"{_s.player_name} ({_reason})")
+        for _s in db.query(NationalTeamSuspension).filter(NationalTeamSuspension.team_id.in_(_team_ids)).all():
             _reason = _s.suspension_reason or "Suspended"
             _susp_map[_s.team_id].append(f"{_s.player_name} ({_reason})")
 

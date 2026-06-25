@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 from sqlalchemy import desc, or_, and_
-from models import Match, Team, TeamElo, Competition, Injury, Suspension, NationalTeamPlayer, Standing, BookmakerOdds
+from models import Match, Team, TeamElo, Competition, Injury, Suspension, NationalTeamInjury, NationalTeamSuspension, NationalTeamPlayer, Standing, BookmakerOdds
 
 def get_team_elo(db, team_name: str) -> int:
     """Retrieves the ELO rating for a team, falling back to 1500 if not found."""
@@ -323,24 +323,30 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
 
     # 5. Injury & suspension market‑value impacts (existing diff features)
     home_injuries = db.query(Injury).filter_by(team_id=home_team_id).all()
+    home_nt_injuries = db.query(NationalTeamInjury).filter_by(team_id=home_team_id).all()
     away_injuries = db.query(Injury).filter_by(team_id=away_team_id).all()
-    home_inj_mv = sum(i.player_market_value or 0.0 for i in home_injuries)
-    away_inj_mv = sum(i.player_market_value or 0.0 for i in away_injuries)
+    away_nt_injuries = db.query(NationalTeamInjury).filter_by(team_id=away_team_id).all()
+    
+    home_inj_mv = sum(i.player_market_value or 0.0 for i in home_injuries) + sum(i.market_value_impact or 0.0 for i in home_nt_injuries)
+    away_inj_mv = sum(i.player_market_value or 0.0 for i in away_injuries) + sum(i.market_value_impact or 0.0 for i in away_nt_injuries)
     inj_diff = away_inj_mv - home_inj_mv  # positive = away worse off
     logger.debug(f"Injury impact: home €{home_inj_mv}M, away €{away_inj_mv}M, diff={inj_diff}")
 
     home_suspensions = db.query(Suspension).filter_by(team_id=home_team_id).all()
+    home_nt_suspensions = db.query(NationalTeamSuspension).filter_by(team_id=home_team_id).all()
     away_suspensions = db.query(Suspension).filter_by(team_id=away_team_id).all()
-    home_susp_mv = sum(s.player_market_value or 0.0 for s in home_suspensions)
-    away_susp_mv = sum(s.player_market_value or 0.0 for s in away_suspensions)
+    away_nt_suspensions = db.query(NationalTeamSuspension).filter_by(team_id=away_team_id).all()
+    
+    home_susp_mv = sum(s.player_market_value or 0.0 for s in home_suspensions) + sum(s.market_value_impact or 0.0 for s in home_nt_suspensions)
+    away_susp_mv = sum(s.player_market_value or 0.0 for s in away_suspensions) + sum(s.market_value_impact or 0.0 for s in away_nt_suspensions)
     susp_diff = away_susp_mv - home_susp_mv  # positive = away worse off
     logger.debug(f"Suspension impact: home €{home_susp_mv}M, away €{away_susp_mv}M, diff={susp_diff}")
 
     # 5b. Raw count & absolute market-value loss features (new — Step 6)
-    home_injury_count = len(home_injuries)
-    away_injury_count = len(away_injuries)
-    home_suspension_count = len(home_suspensions)
-    away_suspension_count = len(away_suspensions)
+    home_injury_count = len(home_injuries) + len(home_nt_injuries)
+    away_injury_count = len(away_injuries) + len(away_nt_injuries)
+    home_suspension_count = len(home_suspensions) + len(home_nt_suspensions)
+    away_suspension_count = len(away_suspensions) + len(away_nt_suspensions)
     home_injury_market_value_loss = home_inj_mv
     away_injury_market_value_loss = away_inj_mv
     logger.debug(
@@ -358,10 +364,10 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
     away_player_mv = {p.player_name: (p.market_value or 0.0) for p in away_players}
 
     # Sets of injured / suspended player names
-    home_inj_names = {i.player_name for i in home_injuries}
-    away_inj_names = {i.player_name for i in away_injuries}
-    home_susp_names = {s.player_name for s in home_suspensions}
-    away_susp_names = {s.player_name for s in away_suspensions}
+    home_inj_names = {i.player_name for i in home_injuries} | {i.player_name for i in home_nt_injuries}
+    away_inj_names = {i.player_name for i in away_injuries} | {i.player_name for i in away_nt_injuries}
+    home_susp_names = {s.player_name for s in home_suspensions} | {s.player_name for s in home_nt_suspensions}
+    away_susp_names = {s.player_name for s in away_suspensions} | {s.player_name for s in away_nt_suspensions}
 
     # 6. Available squad value (market value of players not injured nor suspended)
     home_available = home_mv - home_inj_mv - home_susp_mv
