@@ -1,0 +1,165 @@
+
+#!/usr/bin/env python3
+import os
+import sys
+import pickle
+from datetime import datetime, timezone
+from sqlalchemy.orm import Session
+
+# Add project root to path
+project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, project_root)
+
+from database.connection import SessionLocal
+from models import Team, Match, Competition
+from ml.features import extract_ml_features
+
+
+def load_model_bundle(path):
+    """Load model bundle from pickle file."""
+    with open(path, "rb") as f:
+        return pickle.load(f)
+
+
+def get_team_by_name(db, name):
+    """Find team by name with fuzzy matching."""
+    team = db.query(Team).filter(Team.name.ilike(name)).first()
+    if not team:
+        team = db.query(Team).filter(Team.name.ilike(f"%{name}%")).first()
+    return team
+
+
+def main():
+    print("=" * 120)
+    print("GERMANY vs ECUADOR - END-TO-END PREDICTION TRACE")
+    print("=" * 120)
+
+    # 1. Initialize database session
+    print("\n[1/8] Initializing database session...")
+    db = SessionLocal()
+
+    # 2. Find teams
+    print("\n[2/8] Finding teams in database...")
+    germany = get_team_by_name(db, "Germany")
+    ecuador = get_team_by_name(db, "Ecuador")
+
+    if not germany or not ecuador:
+        print("ERROR: Could not find teams!")
+        db.close()
+        return
+
+    print(f"   - Germany (ID: {germany.id}, FIFA: {germany.fifa_ranking})")
+    print(f"   - Ecuador (ID: {ecuador.id}, FIFA: {ecuador.fifa_ranking})")
+
+    # 3. Load model bundles
+    print("\n[3/8] Loading model bundles...")
+    wc_bundle = load_model_bundle(os.path.join(project_root, "models", "world_cup_predictor.pkl"))
+    goal_bundle = load_model_bundle(os.path.join(project_root, "models", "goal_predictor.pkl"))
+
+    print(f"   - World Cup model loaded (features: {len(wc_bundle['features'])})")
+    print(f"   - Goal model loaded (features: {len(goal_bundle['features'])})")
+
+    # 4. Extract features
+    print("\n[4/8] Extracting ML features...")
+    match_date = datetime.now(timezone.utc)
+    features = extract_ml_features(
+        db,
+        home_team_id=germany.id,
+        away_team_id=ecuador.id,
+        match_date=match_date,
+        competition_code="WC"
+    )
+
+    print("\n   FEATURES EXTRACTED:")
+    for k, v in sorted(features.items()):
+        print(f"   • {k}: {v}")
+
+    # 5. Create feature vectors
+    print("\n[5/8] Creating feature vectors...")
+
+    # WC model vector
+    wc_features = wc_bundle["features"]
+    wc_vector = [features.get(f, 0.0) for f in wc_features]
+    print("\n   WORLD CUP MODEL FEATURE VECTOR:")
+    for i, (feat, val) in enumerate(zip(wc_features, wc_vector), 1):
+        print(f"   {i:2d}. {feat:40} = {val}")
+
+    # Goal model vector
+    goal_features = goal_bundle["features"]
+    goal_vector = [features.get(f, 0.0) for f in goal_features]
+    print("\n   GOAL MODEL FEATURE VECTOR:")
+    for i, (feat, val) in enumerate(zip(goal_features, goal_vector), 1):
+        print(f"   {i:2d}. {feat:40} = {val}")
+
+    # 6. Get raw predictions
+    print("\n[6/8] Running models for raw predictions...")
+    import pandas as pd
+    import numpy as np
+
+    # WC model prediction
+    wc_model = wc_bundle["model"]
+    wc_input_df = pd.DataFrame([wc_vector], columns=wc_features)
+    raw_probs = wc_model.predict_proba(wc_input_df)[0]
+    # Label mapping: 0 = Away, 1 = Draw, 2 = Home
+    raw_away, raw_draw, raw_home = raw_probs
+    print(f"   WORLD CUP RAW PROBS: Home={raw_home:.6f}, Draw={raw_draw:.6f}, Away={raw_away:.6f}")
+
+    # Apply rounding (as in model_service)
+    rounded_home = round(raw_home, 4)
+    rounded_draw = round(raw_draw, 4)
+    rounded_away = round(raw_away, 4)
+    print(f"   WORLD CUP ROUNDED PROBS: Home={rounded_home:.4f}, Draw={rounded_draw:.4f}, Away={rounded_away:.4f}")
+
+    # Goal model predictions
+    home_goal_model = goal_bundle["home_model"]
+    away_goal_model = goal_bundle["away_model"]
+    raw_xg_home = float(home_goal_model.predict(np.array([goal_vector]))[0])
+    raw_xg_away = float(away_goal_model.predict(np.array([goal_vector]))[0])
+    xg_home = max(0.0, raw_xg_home)
+    xg_away = max(0.0, raw_xg_away)
+    print(f"   GOAL MODEL RAW: Home={raw_xg_home:.6f}, Away={raw_xg_away:.6f}")
+    print(f"   GOAL MODEL CLIPPED: Home={xg_home:.4f}, Away={xg_away:.4f}")
+
+    # 7. Check if there's a match record
+    print("\n[7/8] Checking for existing match record...")
+    wc_comp = db.query(Competition).filter(Competition.code == "WC").first()
+    if wc_comp:
+        match = db.query(Match).filter(
+            Match.home_team_id == germany.id,
+            Match.away_team_id == ecuador.id,
+            Match.competition_id == wc_comp.id
+        ).order_by(Match.utc_date.desc()).first()
+        if match:
+            print(f"   Found match: {match.utc_date}, Status: {match.status}")
+        else:
+            print("   No match record found in DB")
+
+    # 8. Summary
+    print("\n[8/8] SUMMARY")
+    print("=" * 120)
+    print("   STAGES OF PROBABILITY TRANSFORMATION:")
+    print("   1. Raw model probs:")
+    print(f"      - Home: {raw_home:.6f} ({raw_home*100:.2f}%)")
+    print(f"      - Draw: {raw_draw:.6f} ({raw_draw*100:.2f}%)")
+    print(f"      - Away: {raw_away:.6f} ({raw_away*100:.2f}%)")
+    print("   2. Rounded to 4 decimals (for API response):")
+    print(f"      - Home: {rounded_home:.4f} ({rounded_home*100:.2f}%)")
+    print(f"      - Draw: {rounded_draw:.4f} ({rounded_draw*100:.2f}%)")
+    print(f"      - Away: {rounded_away:.4f} ({rounded_away*100:.2f}%)")
+    print("\n   FEATURES THAT CHANGED DURING TOURNAMENT:")
+    print("   - form_diff, gs_diff, gc_diff (updated after each match)")
+    print("   - elo_momentum_diff, home_elo_momentum, away_elo_momentum")
+    print("   - home_strength_of_schedule, away_strength_of_schedule, strength_of_schedule_diff")
+    print("   - home_attack_rating, away_attack_rating, attack_rating_diff")
+    print("   - home_defence_rating, away_defence_rating, defence_rating_diff")
+    print("   - clean_sheet_rate features, btts_rate features")
+
+    print("\n   NOTE: No further calibration/normalization is applied beyond rounding!")
+    print("   The frontend just multiplies by 100 to display percentages!")
+
+    db.close()
+
+
+if __name__ == "__main__":
+    main()
+

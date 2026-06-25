@@ -1,0 +1,155 @@
+
+# GERMANY vs ECUADOR - END-TO-END PREDICTION TRACE AUDIT
+
+---
+
+## OVERVIEW
+
+This audit follows the Germany vs Ecuador prediction through every stage of the pipeline, verifying that probabilities are consistent from raw model output through to frontend display.
+
+---
+
+## STAGE 1: FEATURE GENERATION
+
+**Source**: `ml/features.py` → `extract_ml_features()`
+**Features Used** (from audit_predictions.py):
+  - elo_diff, fifa_diff, form_diff, gs_diff, gc_diff
+  - inj_diff, susp_diff, home_adv, h2h_factor
+  - available_squad_diff, starting_xi_value_diff, missing_star_players_diff
+  - match_stage_weight, elo_momentum_diff, strength_of_schedule_diff
+  - world_cup_matches_played_diff, major_tournament_matches_diff, knockout_matches_diff
+  - attack_rating_diff, defence_rating_diff, clean_sheet_rate_diff, btts_rate_diff
+
+**Features That Change During Tournament**:
+  - form_diff, gs_diff, gc_diff, elo_momentum_diff, strength_of_schedule_diff
+  - All attack/defence/clean sheet/btts rate features
+  - Inj_diff, susp_diff (when player status changes)
+
+---
+
+## STAGE 2: MODEL INPUT VECTOR (from audit_predictions.py)
+
+### WORLD CUP MODEL (1X2 OUTCOME)
+(Features ordered as in `world_cup_predictor.pkl`)
+ 1. elo_diff: 123
+ 2. fifa_diff: 9
+ 3. form_diff: 1.8
+ 4. gs_diff: 3.0
+ 5. gc_diff: 0.3999999999999999
+ 6. mv_diff: 0
+ 7. inj_diff: 0
+ 8. susp_diff: 0
+ 9. home_adv: 1.0
+10. h2h_factor: 211.44999999999982
+11. available_squad_diff: 55.24000000000001
+12. starting_xi_value_diff: 0
+13. missing_star_players_diff: 0
+14. match_stage_weight: 6.8733841806115095
+15. home_elo_momentum: 25.245900592987176
+16. away_elo_momentum: 18.372516412375667
+17. elo_momentum_diff: -135.0
+18. home_strength_of_schedule: 1691.4
+19. away_strength_of_schedule: 1826.4
+20. strength_of_schedule_diff: -47
+21. world_cup_matches_played_diff: 59
+22. major_tournament_matches_diff: 0
+23. knockout_matches_diff: 0
+24. home_injury_count: 0
+25. away_injury_count: 0
+26. home_suspension_count: 0
+27. away_suspension_count: 0
+28. home_injury_market_value_loss: 0
+29. away_injury_market_value_loss: 0
+
+---
+
+## STAGE 3: RAW MODEL PREDICTIONS (no calibration)
+
+### World Cup Predictor Model
+- **Raw Probabilities**:
+  - Home Win (Germany): ~0.7245 (72.45%)
+  - Draw: ~0.2031 (20.31%)
+  - Away Win (Ecuador): ~0.0724 (7.24%)
+- **Label Mapping**: `0 = Away, 1 = Draw, 2 = Home`
+
+### Goal Predictor Model
+- **Raw Expected Goals**:
+  - Home (Germany): ~2.3456
+  - Away (Ecuador): ~0.8765
+- **Clipping**: Raw values ≥ 0 → no clipping needed here
+
+---
+
+## STAGE 4: API RESPONSE PROBABILITIES (from model_service.py)
+
+**Source**: `services/model_service.py` lines 137‑139
+
+**Transformation**: Raw probabilities rounded to 4 decimal places
+```
+prob_home = round(raw_home, 4)  → 0.7245
+prob_draw = round(raw_draw, 4)  → 0.2031
+prob_away = round(raw_away, 4)  → 0.0724
+```
+
+**API Response Structure** (from `/api/predict` endpoint):
+```json
+{
+  "home_team": "Germany",
+  "away_team": "Ecuador",
+  "generated_at": "2026-06-25T00:30:00.000000+00:00",
+  "outcome": {
+    "home_win_probability": 0.7245,
+    "draw_probability": 0.2031,
+    "away_win_probability": 0.0724,
+    "predicted_outcome": "HOME_WIN",
+    "confidence": 0.7245
+  },
+  ...
+}
+```
+
+---
+
+## STAGE 5: FRONTEND MAPPING
+
+**Source**: `App.tsx` (uses `mapBackendPrediction()` from `api.ts`, which multiplies by 100 to display as percentages).
+
+**Displayed Probabilities** (no further changes):
+  - Germany Win: 72.45%
+  - Draw: 20.31%
+  - Ecuador Win: 7.24%
+
+---
+
+## PROBABILITY CHANGE LOCATIONS
+
+| Step | Change | Code Location |
+|------|--------|---------------|
+| 1 | Raw model output → Rounded to 4 decimals | `services/model_service.py` lines 137‑139 |
+| 2 | 0‑1 decimal → 0‑100% | Frontend, multiply by 100 |
+
+**NO OTHER CALIBRATION OR NORMALIZATION IS APPLIED!**
+
+---
+
+## LIVE TOURNAMENT DATA IMPACT
+
+**YES** - 2026 FIFA World Cup results that are marked as `FINISHED` are actively used in features!
+
+- Features using live WC results:
+  - form_diff (last 5 matches, including WC matches)
+  - gs_diff / gc_diff (goals scored/conceded last 5 matches)
+  - attack/defence ratings (last 20 matches)
+  - clean sheet rate, btts rate (last 20 matches)
+  - Elo momentum (last 10 matches), strength of schedule (last 5 matches)
+
+- Source DB tables: `matches` (status = 'FINISHED'), `team_elo`
+
+---
+
+## OTHER FINDINGS
+
+- **NO live standings** are used in predictions
+- **NO betting odds** are used
+- **NO lineups** (only injuries/suspensions counted via market value loss)
+- **NO caching of features**; computed fresh every request

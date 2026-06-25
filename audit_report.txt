@@ -1,0 +1,374 @@
+========================================================================================================================
+PREDICTION FEATURE AUDIT REPORT
+========================================================================================================================
+
+------------------------------------------------------------------------------------------------------------------------
+MATCH: Germany vs Ecuador
+------------------------------------------------------------------------------------------------------------------------
+
+=== Extracted Features ===
+  attack_rating_diff                       = 2.2285714285714286
+  availability_pct_diff                    = 0.0
+  available_squad_diff                     = 211.44999999999982
+  away_attack_rating                       = 0.8571428571428571
+  away_btts_rate                           = 0.3
+  away_clean_sheet_rate                    = 0.65
+  away_defence_rating                      = 0.4857142857142857
+  away_elo_momentum                        = 18.372516412375667
+  away_injury_count                        = 0
+  away_injury_market_value_loss            = 0
+  away_strength_of_schedule                = 1826.4
+  away_suspension_count                    = 0
+  btts_rate_diff                           = 0.25000000000000006
+  clean_sheet_rate_diff                    = -0.30000000000000004
+  defence_rating_diff                      = 0.4857142857142857
+  elo_diff                                 = 123
+  elo_momentum_diff                        = 6.8733841806115095
+  fifa_diff                                = 9
+  form_diff                                = 1.8
+  gc_diff                                  = 0.3999999999999999
+  gs_diff                                  = 3.0
+  h2h_factor                               = 1.0
+  home_adv                                 = 0
+  home_attack_rating                       = 3.085714285714286
+  home_btts_rate                           = 0.55
+  home_clean_sheet_rate                    = 0.35
+  home_defence_rating                      = 0.9714285714285714
+  home_elo_momentum                        = 25.245900592987176
+  home_injury_count                        = 0
+  home_injury_market_value_loss            = 0
+  home_strength_of_schedule                = 1691.4
+  home_suspension_count                    = 0
+  inj_diff                                 = 0
+  knockout_matches_diff                    = 0
+  major_tournament_matches_diff            = 59
+  match_stage_weight                       = 0
+  missing_star_players_diff                = 0
+  mv_diff                                  = 211.44999999999982
+  starting_xi_value_diff                   = 55.24000000000001
+  strength_of_schedule_diff                = -135.0
+  susp_diff                                = 0
+  world_cup_matches_played_diff            = -47
+
+=== World Cup Model Input Vector ===
+  (Features in order used by model):
+   1. elo_diff                                 = 123
+   2. fifa_diff                                = 9
+   3. form_diff                                = 1.8
+   4. gs_diff                                  = 3.0
+   5. gc_diff                                  = 0.3999999999999999
+   6. inj_diff                                 = 0
+   7. susp_diff                                = 0
+   8. home_adv                                 = 0
+   9. h2h_factor                               = 1.0
+  10. available_squad_diff                     = 211.44999999999982
+  11. starting_xi_value_diff                   = 55.24000000000001
+  12. missing_star_players_diff                = 0
+  13. match_stage_weight                       = 0
+  14. elo_momentum_diff                        = 6.8733841806115095
+  15. home_elo_momentum                        = 25.245900592987176
+  16. away_elo_momentum                        = 18.372516412375667
+  17. strength_of_schedule_diff                = -135.0
+  18. home_strength_of_schedule                = 1691.4
+  19. away_strength_of_schedule                = 1826.4
+  20. world_cup_matches_played_diff            = -47
+  21. major_tournament_matches_diff            = 59
+  22. knockout_matches_diff                    = 0
+  23. home_injury_count                        = 0
+  24. away_injury_count                        = 0
+  25. home_suspension_count                    = 0
+  26. away_suspension_count                    = 0
+  27. home_injury_market_value_loss            = 0
+  28. away_injury_market_value_loss            = 0
+
+=== Goal Model Input Vector ===
+  (Features in order used by model):
+   1. elo_diff                                 = 123
+   2. fifa_diff                                = 9
+   3. form_diff                                = 1.8
+   4. gs_diff                                  = 3.0
+   5. gc_diff                                  = 0.3999999999999999
+   6. inj_diff                                 = 0
+   7. susp_diff                                = 0
+   8. available_squad_diff                     = 211.44999999999982
+   9. starting_xi_value_diff                   = 55.24000000000001
+  10. missing_star_players_diff                = 0
+  11. elo_momentum_diff                        = 6.8733841806115095
+  12. strength_of_schedule_diff                = -135.0
+  13. home_adv                                 = 0
+  14. h2h_factor                               = 1.0
+  15. match_stage_weight                       = 0
+  16. home_attack_rating                       = 3.085714285714286
+  17. away_attack_rating                       = 0.8571428571428571
+  18. attack_rating_diff                       = 2.2285714285714286
+  19. home_defence_rating                      = 0.9714285714285714
+  20. away_defence_rating                      = 0.4857142857142857
+  21. defence_rating_diff                      = 0.4857142857142857
+  22. home_clean_sheet_rate                    = 0.35
+  23. away_clean_sheet_rate                    = 0.65
+  24. clean_sheet_rate_diff                    = -0.30000000000000004
+  25. home_btts_rate                           = 0.55
+  26. away_btts_rate                           = 0.3
+  27. btts_rate_diff                           = 0.25000000000000006
+
+------------------------------------------------------------------------------------------------------------------------
+MATCH: Bosnia and Herzegovina vs Qatar
+------------------------------------------------------------------------------------------------------------------------
+
+=== Extracted Features ===
+  attack_rating_diff                       = 0.37142857142857144
+  availability_pct_diff                    = 0.0
+  available_squad_diff                     = -120.60999999999996
+  away_attack_rating                       = 1.1714285714285715
+  away_btts_rate                           = 0.7
+  away_clean_sheet_rate                    = 0.1
+  away_defence_rating                      = 2.2
+  away_elo_momentum                        = -30.61102720136649
+  away_injury_count                        = 0
+  away_injury_market_value_loss            = 0
+  away_strength_of_schedule                = 1707.8
+  away_suspension_count                    = 0
+  btts_rate_diff                           = -0.09999999999999998
+  clean_sheet_rate_diff                    = 0.15
+  defence_rating_diff                      = -0.9142857142857144
+  elo_diff                                 = -52
+  elo_momentum_diff                        = 43.69732255857806
+  fifa_diff                                = -11
+  form_diff                                = 0.5999999999999999
+  gc_diff                                  = -1.4000000000000001
+  gs_diff                                  = 0.3999999999999999
+  h2h_factor                               = 0.16666666666666666
+  home_adv                                 = 0
+  home_attack_rating                       = 1.542857142857143
+  home_btts_rate                           = 0.6
+  home_clean_sheet_rate                    = 0.25
+  home_defence_rating                      = 1.2857142857142858
+  home_elo_momentum                        = 13.086295357211567
+  home_injury_count                        = 0
+  home_injury_market_value_loss            = 0
+  home_strength_of_schedule                = 1715.0
+  home_suspension_count                    = 0
+  inj_diff                                 = 0
+  knockout_matches_diff                    = 0
+  major_tournament_matches_diff            = 6
+  match_stage_weight                       = 0
+  missing_star_players_diff                = 0
+  mv_diff                                  = -120.60999999999996
+  starting_xi_value_diff                   = -168.29000000000002
+  strength_of_schedule_diff                = 7.2000000000000455
+  susp_diff                                = 0
+  world_cup_matches_played_diff            = -30
+
+=== World Cup Model Input Vector ===
+  (Features in order used by model):
+   1. elo_diff                                 = -52
+   2. fifa_diff                                = -11
+   3. form_diff                                = 0.5999999999999999
+   4. gs_diff                                  = 0.3999999999999999
+   5. gc_diff                                  = -1.4000000000000001
+   6. inj_diff                                 = 0
+   7. susp_diff                                = 0
+   8. home_adv                                 = 0
+   9. h2h_factor                               = 0.16666666666666666
+  10. available_squad_diff                     = -120.60999999999996
+  11. starting_xi_value_diff                   = -168.29000000000002
+  12. missing_star_players_diff                = 0
+  13. match_stage_weight                       = 0
+  14. elo_momentum_diff                        = 43.69732255857806
+  15. home_elo_momentum                        = 13.086295357211567
+  16. away_elo_momentum                        = -30.61102720136649
+  17. strength_of_schedule_diff                = 7.2000000000000455
+  18. home_strength_of_schedule                = 1715.0
+  19. away_strength_of_schedule                = 1707.8
+  20. world_cup_matches_played_diff            = -30
+  21. major_tournament_matches_diff            = 6
+  22. knockout_matches_diff                    = 0
+  23. home_injury_count                        = 0
+  24. away_injury_count                        = 0
+  25. home_suspension_count                    = 0
+  26. away_suspension_count                    = 0
+  27. home_injury_market_value_loss            = 0
+  28. away_injury_market_value_loss            = 0
+
+=== Goal Model Input Vector ===
+  (Features in order used by model):
+   1. elo_diff                                 = -52
+   2. fifa_diff                                = -11
+   3. form_diff                                = 0.5999999999999999
+   4. gs_diff                                  = 0.3999999999999999
+   5. gc_diff                                  = -1.4000000000000001
+   6. inj_diff                                 = 0
+   7. susp_diff                                = 0
+   8. available_squad_diff                     = -120.60999999999996
+   9. starting_xi_value_diff                   = -168.29000000000002
+  10. missing_star_players_diff                = 0
+  11. elo_momentum_diff                        = 43.69732255857806
+  12. strength_of_schedule_diff                = 7.2000000000000455
+  13. home_adv                                 = 0
+  14. h2h_factor                               = 0.16666666666666666
+  15. match_stage_weight                       = 0
+  16. home_attack_rating                       = 1.542857142857143
+  17. away_attack_rating                       = 1.1714285714285715
+  18. attack_rating_diff                       = 0.37142857142857144
+  19. home_defence_rating                      = 1.2857142857142858
+  20. away_defence_rating                      = 2.2
+  21. defence_rating_diff                      = -0.9142857142857144
+  22. home_clean_sheet_rate                    = 0.25
+  23. away_clean_sheet_rate                    = 0.1
+  24. clean_sheet_rate_diff                    = 0.15
+  25. home_btts_rate                           = 0.6
+  26. away_btts_rate                           = 0.7
+  27. btts_rate_diff                           = -0.09999999999999998
+
+------------------------------------------------------------------------------------------------------------------------
+MATCH: Scotland vs Brazil
+------------------------------------------------------------------------------------------------------------------------
+
+=== Extracted Features ===
+  attack_rating_diff                       = -0.7142857142857144
+  availability_pct_diff                    = 0.0
+  available_squad_diff                     = -1015.3299999999999
+  away_attack_rating                       = 2.2
+  away_btts_rate                           = 0.5
+  away_clean_sheet_rate                    = 0.4
+  away_defence_rating                      = 0.8857142857142857
+  away_elo_momentum                        = -5.734970907605657
+  away_injury_count                        = 0
+  away_injury_market_value_loss            = 0
+  away_strength_of_schedule                = 1859.0
+  away_suspension_count                    = 0
+  btts_rate_diff                           = -0.04999999999999999
+  clean_sheet_rate_diff                    = -0.050000000000000044
+  defence_rating_diff                      = 0.17142857142857149
+  elo_diff                                 = -213
+  elo_momentum_diff                        = 13.568411201927452
+  fifa_diff                                = -30
+  form_diff                                = -0.8
+  gc_diff                                  = -0.3999999999999999
+  gs_diff                                  = -1.7999999999999998
+  h2h_factor                               = 0.0
+  home_adv                                 = 0
+  home_attack_rating                       = 1.4857142857142858
+  home_btts_rate                           = 0.45
+  home_clean_sheet_rate                    = 0.35
+  home_defence_rating                      = 1.0571428571428572
+  home_elo_momentum                        = 7.833440294321795
+  home_injury_count                        = 0
+  home_injury_market_value_loss            = 0
+  home_strength_of_schedule                = 1812.4
+  home_suspension_count                    = 0
+  inj_diff                                 = 0
+  knockout_matches_diff                    = 0
+  major_tournament_matches_diff            = 12
+  match_stage_weight                       = 0
+  missing_star_players_diff                = 0
+  mv_diff                                  = -1015.3299999999999
+  starting_xi_value_diff                   = -636.08
+  strength_of_schedule_diff                = -46.59999999999991
+  susp_diff                                = 0
+  world_cup_matches_played_diff            = -78
+
+=== World Cup Model Input Vector ===
+  (Features in order used by model):
+   1. elo_diff                                 = -213
+   2. fifa_diff                                = -30
+   3. form_diff                                = -0.8
+   4. gs_diff                                  = -1.7999999999999998
+   5. gc_diff                                  = -0.3999999999999999
+   6. inj_diff                                 = 0
+   7. susp_diff                                = 0
+   8. home_adv                                 = 0
+   9. h2h_factor                               = 0.0
+  10. available_squad_diff                     = -1015.3299999999999
+  11. starting_xi_value_diff                   = -636.08
+  12. missing_star_players_diff                = 0
+  13. match_stage_weight                       = 0
+  14. elo_momentum_diff                        = 13.568411201927452
+  15. home_elo_momentum                        = 7.833440294321795
+  16. away_elo_momentum                        = -5.734970907605657
+  17. strength_of_schedule_diff                = -46.59999999999991
+  18. home_strength_of_schedule                = 1812.4
+  19. away_strength_of_schedule                = 1859.0
+  20. world_cup_matches_played_diff            = -78
+  21. major_tournament_matches_diff            = 12
+  22. knockout_matches_diff                    = 0
+  23. home_injury_count                        = 0
+  24. away_injury_count                        = 0
+  25. home_suspension_count                    = 0
+  26. away_suspension_count                    = 0
+  27. home_injury_market_value_loss            = 0
+  28. away_injury_market_value_loss            = 0
+
+=== Goal Model Input Vector ===
+  (Features in order used by model):
+   1. elo_diff                                 = -213
+   2. fifa_diff                                = -30
+   3. form_diff                                = -0.8
+   4. gs_diff                                  = -1.7999999999999998
+   5. gc_diff                                  = -0.3999999999999999
+   6. inj_diff                                 = 0
+   7. susp_diff                                = 0
+   8. available_squad_diff                     = -1015.3299999999999
+   9. starting_xi_value_diff                   = -636.08
+  10. missing_star_players_diff                = 0
+  11. elo_momentum_diff                        = 13.568411201927452
+  12. strength_of_schedule_diff                = -46.59999999999991
+  13. home_adv                                 = 0
+  14. h2h_factor                               = 0.0
+  15. match_stage_weight                       = 0
+  16. home_attack_rating                       = 1.4857142857142858
+  17. away_attack_rating                       = 2.2
+  18. attack_rating_diff                       = -0.7142857142857144
+  19. home_defence_rating                      = 1.0571428571428572
+  20. away_defence_rating                      = 0.8857142857142857
+  21. defence_rating_diff                      = 0.17142857142857149
+  22. home_clean_sheet_rate                    = 0.35
+  23. away_clean_sheet_rate                    = 0.4
+  24. clean_sheet_rate_diff                    = -0.050000000000000044
+  25. home_btts_rate                           = 0.45
+  26. away_btts_rate                           = 0.5
+  27. btts_rate_diff                           = -0.04999999999999999
+
+========================================================================================================================
+
+=== Summary of Features Used by Any Model ===
+    ✓  attack_rating_diff
+  ✓ ✓  available_squad_diff
+    ✓  away_attack_rating
+    ✓  away_btts_rate
+    ✓  away_clean_sheet_rate
+    ✓  away_defence_rating
+  ✓    away_elo_momentum
+  ✓    away_injury_count
+  ✓    away_injury_market_value_loss
+  ✓    away_strength_of_schedule
+  ✓    away_suspension_count
+    ✓  btts_rate_diff
+    ✓  clean_sheet_rate_diff
+    ✓  defence_rating_diff
+  ✓ ✓  elo_diff
+  ✓ ✓  elo_momentum_diff
+  ✓ ✓  fifa_diff
+  ✓ ✓  form_diff
+  ✓ ✓  gc_diff
+  ✓ ✓  gs_diff
+  ✓ ✓  h2h_factor
+  ✓ ✓  home_adv
+    ✓  home_attack_rating
+    ✓  home_btts_rate
+    ✓  home_clean_sheet_rate
+    ✓  home_defence_rating
+  ✓    home_elo_momentum
+  ✓    home_injury_count
+  ✓    home_injury_market_value_loss
+  ✓    home_strength_of_schedule
+  ✓    home_suspension_count
+  ✓ ✓  inj_diff
+  ✓    knockout_matches_diff
+  ✓    major_tournament_matches_diff
+  ✓ ✓  match_stage_weight
+  ✓ ✓  missing_star_players_diff
+  ✓ ✓  starting_xi_value_diff
+  ✓ ✓  strength_of_schedule_diff
+  ✓ ✓  susp_diff
+  ✓    world_cup_matches_played_diff
