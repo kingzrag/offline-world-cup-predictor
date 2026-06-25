@@ -487,6 +487,9 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
     competition = None
     if match and match.competition_id:
         competition = db.query(Competition).filter_by(id=match.competition_id).first()
+    # If no competition from match, try to get by competition_code!
+    if not competition and competition_code:
+        competition = db.query(Competition).filter_by(code=competition_code).first()
 
     home_group_position = 0
     away_group_position = 0
