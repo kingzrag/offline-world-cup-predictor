@@ -580,12 +580,12 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
         home_performances = db.query(PlayerMatchPerformance)\
             .filter(PlayerMatchPerformance.match_id == match.id,
                     PlayerMatchPerformance.team_id == match.home_team_id,
-                    PlayerMatchPerformance.is_starter == True)\
+                    PlayerMatchPerformance.is_starter == 1)\
             .all()
         away_performances = db.query(PlayerMatchPerformance)\
             .filter(PlayerMatchPerformance.match_id == match.id,
                     PlayerMatchPerformance.team_id == match.away_team_id,
-                    PlayerMatchPerformance.is_starter == True)\
+                    PlayerMatchPerformance.is_starter == 1)\
             .all()
         
         if home_performances:
@@ -616,6 +616,87 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
             f"SofaScore features: home_avg_rating={home_avg_rating:.2f}, "
             f"away_avg_rating={away_avg_rating:.2f}, possession_diff={possession_diff:.1f}, xg_diff={xg_diff:.2f}"
         )
+
+    # ------------------------------------------------------------
+    # NEW: MATCH INTELLIGENCE FEATURES (Phase 4 expansion)
+    # All 16 intelligence scores with safe defaults = 0.0
+    # ------------------------------------------------------------
+    home_attacking_strength = 0.0
+    away_attacking_strength = 0.0
+    home_defensive_strength = 0.0
+    away_defensive_strength = 0.0
+    home_midfield_control = 0.0
+    away_midfield_control = 0.0
+    home_goalkeeper_performance = 0.0
+    away_goalkeeper_performance = 0.0
+    home_passing_dominance = 0.0
+    away_passing_dominance = 0.0
+    home_pressing_intensity = 0.0
+    away_pressing_intensity = 0.0
+    home_set_piece_threat = 0.0
+    away_set_piece_threat = 0.0
+    home_discipline_score = 1.0   # default: perfectly disciplined
+    away_discipline_score = 1.0
+    home_fatigue_score = 1.0      # default: fully fresh
+    away_fatigue_score = 1.0
+    home_substitution_impact = 0.0
+    away_substitution_impact = 0.0
+    home_player_availability_score = 1.0
+    away_player_availability_score = 1.0
+    home_injury_impact = 0.0
+    away_injury_impact = 0.0
+    home_suspension_impact = 0.0
+    away_suspension_impact = 0.0
+    home_formation_stability = 0.5   # default: unknown
+    away_formation_stability = 0.5
+    home_momentum_score = 0.5        # default: neutral
+    away_momentum_score = 0.5
+    confidence_score = 0.5
+
+    if match:
+        try:
+            from services.intelligence_service import IntelligenceService
+            intel_svc = IntelligenceService()
+            intel = intel_svc.calculate_match_intelligence(db, match)
+
+            home_attacking_strength = intel.home_attacking_strength
+            away_attacking_strength = intel.away_attacking_strength
+            home_defensive_strength = intel.home_defensive_strength
+            away_defensive_strength = intel.away_defensive_strength
+            home_midfield_control = intel.home_midfield_control
+            away_midfield_control = intel.away_midfield_control
+            home_goalkeeper_performance = intel.home_goalkeeper_performance
+            away_goalkeeper_performance = intel.away_goalkeeper_performance
+            home_passing_dominance = intel.home_passing_dominance
+            away_passing_dominance = intel.away_passing_dominance
+            home_pressing_intensity = intel.home_pressing_intensity
+            away_pressing_intensity = intel.away_pressing_intensity
+            home_set_piece_threat = intel.home_set_piece_threat
+            away_set_piece_threat = intel.away_set_piece_threat
+            home_discipline_score = intel.home_discipline_score
+            away_discipline_score = intel.away_discipline_score
+            home_fatigue_score = intel.home_fatigue_score
+            away_fatigue_score = intel.away_fatigue_score
+            home_substitution_impact = intel.home_substitution_impact
+            away_substitution_impact = intel.away_substitution_impact
+            home_player_availability_score = intel.home_player_availability_score
+            away_player_availability_score = intel.away_player_availability_score
+            home_injury_impact = intel.home_injury_impact
+            away_injury_impact = intel.away_injury_impact
+            home_suspension_impact = intel.home_suspension_impact
+            away_suspension_impact = intel.away_suspension_impact
+            home_formation_stability = intel.home_formation_stability
+            away_formation_stability = intel.away_formation_stability
+            home_momentum_score = intel.home_momentum_score
+            away_momentum_score = intel.away_momentum_score
+            confidence_score = intel.confidence_score
+
+            logger.debug(
+                f"Intelligence features: confidence={confidence_score:.2f}, "
+                f"home_momentum={home_momentum_score:.2f}, away_momentum={away_momentum_score:.2f}"
+            )
+        except Exception as e:
+            logger.debug(f"Could not compute Match Intelligence features: {e}")
 
     return {
         # ---- Phase 1 core features ----
@@ -694,4 +775,51 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
         "home_expected_goals":            home_xg,
         "away_expected_goals":            away_xg,
         "expected_goals_diff":            xg_diff,
+        # ---- NEW: MATCH INTELLIGENCE FEATURES (Phase 4 expansion) ----
+        "home_attacking_strength":        home_attacking_strength,
+        "away_attacking_strength":        away_attacking_strength,
+        "attacking_strength_diff":        home_attacking_strength - away_attacking_strength,
+        "home_defensive_strength":        home_defensive_strength,
+        "away_defensive_strength":        away_defensive_strength,
+        "defensive_strength_diff":        home_defensive_strength - away_defensive_strength,
+        "home_midfield_control":          home_midfield_control,
+        "away_midfield_control":          away_midfield_control,
+        "midfield_control_diff":          home_midfield_control - away_midfield_control,
+        "home_goalkeeper_performance":    home_goalkeeper_performance,
+        "away_goalkeeper_performance":    away_goalkeeper_performance,
+        "goalkeeper_performance_diff":    home_goalkeeper_performance - away_goalkeeper_performance,
+        "home_passing_dominance":         home_passing_dominance,
+        "away_passing_dominance":         away_passing_dominance,
+        "passing_dominance_diff":         home_passing_dominance - away_passing_dominance,
+        "home_pressing_intensity":        home_pressing_intensity,
+        "away_pressing_intensity":        away_pressing_intensity,
+        "pressing_intensity_diff":        home_pressing_intensity - away_pressing_intensity,
+        "home_set_piece_threat":          home_set_piece_threat,
+        "away_set_piece_threat":          away_set_piece_threat,
+        "set_piece_threat_diff":          home_set_piece_threat - away_set_piece_threat,
+        "home_discipline_score":          home_discipline_score,
+        "away_discipline_score":          away_discipline_score,
+        "discipline_score_diff":          home_discipline_score - away_discipline_score,
+        "home_fatigue_score":             home_fatigue_score,
+        "away_fatigue_score":             away_fatigue_score,
+        "fatigue_score_diff":             home_fatigue_score - away_fatigue_score,
+        "home_substitution_impact":       home_substitution_impact,
+        "away_substitution_impact":       away_substitution_impact,
+        "substitution_impact_diff":       home_substitution_impact - away_substitution_impact,
+        "home_player_availability_score": home_player_availability_score,
+        "away_player_availability_score": away_player_availability_score,
+        "availability_score_diff":        home_player_availability_score - away_player_availability_score,
+        "home_injury_impact":             home_injury_impact,
+        "away_injury_impact":             away_injury_impact,
+        "injury_impact_diff":             home_injury_impact - away_injury_impact,
+        "home_suspension_impact":         home_suspension_impact,
+        "away_suspension_impact":         away_suspension_impact,
+        "suspension_impact_diff":         home_suspension_impact - away_suspension_impact,
+        "home_formation_stability":       home_formation_stability,
+        "away_formation_stability":       away_formation_stability,
+        "formation_stability_diff":       home_formation_stability - away_formation_stability,
+        "home_momentum_score":            home_momentum_score,
+        "away_momentum_score":            away_momentum_score,
+        "momentum_score_diff":            home_momentum_score - away_momentum_score,
+        "confidence_score":               confidence_score,
     }

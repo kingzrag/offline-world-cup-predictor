@@ -1,12 +1,13 @@
 import time
-from datetime import datetime, date
-from typing import Dict, Any, List, Tuple
+from datetime import date, datetime
+from typing import Any, Dict, List, Tuple
+
 import requests
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
 
+from models import Competition, Injury, NationalTeamPlayer, Standing, Suspension, Team
 from utils.logger import logger
-from models import Competition, Team, Standing, Injury, Suspension, NationalTeamPlayer
 
 # Static mapping for National Teams to automatically populate empty URLs
 NATIONAL_TEAM_TRANSFERMARKT_URLS = {
@@ -74,6 +75,7 @@ NATIONAL_TEAM_TRANSFERMARKT_URLS = {
     "Panama": "https://www.transfermarkt.com/panama/sperrenundverletzungen/verein/3822",
 }
 
+
 class TransfermarktService:
     """
     Service to ingest injury and suspension data from Transfermarkt.
@@ -91,9 +93,13 @@ class TransfermarktService:
                 response = requests.get(url, headers=self.headers, timeout=15)
                 if response.status_code == 200:
                     return response.text
-                logger.warning(f"Transfermarkt returned code {response.status_code} for {url}. Attempt {attempt + 1}/{retries}")
+                logger.warning(
+                    f"Transfermarkt returned code {response.status_code} for {url}. Attempt {attempt + 1}/{retries}"
+                )
             except Exception as e:
-                logger.warning(f"Error fetching {url}: {str(e)}. Attempt {attempt + 1}/{retries}")
+                logger.warning(
+                    f"Error fetching {url}: {str(e)}. Attempt {attempt + 1}/{retries}"
+                )
             if attempt < retries - 1:
                 time.sleep(delay * (attempt + 1))
         return None
@@ -117,7 +123,9 @@ class TransfermarktService:
         val_clean = "".join(c for c in val_str if c.isdigit())
         return int(val_clean) if val_clean else None
 
-    def _scrape_team_data(self, url: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    def _scrape_team_data(
+        self, url: str
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         Scrapes a Transfermarkt team URL and extracts injuries and suspensions.
         """
@@ -128,7 +136,7 @@ class TransfermarktService:
 
         soup = BeautifulSoup(html_content, "lxml")
         tables = soup.find_all("table")
-        
+
         injuries = []
         suspensions = []
 
@@ -136,7 +144,18 @@ class TransfermarktService:
         target_table = None
         for idx, table in enumerate(tables):
             headers = [th.get_text(strip=True) for th in table.find_all("th")]
-            if "Player" in headers and "Reason" in headers and ("Expected return" in headers or "Expected Return" in headers):
+            normalized_headers = {h.lower() for h in headers}
+            has_player = any(h in normalized_headers for h in {"player", "spieler"})
+            has_reason = any(h in normalized_headers for h in {"reason", "grund"})
+            has_return = any(
+                h in normalized_headers
+                for h in {"expected return", "expectedreturn", "bis voraussichtlich"}
+            )
+            if (
+                has_player
+                and has_reason
+                and (has_return or "verpasste spiele" in normalized_headers)
+            ):
                 target_table = table
                 break
 
@@ -144,9 +163,11 @@ class TransfermarktService:
             logger.warning(f"No injury/suspension table found at URL: {url}")
             return [], []
 
-        tbody = target_table.find("tbody") if target_table.find("tbody") else target_table
+        tbody = (
+            target_table.find("tbody") if target_table.find("tbody") else target_table
+        )
         rows = tbody.find_all("tr", recursive=False)
-        
+
         current_section = "Injuries"
         for r in rows:
             cells = r.find_all("td", recursive=False)
@@ -154,7 +175,7 @@ class TransfermarktService:
                 # Update the active section header (e.g. "Injuries", "Red card suspension", etc.)
                 current_section = cells[0].get_text(strip=True)
                 continue
-            
+
             if len(cells) < 3:
                 continue
 
@@ -166,7 +187,9 @@ class TransfermarktService:
 
             reason = cells[2].get_text(strip=True) if len(cells) > 2 else ""
             since_str = cells[3].get_text(strip=True) if len(cells) > 3 else ""
-            expected_return_str = cells[4].get_text(strip=True) if len(cells) > 4 else ""
+            expected_return_str = (
+                cells[4].get_text(strip=True) if len(cells) > 4 else ""
+            )
             missed_matches_str = cells[5].get_text(strip=True) if len(cells) > 5 else ""
 
             since_date = self._parse_date(since_str)
@@ -175,24 +198,26 @@ class TransfermarktService:
             # Classify as suspension or injury based on section name and reason text
             section_lower = current_section.lower()
             reason_lower = reason.lower()
-            
+
             is_suspension = (
-                "suspens" in section_lower or
-                "sperr" in section_lower or
-                "ban" in section_lower or
-                "card" in section_lower or
-                "suspens" in reason_lower or
-                "ban" in reason_lower or
-                "card" in reason_lower
+                "suspens" in section_lower
+                or "sperr" in section_lower
+                or "ban" in section_lower
+                or "card" in section_lower
+                or "suspens" in reason_lower
+                or "ban" in reason_lower
+                or "card" in reason_lower
             )
 
             if is_suspension:
                 matches_remaining = self._parse_int(missed_matches_str)
-                suspensions.append({
-                    "player_name": player_name,
-                    "suspension_reason": reason or current_section,
-                    "matches_remaining": matches_remaining
-                })
+                suspensions.append(
+                    {
+                        "player_name": player_name,
+                        "suspension_reason": reason or current_section,
+                        "matches_remaining": matches_remaining,
+                    }
+                )
             else:
                 # Calculate days out
                 days_out = None
@@ -201,12 +226,14 @@ class TransfermarktService:
                 elif expected_return_date:
                     days_out = max(0, (expected_return_date - date.today()).days)
 
-                injuries.append({
-                    "player_name": player_name,
-                    "injury_type": reason or "Unknown Injury",
-                    "expected_return_date": expected_return_date,
-                    "days_out": days_out
-                })
+                injuries.append(
+                    {
+                        "player_name": player_name,
+                        "injury_type": reason or "Unknown Injury",
+                        "expected_return_date": expected_return_date,
+                        "days_out": days_out,
+                    }
+                )
 
         return injuries, suspensions
 
@@ -226,18 +253,24 @@ class TransfermarktService:
                 break
 
         if matched_url:
-            logger.info(f"Auto-populating Transfermarkt URL for team {team_name} -> {matched_url}")
+            logger.info(
+                f"Auto-populating Transfermarkt URL for team {team_name} -> {matched_url}"
+            )
             team.transfermarkt_url = matched_url
             db.commit()
             return matched_url
 
         return None
 
-    def ingest_injuries(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
+    def ingest_injuries(
+        self, db: Session, competition_code: str = "WC"
+    ) -> Dict[str, Any]:
         """
         Scrapes and ingests active injuries for all teams in the given competition.
         """
-        logger.info(f"Starting Transfermarkt injuries ingestion for competition: {competition_code}")
+        logger.info(
+            f"Starting Transfermarkt injuries ingestion for competition: {competition_code}"
+        )
         summary = {"injuries": 0, "teams_processed": 0}
 
         try:
@@ -246,31 +279,37 @@ class TransfermarktService:
                 logger.error(f"Competition {competition_code} not found.")
                 return summary
 
-            standings = db.query(Standing).filter_by(competition_id=target_comp.id).all()
+            standings = (
+                db.query(Standing).filter_by(competition_id=target_comp.id).all()
+            )
             for standing in standings:
                 try:
                     team_db = standing.team
                     url = self._resolve_team_url(db, team_db)
                     if not url:
-                        logger.warning(f"No Transfermarkt URL available for team {team_db.name}, skipping.")
+                        logger.warning(
+                            f"No Transfermarkt URL available for team {team_db.name}, skipping."
+                        )
                         continue
 
                     logger.info(f"Fetching injury data for team: {team_db.name}...")
                     injuries_list, _ = self._scrape_team_data(url)
-                    
+
                     # Build player name to market value map for this team
                     player_market_values = {
                         p.player_name: p.market_value
-                        for p in db.query(NationalTeamPlayer).filter_by(team_id=team_db.id).all()
+                        for p in db.query(NationalTeamPlayer)
+                        .filter_by(team_id=team_db.id)
+                        .all()
                     }
-                    
+
                     # Delete existing injury records for this team to prevent stale data
                     db.query(Injury).filter_by(team_id=team_db.id).delete()
-                    
+
                     for inj in injuries_list:
                         player_name = inj["player_name"]
                         player_mv = player_market_values.get(player_name, 0.0)
-                        
+
                         injury_record = Injury(
                             player_name=player_name,
                             team_id=team_db.id,
@@ -278,16 +317,18 @@ class TransfermarktService:
                             injury_type=inj["injury_type"],
                             expected_return_date=inj["expected_return_date"],
                             days_out=inj["days_out"],
-                            player_market_value=player_mv
+                            player_market_value=player_mv,
                         )
                         db.add(injury_record)
                         summary["injuries"] += 1
-                    
+
                     db.commit()
                     summary["teams_processed"] += 1
                 except Exception as e:
                     db.rollback()
-                    logger.error(f"Failed to ingest Transfermarkt injuries for team {standing.team.name}: {e}. Continuing with next team...")
+                    logger.error(
+                        f"Failed to ingest Transfermarkt injuries for team {standing.team.name}: {e}. Continuing with next team..."
+                    )
 
             logger.info(f"Transfermarkt injuries ingestion completed: {summary}")
             return summary
@@ -296,11 +337,15 @@ class TransfermarktService:
             logger.error(f"Error during Transfermarkt injuries ingestion: {str(e)}")
             raise e
 
-    def ingest_suspensions(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
+    def ingest_suspensions(
+        self, db: Session, competition_code: str = "WC"
+    ) -> Dict[str, Any]:
         """
         Scrapes and ingests active suspensions for all teams in the given competition.
         """
-        logger.info(f"Starting Transfermarkt suspensions ingestion for competition: {competition_code}")
+        logger.info(
+            f"Starting Transfermarkt suspensions ingestion for competition: {competition_code}"
+        )
         summary = {"suspensions": 0, "teams_processed": 0}
 
         try:
@@ -309,47 +354,55 @@ class TransfermarktService:
                 logger.error(f"Competition {competition_code} not found.")
                 return summary
 
-            standings = db.query(Standing).filter_by(competition_id=target_comp.id).all()
+            standings = (
+                db.query(Standing).filter_by(competition_id=target_comp.id).all()
+            )
             for standing in standings:
                 try:
                     team_db = standing.team
                     url = self._resolve_team_url(db, team_db)
                     if not url:
-                        logger.warning(f"No Transfermarkt URL available for team {team_db.name}, skipping.")
+                        logger.warning(
+                            f"No Transfermarkt URL available for team {team_db.name}, skipping."
+                        )
                         continue
 
                     logger.info(f"Fetching suspension data for team: {team_db.name}...")
                     _, suspensions_list = self._scrape_team_data(url)
-                    
+
                     # Build player name to market value map for this team
                     player_market_values = {
                         p.player_name: p.market_value
-                        for p in db.query(NationalTeamPlayer).filter_by(team_id=team_db.id).all()
+                        for p in db.query(NationalTeamPlayer)
+                        .filter_by(team_id=team_db.id)
+                        .all()
                     }
-                    
+
                     # Delete existing suspension records for this team to prevent stale data
                     db.query(Suspension).filter_by(team_id=team_db.id).delete()
-                    
+
                     for susp in suspensions_list:
                         player_name = susp["player_name"]
                         player_mv = player_market_values.get(player_name, 0.0)
-                        
+
                         suspension_record = Suspension(
                             player_name=player_name,
                             team_id=team_db.id,
                             team_name=team_db.name,
                             suspension_reason=susp["suspension_reason"],
                             matches_remaining=susp["matches_remaining"],
-                            player_market_value=player_mv
+                            player_market_value=player_mv,
                         )
                         db.add(suspension_record)
                         summary["suspensions"] += 1
-                    
+
                     db.commit()
                     summary["teams_processed"] += 1
                 except Exception as e:
                     db.rollback()
-                    logger.error(f"Failed to ingest Transfermarkt suspensions for team {standing.team.name}: {e}. Continuing with next team...")
+                    logger.error(
+                        f"Failed to ingest Transfermarkt suspensions for team {standing.team.name}: {e}. Continuing with next team..."
+                    )
 
             logger.info(f"Transfermarkt suspensions ingestion completed: {summary}")
             return summary

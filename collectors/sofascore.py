@@ -7,7 +7,7 @@ import time
 import uuid
 import json
 
-# Browser fingerprint options (from curl_cffi)
+# Browser fingerprint options (supported by curl_cffi)
 BROWSER_IMPERSONATIONS = [
     "chrome",
     "chrome101",
@@ -22,13 +22,7 @@ BROWSER_IMPERSONATIONS = [
     "edge101",
     "safari15_3",
     "safari15_5",
-    "safari16_0",
     "safari17_0",
-    "firefox100",
-    "firefox101",
-    "firefox110",
-    "firefox117",
-    "firefox120",
 ]
 
 # User-Agent strings (for rotation)
