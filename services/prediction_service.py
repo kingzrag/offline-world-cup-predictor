@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from ml.predictor import FootballPredictor
 from models import Match, Prediction, Competition
 from services.model_service import model_service
+from services.prediction_tracking_service import prediction_tracking_service
 from utils.logger import logger
 
 class PredictionService:
@@ -141,6 +142,12 @@ class PredictionService:
 
                 existing_pred.expected_home_goals = goals["expected_home_goals"]
                 existing_pred.expected_away_goals = goals["expected_away_goals"]
+                
+                # Store betting market predictions for tracking
+                self._store_betting_market_predictions(
+                    db, match, goals, goals.get("model_version", "unknown")
+                )
+                
                 logger.info(
                     f"[enrichment-store] match_id={match.id} "
                     f"{match.home_team.name} vs {match.away_team.name} "
@@ -165,3 +172,111 @@ class PredictionService:
         Serving pre-calculated prediction history entries.
         """
         return db.query(Prediction).order_by(Prediction.created_at.desc()).limit(limit).all()
+
+    def _store_betting_market_predictions(
+        self, db: Session, match: Match, goals: Dict[str, Any], model_version: str
+    ) -> None:
+        """
+        Store betting market predictions for tracking.
+
+        Extracts predictions from the goals result and stores them
+        in the betting_market_predictions table.
+        """
+        try:
+            # Asian Handicap
+            ah_label = goals.get("asian_handicap", {}).get("label", "Level (0)")
+            prediction_tracking_service.store_betting_market_prediction(
+                db=db,
+                match_id=match.id,
+                market_type="asian_handicap",
+                predicted_value=ah_label,
+                predicted_probability=None,
+                model_version=model_version,
+                source="poisson_fallback",
+                prediction_data=goals.get("asian_handicap"),
+            )
+
+            # Asian Total (Over/Under 2.5)
+            ou_2_5 = goals.get("over_under", {}).get("2.5", {})
+            over_prob = ou_2_5.get("over", 0.5)
+            prediction_tracking_service.store_betting_market_prediction(
+                db=db,
+                match_id=match.id,
+                market_type="asian_total",
+                predicted_value="Over" if over_prob > 0.5 else "Under",
+                predicted_probability=over_prob,
+                model_version=model_version,
+                source="poisson_fallback",
+                prediction_data=goals.get("over_under"),
+            )
+
+            # BTTS
+            btts = goals.get("btts", {})
+            btts_yes_prob = btts.get("yes", 0.5)
+            prediction_tracking_service.store_betting_market_prediction(
+                db=db,
+                match_id=match.id,
+                market_type="btts",
+                predicted_value="Yes" if btts_yes_prob > 0.5 else "No",
+                predicted_probability=btts_yes_prob,
+                model_version=model_version,
+                source="poisson_fallback",
+                prediction_data=btts,
+            )
+
+            # Clean Sheet
+            cs = goals.get("clean_sheet", {})
+            home_cs_prob = cs.get("home_clean_sheet", 0.5)
+            prediction_tracking_service.store_betting_market_prediction(
+                db=db,
+                match_id=match.id,
+                market_type="clean_sheet",
+                predicted_value="Yes" if home_cs_prob > 0.5 else "No",
+                predicted_probability=home_cs_prob,
+                model_version=model_version,
+                source="poisson_fallback",
+                prediction_data=cs,
+            )
+
+            # Correct Score
+            most_likely = goals.get("most_likely_score", "1-1")
+            top_5 = goals.get("top_5_scorelines", [])
+            top_prob = top_5[0].get("probability", 0.0) if top_5 else 0.0
+            prediction_tracking_service.store_betting_market_prediction(
+                db=db,
+                match_id=match.id,
+                market_type="correct_score",
+                predicted_value=most_likely,
+                predicted_probability=top_prob,
+                model_version=model_version,
+                source="poisson_fallback",
+                prediction_data={"most_likely_score": most_likely, "top_5_scorelines": top_5},
+            )
+
+            # Match Winner (1X2)
+            # Get the existing prediction for 1X2
+            existing_pred = db.query(Prediction).filter_by(match_id=match.id).first()
+            if existing_pred:
+                confidence = max(
+                    existing_pred.home_probability,
+                    existing_pred.draw_probability,
+                    existing_pred.away_probability,
+                )
+                prediction_tracking_service.store_betting_market_prediction(
+                    db=db,
+                    match_id=match.id,
+                    market_type="match_winner",
+                    predicted_value=existing_pred.predicted_outcome,
+                    predicted_probability=confidence,
+                    model_version=existing_pred.model_version,
+                    source="ml_model",
+                    prediction_data={
+                        "confidence": confidence,
+                        "home_prob": existing_pred.home_probability,
+                        "draw_prob": existing_pred.draw_probability,
+                        "away_prob": existing_pred.away_probability,
+                    },
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to store betting market predictions for match {match.id}: {e}", exc_info=True)

@@ -114,6 +114,11 @@ from api.routes.admin import router as admin_router
 
 app.include_router(admin_router)
 
+# ── Analytics endpoints (prediction tracking and metrics) ───────────────────
+from api.routes.analytics import router as analytics_router
+
+app.include_router(analytics_router)
+
 
 async def run_live_match_sync():
     """

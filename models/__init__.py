@@ -17,6 +17,12 @@ from models.match_event import MatchEvent
 from models.player_match_performance import PlayerMatchPerformance
 from models.match_lineup import MatchLineup
 from models.suspension_history import SuspensionHistory, SuspensionStatus
+from models.prediction_tracking import (
+    BettingMarketPrediction,
+    PredictionAccuracy,
+    CalibrationMetrics,
+    RollingAccuracy,
+)
 
 __all__ = [
     "Base",
@@ -39,4 +45,8 @@ __all__ = [
     "MatchLineup",
     "SuspensionHistory",
     "SuspensionStatus",
+    "BettingMarketPrediction",
+    "PredictionAccuracy",
+    "CalibrationMetrics",
+    "RollingAccuracy",
 ]

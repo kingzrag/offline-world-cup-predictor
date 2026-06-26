@@ -4475,11 +4475,161 @@ export default function App() {
                   </details>
                 )}
 
-                {/* SECTION 4 — DOUBLE CHANCE */}
+                {/* SECTION 4 — ASIAN TOTAL */}
+                {!match.isLiveData ? renderPredictionLoading("Asian Total Markets") : (
+                  <details className="group border border-zinc-900 bg-zinc-950/40 rounded overflow-hidden" open>
+                    <summary className="flex justify-between items-center px-4 py-3 text-xs font-mono font-bold tracking-widest text-zinc-400 group-open:text-zinc-100 hover:text-white cursor-pointer select-none bg-zinc-950/60 border-b border-transparent group-open:border-zinc-900 transition-colors">
+                      <span>SECTION 4 — Asian Total (Over / Under)</span>
+                      <ChevronDown className="w-4 h-4 text-zinc-550 group-open:rotate-180 transition-transform duration-300" />
+                    </summary>
+                    <div className="p-4 space-y-4 font-mono text-xs text-zinc-400">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-3 p-3 bg-black rounded border border-zinc-900">
+                          <div className="text-[10px] text-zinc-500 uppercase font-bold border-b border-zinc-900 pb-1 mb-2">Over Probabilities</div>
+                          {[
+                            { line: '0.5', prob: over0_5 },
+                            { line: '1.5', prob: over1_5 },
+                            { line: '2.5', prob: over2_5 },
+                            { line: '3.5', prob: over3_5 },
+                            { line: '4.5', prob: over4_5 },
+                          ].map(({ line, prob }) => {
+                            const barColor = prob !== null && prob >= 90 ? 'bg-green-400' : 
+                                           prob !== null && prob >= 80 ? 'bg-green-500' : 
+                                           prob !== null && prob >= 70 ? 'bg-lime-400' : 
+                                           prob !== null && prob >= 60 ? 'bg-yellow-400' : 'bg-zinc-600';
+                            const isPick = prob !== null && prob >= 90;
+                            const strengthLabel = prob !== null && prob >= 90 ? '⭐ Very Strong' : 
+                                                  prob !== null && prob >= 80 ? '🟢 Strong' : 
+                                                  prob !== null && prob >= 70 ? '🟡 Good' : 
+                                                  prob !== null && prob >= 60 ? '🟠 Lean' : '⚪ Avoid';
+                            const strengthColor = prob !== null && prob >= 90 ? 'text-green-400' : 
+                                                   prob !== null && prob >= 80 ? 'text-green-500' : 
+                                                   prob !== null && prob >= 70 ? 'text-lime-400' : 
+                                                   prob !== null && prob >= 60 ? 'text-yellow-400' : 'text-zinc-500';
+                            return (
+                              <div key={line} className="space-y-1">
+                                <div className="flex justify-between items-center">
+                                  <span>Over {line}</span>
+                                  {isPick && <span className="text-[8px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded font-bold">🏆 AI PICK</span>}
+                                </div>
+                                <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-500 ease-out ${barColor}`}
+                                    style={{ width: prob !== null ? `${prob}%` : '0%' }}
+                                  />
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className={`text-[10px] font-bold ${strengthColor}`}>{strengthLabel}</span>
+                                  <span className="text-white font-bold">{prob !== null ? `${prob}%` : 'N/A'}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="space-y-3 p-3 bg-black rounded border border-zinc-900">
+                          <div className="text-[10px] text-zinc-500 uppercase font-bold border-b border-zinc-900 pb-1 mb-2">Under Probabilities</div>
+                          {[
+                            { line: '0.5', prob: under0_5 },
+                            { line: '1.5', prob: under1_5 },
+                            { line: '2.5', prob: under2_5 },
+                            { line: '3.5', prob: under3_5 },
+                            { line: '4.5', prob: under4_5 },
+                          ].map(({ line, prob }) => {
+                            const barColor = prob !== null && prob >= 90 ? 'bg-green-400' : 
+                                           prob !== null && prob >= 80 ? 'bg-green-500' : 
+                                           prob !== null && prob >= 70 ? 'bg-lime-400' : 
+                                           prob !== null && prob >= 60 ? 'bg-yellow-400' : 'bg-zinc-600';
+                            const isPick = prob !== null && prob >= 90;
+                            const strengthLabel = prob !== null && prob >= 90 ? '⭐ Very Strong' : 
+                                                  prob !== null && prob >= 80 ? '🟢 Strong' : 
+                                                  prob !== null && prob >= 70 ? '🟡 Good' : 
+                                                  prob !== null && prob >= 60 ? '🟠 Lean' : '⚪ Avoid';
+                            const strengthColor = prob !== null && prob >= 90 ? 'text-green-400' : 
+                                                   prob !== null && prob >= 80 ? 'text-green-500' : 
+                                                   prob !== null && prob >= 70 ? 'text-lime-400' : 
+                                                   prob !== null && prob >= 60 ? 'text-yellow-400' : 'text-zinc-500';
+                            return (
+                              <div key={line} className="space-y-1">
+                                <div className="flex justify-between items-center">
+                                  <span>Under {line}</span>
+                                  {isPick && <span className="text-[8px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded font-bold">🏆 AI PICK</span>}
+                                </div>
+                                <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-500 ease-out ${barColor}`}
+                                    style={{ width: prob !== null ? `${prob}%` : '0%' }}
+                                  />
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className={`text-[10px] font-bold ${strengthColor}`}>{strengthLabel}</span>
+                                  <span className="text-white font-bold">{prob !== null ? `${prob}%` : 'N/A'}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                )}
+
+                {/* SECTION 5 — ASIAN HANDICAP */}
+                {!match.isLiveData ? renderPredictionLoading("Asian Handicap Markets") : (
+                  <details className="group border border-zinc-900 bg-zinc-950/40 rounded overflow-hidden" open>
+                    <summary className="flex justify-between items-center px-4 py-3 text-xs font-mono font-bold tracking-widest text-zinc-400 group-open:text-zinc-100 hover:text-white cursor-pointer select-none bg-zinc-950/60 border-b border-transparent group-open:border-zinc-900 transition-colors">
+                      <span>SECTION 5 — Asian Handicap</span>
+                      <ChevronDown className="w-4 h-4 text-zinc-550 group-open:rotate-180 transition-transform duration-300" />
+                    </summary>
+                    <div className="p-4 font-mono text-xs text-zinc-400">
+                      {match.asianHandicap && Object.keys(match.asianHandicap.lines).length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {Object.entries(match.asianHandicap.lines).map(([line, val]) => {
+                            const prob = Math.round((val as number) * 100);
+                            const barColor = prob >= 90 ? 'bg-green-400' : 
+                                           prob >= 80 ? 'bg-green-500' : 
+                                           prob >= 70 ? 'bg-lime-400' : 
+                                           prob >= 60 ? 'bg-yellow-400' : 'bg-zinc-600';
+                            const isPick = prob >= 90;
+                            const strengthLabel = prob >= 90 ? '⭐ Very Strong' : 
+                                                   prob >= 80 ? '🟢 Strong' : 
+                                                   prob >= 70 ? '🟡 Good' : 
+                                                   prob >= 60 ? '🟠 Lean' : '⚪ Avoid';
+                            const strengthColor = prob >= 90 ? 'text-green-400' : 
+                                                   prob >= 80 ? 'text-green-500' : 
+                                                   prob >= 70 ? 'text-lime-400' : 
+                                                   prob >= 60 ? 'text-yellow-400' : 'text-zinc-500';
+                            return (
+                              <div key={line} className="p-3 bg-black rounded border border-zinc-900 hover:border-zinc-700 transition-colors">
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="text-white font-bold">{match.asianHandicap.favored_team} {line}</span>
+                                  {isPick && <span className="text-[8px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded font-bold">🏆 AI PICK</span>}
+                                </div>
+                                <div className="text-2xl font-bold text-white mb-2">{prob}%</div>
+                                <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden mb-2">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-500 ease-out ${barColor}`}
+                                    style={{ width: `${prob}%` }}
+                                  />
+                                </div>
+                                <div className={`text-[10px] font-bold ${strengthColor}`}>{strengthLabel}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-black border border-zinc-900 rounded text-center text-zinc-550 italic">
+                          No Asian Handicap predictions available.
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                )}
+
+                {/* SECTION 6 — DOUBLE CHANCE */}
                 {!match.isLiveData ? renderPredictionLoading("Double Chance Markets") : (
                   <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                      SECTION 4 — Double Chance
+                      SECTION 6 — Double Chance
                     </h4>
                     <div className="grid grid-cols-3 gap-2 mt-2 text-center">
                       <div className="p-2 bg-black rounded border border-zinc-900">
@@ -4498,11 +4648,11 @@ export default function App() {
                   </div>
                 )}
 
-                {/* SECTION 5 — DRAW NO BET */}
+                {/* SECTION 7 — DRAW NO BET */}
                 {!match.isLiveData ? renderPredictionLoading("Draw No Bet Markets") : (
                   <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                      SECTION 5 — Draw No Bet (DNB)
+                      SECTION 7 — Draw No Bet (DNB)
                     </h4>
                     <div className="grid grid-cols-2 gap-4 mt-2 text-center">
                       <div className="p-2 bg-black rounded border border-zinc-900">
@@ -4517,11 +4667,11 @@ export default function App() {
                   </div>
                 )}
 
-                {/* SECTION 6 — CLEAN SHEET */}
+                {/* SECTION 8 — CLEAN SHEET */}
                 {!match.isLiveData ? renderPredictionLoading("Clean Sheet Probabilities") : (
                   <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                      SECTION 6 — Clean Sheet
+                      SECTION 8 — Clean Sheet
                     </h4>
                     <div className="grid grid-cols-2 gap-4 mt-2 text-center">
                       <div className="p-2 bg-black rounded border border-zinc-900">
@@ -4536,11 +4686,11 @@ export default function App() {
                   </div>
                 )}
 
-                {/* SECTION 7 — CORRECT SCORE MATRIX */}
+                {/* SECTION 9 — CORRECT SCORE MATRIX */}
                 {!match.isLiveData ? renderPredictionLoading("Correct Score Matrix") : (
                   <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                      SECTION 7 — Correct Score Matrix (Top 5 Likeliest)
+                      SECTION 9 — Correct Score Matrix (Top 5 Likeliest)
                     </h4>
                     <div className="space-y-2 mt-2">
                       {top5Scores ? top5Scores.map((sc, index) => (
@@ -4555,26 +4705,6 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                )}
-
-                {/* SECTION 13 — ASIAN HANDICAP */}
-                {match.asianHandicap && (
-                  !match.isLiveData ? renderPredictionLoading("Asian Handicap") : (
-                    <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
-                      <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-900 pb-2 flex justify-between">
-                        <span>SECTION 13 — Asian Handicap ({match.asianHandicap.label})</span>
-                        <span className="text-[10px] text-zinc-500 lowercase">Favored: {match.asianHandicap.favored_team}</span>
-                      </h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2">
-                        {Object.entries(match.asianHandicap.lines).map(([line, val]) => (
-                          <div key={line} className="p-2 bg-black rounded border border-zinc-900 hover:border-zinc-700 transition-colors text-center">
-                            <span className="text-[9px] text-zinc-550 block uppercase mb-1">Line {line}</span>
-                            <span className="text-xs font-bold text-white">{Math.round((val as number) * 100)}%</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
                 )}
 
                 {/* SECTION 14 — TEAM GOALS (OVER/UNDER) */}
@@ -4606,11 +4736,11 @@ export default function App() {
                   )
                 )}
 
-                {/* SECTION 8 — MODEL CONFIDENCE */}
+                {/* SECTION 10 — MODEL CONFIDENCE */}
                 {!match.isLiveData ? renderPredictionLoading("Model Diagnostics") : (
                   <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                      SECTION 8 — Model Confidence Diagnostics
+                      SECTION 10 — Model Confidence Diagnostics
                     </h4>
                     <ul className="space-y-2 mt-2 text-zinc-400 text-xs">
                       <li className="flex justify-between"><span>Calibration Tier:</span> <span className="text-white font-bold">{confidenceLabel}</span></li>
@@ -4621,10 +4751,10 @@ export default function App() {
                   </div>
                 )}
 
-                {/* SECTION 10 — SQUAD HEALTH */}
+                {/* SECTION 11 — SQUAD HEALTH */}
                 <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded text-xs">
                   <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 10 — Squad Health &amp; Incompatibilities
+                    SECTION 11 — Squad Health &amp; Incompatibilities
                   </h4>
                   <div className="grid grid-cols-2 gap-4 mt-2">
                     <div className="space-y-2 bg-black p-3 border border-zinc-900 rounded">
@@ -4646,11 +4776,11 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* SECTION 11 — TOURNAMENT IMPACT */}
+                {/* SECTION 12 — TOURNAMENT IMPACT */}
                 {!match.isLiveData ? renderPredictionLoading("Tournament Impact Projections") : (
                   <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
-                      SECTION 11 — Tournament Impact &amp; Bracket Projections
+                      SECTION 12 — Tournament Impact &amp; Bracket Projections
                     </h4>
                     <div className="space-y-2 mt-2 text-zinc-400 text-xs">
                       <div className="flex justify-between"><span>Qualification probability ({match.teamACode}):</span> <span className="text-white font-bold">{qualA}%</span></div>
@@ -4663,10 +4793,10 @@ export default function App() {
                   </div>
                 )}
 
-                {/* SECTION 12 — HISTORICAL DATA */}
+                {/* SECTION 13 — HISTORICAL DATA */}
                 <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded text-xs">
                   <h4 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-300 border-b border-zinc-900 pb-2">
-                    SECTION 12 — Head-To-Head Record &amp; Recent Form
+                    SECTION 13 — Head-To-Head Record &amp; Recent Form
                   </h4>
                   <div className="bg-black p-3 border border-zinc-900 rounded font-mono text-xs space-y-1.5 mt-2">
                     <div className="flex justify-between"><span>Previous Meetings:</span> <span className="text-white font-bold">{match.h2hPreviousMeetings} matches</span></div>
