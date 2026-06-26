@@ -152,34 +152,34 @@ def main():
         }
 
         sample_events = {
-            "incidents": [
-                {
-                    "id": 12345,
-                    "time": 23,
-                    "isHome": True,
-                    "incidentType": "goal",
-                    "playerName": "Lionel Messi",
-                    "reason": "Left-footed shot from inside the box"
-                },
-                {
-                    "id": 12346,
-                    "time": 52,
-                    "isHome": False,
-                    "incidentType": "card",
-                    "incidentClass": "yellow",
-                    "playerName": "Dayot Upamecano",
-                    "reason": "Rough tackle"
-                },
-                {
-                    "id": 12347,
-                    "time": 81,
-                    "isHome": False,
-                    "incidentType": "goal",
-                    "playerName": "Kylian Mbappé",
-                    "reason": "Penalty"
-                }
-            ]
-        }
+        "incidents": [
+            {
+                "id": 12345,
+                "time": 23,
+                "isHome": True,
+                "incidentType": "goal",
+                "playerName": "Lionel Messi",
+                "reason": "Left-footed shot from inside the box"
+            },
+            {
+                "id": 12346,
+                "time": 52,
+                "isHome": False,
+                "incidentType": "card",
+                "incidentClass": "red",
+                "playerName": "Dayot Upamecano",
+                "reason": "Rough tackle"
+            },
+            {
+                "id": 12347,
+                "time": 81,
+                "isHome": False,
+                "incidentType": "goal",
+                "playerName": "Kylian Mbappé",
+                "reason": "Penalty"
+            }
+        ]
+    }
 
         # Use collector to parse data
         collector = SofaScoreCollector()
