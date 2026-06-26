@@ -1,97 +1,224 @@
+
 from curl_cffi import requests
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
 from utils.logger import logger
+import random
+import time
+import uuid
+import json
 
+# Browser fingerprint options (from curl_cffi)
+BROWSER_IMPERSONATIONS = [
+    "chrome",
+    "chrome101",
+    "chrome104",
+    "chrome107",
+    "chrome110",
+    "chrome116",
+    "chrome119",
+    "chrome120",
+    "chrome123",
+    "edge99",
+    "edge101",
+    "safari15_3",
+    "safari15_5",
+    "safari16_0",
+    "safari17_0",
+    "firefox100",
+    "firefox101",
+    "firefox110",
+    "firefox117",
+    "firefox120",
+]
+
+# User-Agent strings (for rotation)
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+]
+
+# Accept-Language options (for rotation)
+ACCEPT_LANGUAGES = [
+    "en-US,en;q=0.9",
+    "en-GB,en;q=0.9",
+    "es-ES,es;q=0.9",
+    "fr-FR,fr;q=0.9",
+    "de-DE,de;q=0.9",
+    "pt-PT,pt;q=0.9",
+    "it-IT,it;q=0.9",
+]
 
 class SofaScoreCollector:
     """
-    Collector for SofaScore data
+    Production-ready collector for SofaScore data with browser impersonation,
+    automatic retry, and robust error handling!
     """
     BASE_URL = "https://api.sofascore.com/api/v1"
-    HEADERS = {
-        "Referer": "https://www.sofascore.com/",
-        "Origin": "https://www.sofascore.com",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
+    SOFASCORE_WEBSITE = "https://www.sofascore.com"
 
     def __init__(self):
-        self._session = requests.Session(impersonate="chrome", headers=self.HEADERS)
+        self.session_id = str(uuid.uuid4())[:8]
+        self.current_browser = random.choice(BROWSER_IMPERSONATIONS)
+        self.current_user_agent = random.choice(USER_AGENTS)
+        self.current_accept_language = random.choice(ACCEPT_LANGUAGES)
+        self._session = None
+        self._initialize_session()
+        logger.info(f"[{self.session_id}] SofaScoreCollector initialized with browser: {self.current_browser}")
+
+    def _initialize_session(self):
+        """Initialize the requests session with current settings"""
+        self._session = requests.Session(
+            impersonate=self.current_browser,
+            headers=self._get_headers()
+        )
+        logger.debug(f"[{self.session_id}] New session initialized with headers: {self._get_headers()}")
+
+    def _get_headers(self) -> Dict[str, str]:
+        """Get current headers for requests"""
+        return {
+            "Referer": self.SOFASCORE_WEBSITE,
+            "Origin": self.SOFASCORE_WEBSITE,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": self.current_accept_language,
+            "User-Agent": self.current_user_agent,
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+        }
+
+    def _rotate_browser_fingerprint(self):
+        """Rotate to a new browser fingerprint"""
+        old_browser = self.current_browser
+        self.current_browser = random.choice([b for b in BROWSER_IMPERSONATIONS if b != old_browser])
+        self.current_user_agent = random.choice(USER_AGENTS)
+        self.current_accept_language = random.choice(ACCEPT_LANGUAGES)
+        logger.info(f"[{self.session_id}] Rotating browser fingerprint: {old_browser} -> {self.current_browser}")
+        self._initialize_session()
+
+    def _rotate_headers_only(self):
+        """Rotate only headers (keep same browser fingerprint)"""
+        self.current_user_agent = random.choice(USER_AGENTS)
+        self.current_accept_language = random.choice(ACCEPT_LANGUAGES)
+        self._session.headers.update(self._get_headers())
+        logger.debug(f"[{self.session_id}] Rotated headers only")
+
+    def _random_delay(self, min_sec: float = 0.5, max_sec: float = 2.0):
+        """Add random delay between requests to mimic human behavior"""
+        delay = random.uniform(min_sec, max_sec)
+        logger.debug(f"[{self.session_id}] Random delay: {delay:.2f}s")
+        time.sleep(delay)
 
     def _get(self, path: str) -> Optional[Dict[str, Any]]:
-        """GET request with retry logic (similar to pysofascore)."""
+        """
+        Robust GET request with retry logic, exponential backoff, and recovery!
+        """
         url = f"{self.BASE_URL}{path}"
-        retries = 3
-        retry_delay = 2.0
-        last_error = None
+        max_attempts = 5
+        attempt = 0
         
-        for attempt in range(retries):
+        while attempt < max_attempts:
+            attempt += 1
+            attempt_id = f"{self.session_id}-{attempt}"
+            logger.info(f"[{attempt_id}] Requesting {url} (attempt {attempt}/{max_attempts})")
+            
             try:
-                resp = self._session.get(url, timeout=30)
+                if attempt > 1:
+                    self._random_delay()
+                
+                resp = self._session.get(url, timeout=30.0)
+                
                 if resp.status_code == 200:
-                    return resp.json()
-                if resp.status_code in (403, 429) and attempt < retries - 1:
-                    import time
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                logger.error(f"SofaScore request failed: {resp.status_code} for {url}")
-                return None
+                    data = resp.json()
+                    logger.debug(f"[{attempt_id}] Successful response: {len(json.dumps(data))} bytes")
+                    return data
+                
+                logger.error(f"[{attempt_id}] Request failed with status {resp.status_code}: {resp.text[:200]}")
+                
+                if resp.status_code in [403, 429]:
+                    if attempt < max_attempts:
+                        if attempt == 1:
+                            logger.warning(f"[{attempt_id}] 403/429 detected, rotating browser fingerprint for next attempt")
+                            self._rotate_browser_fingerprint()
+                        elif attempt == 2:
+                            logger.warning(f"[{attempt_id}] Still blocked, rotating headers for next attempt")
+                            self._rotate_headers_only()
+                        else:
+                            backoff = 2 ** (attempt - 1) + random.uniform(0, 1)
+                            logger.warning(f"[{attempt_id}] Still blocked, waiting {backoff:.2f}s before next attempt")
+                            time.sleep(backoff)
+                elif resp.status_code >= 500:
+                    backoff = 2 ** (attempt - 1) + random.uniform(0, 1)
+                    logger.warning(f"[{attempt_id}] Server error {resp.status_code}, waiting {backoff:.2f}s before next attempt")
+                    time.sleep(backoff)
+                else:
+                    logger.error(f"[{attempt_id}] Non-retryable status {resp.status_code}")
+                    return None
+                    
+            except requests.exceptions.Timeout:
+                logger.error(f"[{attempt_id}] Request timed out after 30s")
+                if attempt < max_attempts:
+                    backoff = 2 ** (attempt - 1) + random.uniform(0, 1)
+                    time.sleep(backoff)
+            except requests.exceptions.RequestException as e:
+                logger.error(f"[{attempt_id}] Request exception: {type(e).__name__}: {e}", exc_info=True)
+                if attempt < max_attempts:
+                    self._rotate_browser_fingerprint()
+                    backoff = 2 ** (attempt - 1) + random.uniform(0, 1)
+                    time.sleep(backoff)
             except Exception as e:
-                last_error = e
-                logger.error(f"Error requesting {url}: {e}")
-                if attempt < retries - 1:
-                    import time
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                return None
+                logger.error(f"[{attempt_id}] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
+                if attempt < max_attempts:
+                    backoff = 2 ** (attempt - 1) + random.uniform(0, 1)
+                    time.sleep(backoff)
+        
+        logger.error(f"[{self.session_id}] All {max_attempts} attempts failed for {url}")
         return None
 
     def get_live_matches(self) -> Optional[Dict[str, Any]]:
         """
-        Get all live football matches
+        Get all live football matches from SofaScore
         """
-        logger.info("Fetching live matches from SofaScore")
+        logger.info(f"[{self.session_id}] Fetching live matches from SofaScore")
         data = self._get("/sport/football/events/live")
-        if data:
-            return data
-        return None
+        if data and "events" in data:
+            logger.info(f"[{self.session_id}] Found {len(data.get('events', []))} live matches")
+        return data
 
     def get_match_details(self, sofa_score_id: str) -> Optional[Dict[str, Any]]:
         """
         Get match details by SofaScore ID
         """
-        logger.info(f"Fetching match details for SofaScore ID {sofa_score_id}")
+        logger.info(f"[{self.session_id}] Fetching match details for SofaScore ID {sofa_score_id}")
         return self._get(f"/event/{sofa_score_id}")
 
     def get_match_statistics(self, sofa_score_id: str) -> Optional[Dict[str, Any]]:
         """
         Get match statistics by SofaScore ID
         """
-        logger.info(f"Fetching match statistics for SofaScore ID {sofa_score_id}")
+        logger.info(f"[{self.session_id}] Fetching match statistics for SofaScore ID {sofa_score_id}")
         return self._get(f"/event/{sofa_score_id}/statistics")
 
     def get_match_lineups(self, sofa_score_id: str) -> Optional[Dict[str, Any]]:
         """
         Get match lineups by SofaScore ID
         """
-        logger.info(f"Fetching match lineups for SofaScore ID {sofa_score_id}")
+        logger.info(f"[{self.session_id}] Fetching match lineups for SofaScore ID {sofa_score_id}")
         return self._get(f"/event/{sofa_score_id}/lineups")
 
     def get_match_events(self, sofa_score_id: str) -> Optional[Dict[str, Any]]:
         """
         Get match events (incidents) by SofaScore ID
         """
-        logger.info(f"Fetching match incidents for SofaScore ID {sofa_score_id}")
+        logger.info(f"[{self.session_id}] Fetching match incidents for SofaScore ID {sofa_score_id}")
         return self._get(f"/event/{sofa_score_id}/incidents")
 
     def get_player_ratings(self, sofa_score_id: str) -> Optional[Dict[str, Any]]:
         """
         Get player ratings by SofaScore ID (from lineups endpoint)
         """
-        logger.info(f"Fetching player ratings from lineups for SofaScore ID {sofa_score_id}")
+        logger.info(f"[{self.session_id}] Fetching player ratings from lineups for SofaScore ID {sofa_score_id}")
         return self.get_match_lineups(sofa_score_id)
 
     @staticmethod
@@ -117,7 +244,6 @@ class SofaScoreCollector:
                 home_val = stat_item.get("home")
                 away_val = stat_item.get("away")
                 
-                # Handle numeric conversions
                 try:
                     if "%" in str(home_val):
                         home_val = float(str(home_val).replace("%", ""))
@@ -156,7 +282,6 @@ class SofaScoreCollector:
             event_type = incident.get("incidentType")
             incident_class = incident.get("incidentClass")
             
-            # Map to our EventType enum
             if event_type == "card":
                 if incident_class == "red":
                     db_type = "RED_CARD"
@@ -171,7 +296,7 @@ class SofaScoreCollector:
             elif event_type == "var":
                 db_type = "VAR_CHECK"
             else:
-                db_type = "GOAL"
+                continue
                 
             events.append({
                 "sofa_score_id": str(incident.get("id")),
