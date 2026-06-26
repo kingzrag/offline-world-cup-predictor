@@ -1,3 +1,4 @@
+
 import asyncio
 import schedule
 import time
@@ -103,6 +104,18 @@ def refresh_upcoming_match_teams():
     finally:
         db.close()
 
+def ingest_sofascore_live_data():
+    logger.info("Starting SofaScore live data ingestion")
+    db = SessionLocal()
+    try:
+        service = CollectionService()
+        asyncio.run(service.ingest_sofascore_live(db))
+        logger.info("SofaScore live data ingestion completed")
+    except Exception as e:
+        logger.error(f"Error during SofaScore live ingestion: {e}")
+    finally:
+        db.close()
+
 def run_scheduler():
     # Daily refresh at 03:00 UTC
     schedule.every().day.at("03:00").do(refresh_all_injuries_suspensions)
@@ -112,6 +125,9 @@ def run_scheduler():
     
     # Additional checks for upcoming matches every hour
     schedule.every().hour.do(refresh_upcoming_match_teams)
+    
+    # SofaScore live ingestion every 5 minutes
+    schedule.every(5).minutes.do(ingest_sofascore_live_data)
     
     logger.info("Scheduler started")
     while True:
