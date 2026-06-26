@@ -1,0 +1,6 @@
+2026/06/26-14:29:41.314 1c93e4e Reusing MANIFEST /Users/anuragsaikia/prediction/sofascore_profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/06/26-14:29:41.316 1c93e4e Recovering log #3
+2026/06/26-14:29:41.317 1c93e4e Reusing old log /Users/anuragsaikia/prediction/sofascore_profile/Default/Local Storage/leveldb/000003.log 
+2026/06/26-14:29:51.261 1c93e52 Level-0 table #5: started
+2026/06/26-14:29:51.266 1c93e52 Level-0 table #5: 17387 bytes OK
+2026/06/26-14:29:51.269 1c93e52 Delete type=0 #3

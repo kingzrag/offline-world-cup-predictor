@@ -352,6 +352,30 @@ class MatchIntelligence:
     # --- Composite confidence ---
     confidence_score: float = 0.0
 
+    # --- Additional engineered ML-only features ---
+    home_goalkeeper_strength: float = 0.0
+    away_goalkeeper_strength: float = 0.0
+    home_passing_strength: float = 0.0
+    away_passing_strength: float = 0.0
+    home_recent_form: float = 0.5
+    away_recent_form: float = 0.5
+    home_aerial_dominance: float = 0.0
+    away_aerial_dominance: float = 0.0
+    home_pressing_strength: float = 0.0
+    away_pressing_strength: float = 0.0
+    home_defensive_stability: float = 0.5
+    away_defensive_stability: float = 0.5
+    home_attacking_efficiency: float = 0.0
+    away_attacking_efficiency: float = 0.0
+    home_finishing_quality: float = 0.5
+    away_finishing_quality: float = 0.5
+    home_set_piece_strength: float = 0.0
+    away_set_piece_strength: float = 0.0
+    home_squad_availability: float = 1.0
+    away_squad_availability: float = 1.0
+    home_tactical_stability: float = 0.5
+    away_tactical_stability: float = 0.5
+
     # --- Metadata ---
     data_completeness: float = 0.0  # 0.0–1.0 fraction of metrics successfully computed
     sources_used: Optional[List[str]] = None

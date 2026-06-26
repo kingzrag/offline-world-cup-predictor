@@ -24,8 +24,9 @@ provider data stored in the database:
 All metrics use safe defaults when data is missing.
 """
 
+import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import and_, desc, func, or_
 from sqlalchemy.orm import Session
@@ -184,6 +185,48 @@ class IntelligenceService:
             if home_mom != 0 or away_mom != 0:
                 metrics_computed += 1
 
+            # Additional engineered ML-only features (backward-compatible extension)
+            home_engineered = self._build_team_engineered_metrics(
+                db, match, match.home_team_id
+            )
+            away_engineered = self._build_team_engineered_metrics(
+                db, match, match.away_team_id
+            )
+            intelligence.home_goalkeeper_strength = home_engineered[
+                "goalkeeper_strength"
+            ]
+            intelligence.away_goalkeeper_strength = away_engineered[
+                "goalkeeper_strength"
+            ]
+            intelligence.home_passing_strength = home_engineered["passing_strength"]
+            intelligence.away_passing_strength = away_engineered["passing_strength"]
+            intelligence.home_recent_form = home_engineered["recent_form"]
+            intelligence.away_recent_form = away_engineered["recent_form"]
+            intelligence.home_aerial_dominance = home_engineered["aerial_dominance"]
+            intelligence.away_aerial_dominance = away_engineered["aerial_dominance"]
+            intelligence.home_pressing_strength = home_engineered["pressing_strength"]
+            intelligence.away_pressing_strength = away_engineered["pressing_strength"]
+            intelligence.home_defensive_stability = home_engineered[
+                "defensive_stability"
+            ]
+            intelligence.away_defensive_stability = away_engineered[
+                "defensive_stability"
+            ]
+            intelligence.home_attacking_efficiency = home_engineered[
+                "attacking_efficiency"
+            ]
+            intelligence.away_attacking_efficiency = away_engineered[
+                "attacking_efficiency"
+            ]
+            intelligence.home_finishing_quality = home_engineered["finishing_quality"]
+            intelligence.away_finishing_quality = away_engineered["finishing_quality"]
+            intelligence.home_set_piece_strength = home_engineered["set_piece_strength"]
+            intelligence.away_set_piece_strength = away_engineered["set_piece_strength"]
+            intelligence.home_squad_availability = home_engineered["squad_availability"]
+            intelligence.away_squad_availability = away_engineered["squad_availability"]
+            intelligence.home_tactical_stability = home_engineered["tactical_stability"]
+            intelligence.away_tactical_stability = away_engineered["tactical_stability"]
+
             # 16. Confidence Score (composite)
             intelligence.confidence_score = self._calc_confidence_score(intelligence)
             metrics_computed += 1
@@ -231,6 +274,680 @@ class IntelligenceService:
         return (
             db.query(MatchStatistic).filter(MatchStatistic.match_id == match_id).first()
         )
+
+    def _clamp(self, value: float, lower: float = 0.0, upper: float = 1.0) -> float:
+        return max(lower, min(upper, value))
+
+    def _safe_div(
+        self, numerator: float, denominator: float, default: float = 0.0
+    ) -> float:
+        if not denominator:
+            return default
+        return numerator / denominator
+
+    def _mean(self, values: List[float], default: float = 0.0) -> float:
+        return sum(values) / len(values) if values else default
+
+    def _normalize_rating(self, rating: Optional[float]) -> float:
+        if rating is None:
+            return 0.0
+        return self._clamp((rating - 5.0) / 3.0)
+
+    def _normalize_symmetric(
+        self, value: float, negative_bound: float, positive_bound: float
+    ) -> float:
+        if positive_bound <= 0 or negative_bound <= 0:
+            return 0.5
+        if value >= 0:
+            return self._clamp(0.5 + 0.5 * (value / positive_bound))
+        return self._clamp(0.5 - 0.5 * (abs(value) / negative_bound))
+
+    def _parse_lineup_players(self, lineup_blob: Optional[str]) -> Set[str]:
+        if not lineup_blob:
+            return set()
+        try:
+            parsed = json.loads(lineup_blob)
+        except Exception:
+            return {
+                item.strip() for item in str(lineup_blob).split(",") if item.strip()
+            }
+
+        players: Set[str] = set()
+        if isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, dict):
+                    candidate = (
+                        item.get("player_name")
+                        or item.get("name")
+                        or item.get("player")
+                    )
+                    if candidate:
+                        players.add(str(candidate).strip())
+                elif item is not None:
+                    players.add(str(item).strip())
+        return players
+
+    def _performance_sources(
+        self, performances: List[PlayerMatchPerformance]
+    ) -> Set[str]:
+        sources: Set[str] = set()
+        for perf in performances:
+            if perf.statsbomb_id:
+                sources.add("StatsBomb")
+            if perf.fbref_id:
+                sources.add("FBref")
+            if perf.sofa_score_id or perf.sofa_score_rating is not None:
+                sources.add("SofaScore")
+        return sources
+
+    def _team_recent_context(
+        self, db: Session, team_id: int, match: Match
+    ) -> Dict[str, Any]:
+        recent_matches = self._get_recent_matches(db, team_id, match.utc_date)
+        snapshots: List[Dict[str, Any]] = []
+        sources: Set[str] = set()
+        stats_sources: Set[str] = set()
+        performance_sources: Set[str] = set()
+        lineup_sources: Set[str] = set()
+        event_sources: Set[str] = set()
+        availability_sources: Set[str] = set()
+
+        for recent_match in recent_matches:
+            is_home = recent_match.home_team_id == team_id
+            stats = self._get_match_stats(db, recent_match.id)
+            lineup = (
+                db.query(MatchLineup)
+                .filter(
+                    MatchLineup.match_id == recent_match.id,
+                    MatchLineup.team_id == team_id,
+                )
+                .first()
+            )
+            performances = (
+                db.query(PlayerMatchPerformance)
+                .filter(
+                    PlayerMatchPerformance.match_id == recent_match.id,
+                    PlayerMatchPerformance.team_id == team_id,
+                )
+                .all()
+            )
+            events = (
+                db.query(MatchEvent)
+                .filter(
+                    MatchEvent.match_id == recent_match.id,
+                    MatchEvent.team_id == team_id,
+                )
+                .all()
+            )
+
+            if stats and stats.data_source:
+                sources.add(stats.data_source)
+                stats_sources.add(stats.data_source)
+            perf_sources = self._performance_sources(performances)
+            sources.update(perf_sources)
+            performance_sources.update(perf_sources)
+            if lineup:
+                if lineup.coach_name == "StatsBomb Import":
+                    sources.add("StatsBomb")
+                    lineup_sources.add("StatsBomb")
+                elif lineup.sofa_score_id:
+                    sources.add("SofaScore")
+                    lineup_sources.add("SofaScore")
+            if events:
+                if any((e.description or "").startswith("StatsBomb:") for e in events):
+                    sources.add("StatsBomb")
+                    event_sources.add("StatsBomb")
+                if any(e.sofa_score_id for e in events):
+                    sources.add("SofaScore")
+                    event_sources.add("SofaScore")
+
+            goals_for = (
+                (recent_match.home_score or 0)
+                if is_home
+                else (recent_match.away_score or 0)
+            )
+            goals_against = (
+                (recent_match.away_score or 0)
+                if is_home
+                else (recent_match.home_score or 0)
+            )
+
+            snapshots.append(
+                {
+                    "match": recent_match,
+                    "is_home": is_home,
+                    "stats": stats,
+                    "lineup": lineup,
+                    "performances": performances,
+                    "events": events,
+                    "goals_for": goals_for,
+                    "goals_against": goals_against,
+                }
+            )
+
+        injuries = db.query(Injury).filter(Injury.team_id == team_id).all()
+        suspensions = db.query(Suspension).filter(Suspension.team_id == team_id).all()
+        nt_players = (
+            db.query(NationalTeamPlayer)
+            .filter(NationalTeamPlayer.team_id == team_id)
+            .all()
+        )
+        if injuries:
+            sources.add("Transfermarkt")
+            availability_sources.add("Transfermarkt")
+        if suspensions:
+            sources.add("Transfermarkt")
+            availability_sources.add("Transfermarkt")
+        if nt_players:
+            sources.add("Transfermarkt")
+            availability_sources.add("Transfermarkt")
+
+        return {
+            "recent_matches": recent_matches,
+            "snapshots": snapshots,
+            "injuries": injuries,
+            "suspensions": suspensions,
+            "nt_players": nt_players,
+            "sources": sorted(sources),
+            "stats_sources": sorted(stats_sources),
+            "performance_sources": sorted(performance_sources),
+            "lineup_sources": sorted(lineup_sources),
+            "event_sources": sorted(event_sources),
+            "availability_sources": sorted(availability_sources),
+        }
+
+    def _build_team_engineered_metrics(
+        self, db: Session, match: Match, team_id: int
+    ) -> Dict[str, Any]:
+        context = self._team_recent_context(db, team_id, match)
+        snapshots = context["snapshots"]
+        injuries = context["injuries"]
+        suspensions = context["suspensions"]
+        nt_players = context["nt_players"]
+
+        wins = draws = losses = clean_sheets = 0
+        goals_for: List[float] = []
+        goals_against: List[float] = []
+        goal_diff: List[float] = []
+        xg_for: List[float] = []
+        xg_against: List[float] = []
+        xg_diff: List[float] = []
+        shots: List[float] = []
+        shots_on_target: List[float] = []
+        passes: List[float] = []
+        successful_passes: List[float] = []
+        possession: List[float] = []
+        pass_accuracy: List[float] = []
+        tackles: List[float] = []
+        interceptions: List[float] = []
+        pressures: List[float] = []
+        corners: List[float] = []
+        aerial_duels: List[float] = []
+        aerial_duels_won: List[float] = []
+        blocks: List[float] = []
+        gk_saves: List[float] = []
+        gk_ratings: List[float] = []
+        formations: List[str] = []
+        lineup_sets: List[Set[str]] = []
+
+        for snapshot in snapshots:
+            recent_match = snapshot["match"]
+            is_home = snapshot["is_home"]
+            stats = snapshot["stats"]
+            perfs = snapshot["performances"]
+            lineup = snapshot["lineup"]
+
+            gf = snapshot["goals_for"]
+            ga = snapshot["goals_against"]
+            goals_for.append(gf)
+            goals_against.append(ga)
+            goal_diff.append(gf - ga)
+            if ga == 0:
+                clean_sheets += 1
+
+            if recent_match.winner == "DRAW":
+                draws += 1
+            elif recent_match.winner == ("HOME_TEAM" if is_home else "AWAY_TEAM"):
+                wins += 1
+            else:
+                losses += 1
+
+            if stats:
+                team_xg_for = (
+                    (stats.home_expected_goals or 0.0)
+                    if is_home
+                    else (stats.away_expected_goals or 0.0)
+                )
+                team_xg_against = (
+                    (stats.away_expected_goals or 0.0)
+                    if is_home
+                    else (stats.home_expected_goals or 0.0)
+                )
+                xg_for.append(team_xg_for)
+                xg_against.append(team_xg_against)
+                xg_diff.append(team_xg_for - team_xg_against)
+                shots.append(
+                    (stats.home_shots or 0) if is_home else (stats.away_shots or 0)
+                )
+                shots_on_target.append(
+                    (stats.home_shots_on_target or 0)
+                    if is_home
+                    else (stats.away_shots_on_target or 0)
+                )
+                passes.append(
+                    (stats.home_passes or 0) if is_home else (stats.away_passes or 0)
+                )
+                successful_passes.append(
+                    (stats.home_successful_passes or 0)
+                    if is_home
+                    else (stats.away_successful_passes or 0)
+                )
+                possession.append(
+                    (stats.home_possession or 0.0)
+                    if is_home
+                    else (stats.away_possession or 0.0)
+                )
+                pass_accuracy.append(
+                    (stats.home_pass_accuracy or 0.0)
+                    if is_home
+                    else (stats.away_pass_accuracy or 0.0)
+                )
+                tackles.append(
+                    (stats.home_tackles or 0) if is_home else (stats.away_tackles or 0)
+                )
+                interceptions.append(
+                    (stats.home_interceptions or 0)
+                    if is_home
+                    else (stats.away_interceptions or 0)
+                )
+                pressures.append(
+                    (stats.home_pressures or 0)
+                    if is_home
+                    else (stats.away_pressures or 0)
+                )
+                corners.append(
+                    (stats.home_corners or 0) if is_home else (stats.away_corners or 0)
+                )
+                aerial_duels.append(
+                    (stats.home_aerial_duels or 0)
+                    if is_home
+                    else (stats.away_aerial_duels or 0)
+                )
+
+            if lineup and lineup.formation:
+                formations.append(lineup.formation)
+            lineup_players = self._parse_lineup_players(
+                lineup.starting_xi if lineup else None
+            )
+            if lineup_players:
+                lineup_sets.append(lineup_players)
+
+            gk_perfs = [p for p in perfs if p.position and "GK" in p.position.upper()]
+            if not gk_perfs:
+                gk_perfs = [p for p in perfs if (p.saves or 0) > 0]
+            if gk_perfs:
+                gk_saves.append(sum(p.saves or 0 for p in gk_perfs))
+                rated_gks = [
+                    self._normalize_rating(p.rating or p.sofa_score_rating)
+                    for p in gk_perfs
+                    if (p.rating is not None or p.sofa_score_rating is not None)
+                ]
+                if rated_gks:
+                    gk_ratings.append(self._mean(rated_gks))
+
+            perf_aerial_total = sum(p.aerial_duels or 0 for p in perfs)
+            perf_aerial_won = sum(p.aerial_duels_won or 0 for p in perfs)
+            if perf_aerial_total > 0:
+                aerial_duels.append(perf_aerial_total)
+                aerial_duels_won.append(perf_aerial_won)
+            perf_blocks = sum((p.blocks or 0) + (p.clearances or 0) for p in perfs)
+            if perf_blocks > 0:
+                blocks.append(perf_blocks)
+            perf_pressures = sum(p.pressures or 0 for p in perfs)
+            if perf_pressures > 0:
+                pressures.append(perf_pressures)
+
+        recent_count = len(snapshots)
+        clean_sheet_rate = self._safe_div(clean_sheets, recent_count, 0.0)
+        avg_goals_for = self._mean(goals_for)
+        avg_goals_against = self._mean(goals_against)
+        avg_goal_diff = self._mean(goal_diff)
+        avg_xg_for = self._mean(xg_for)
+        avg_xg_against = self._mean(xg_against)
+        avg_xg_diff = self._mean(xg_diff)
+        avg_shots = self._mean(shots)
+        avg_shots_on_target = self._mean(shots_on_target)
+        avg_passes = self._mean(passes)
+        avg_successful_passes = self._mean(successful_passes)
+        avg_possession = self._mean(possession)
+        avg_pass_accuracy = self._mean(pass_accuracy)
+        avg_tackles = self._mean(tackles)
+        avg_interceptions = self._mean(interceptions)
+        avg_pressures = self._mean(pressures)
+        avg_corners = self._mean(corners)
+        avg_aerial_duels = self._mean(aerial_duels)
+        avg_aerial_duels_won = self._mean(aerial_duels_won)
+        avg_blocks = self._mean(blocks)
+        avg_gk_saves = self._mean(gk_saves)
+        avg_gk_rating_score = self._mean(gk_ratings)
+
+        points_ratio = self._safe_div((wins * 3) + draws, max(recent_count * 3, 1), 0.5)
+        goal_diff_score = self._normalize_symmetric(avg_goal_diff, 2.0, 2.0)
+        xg_diff_score = self._normalize_symmetric(avg_xg_diff, 1.5, 1.5)
+        recent_form = (
+            round(points_ratio * 0.5 + goal_diff_score * 0.25 + xg_diff_score * 0.25, 3)
+            if recent_count
+            else 0.5
+        )
+
+        gk_save_score = self._clamp(avg_gk_saves / 5.0)
+        gk_clean_sheet_score = clean_sheet_rate
+        gk_conceded_score = self._clamp(1.0 - (avg_goals_against / 3.0))
+        goalkeeper_strength = (
+            round(
+                avg_gk_rating_score * 0.35
+                + gk_save_score * 0.25
+                + gk_clean_sheet_score * 0.20
+                + gk_conceded_score * 0.20,
+                3,
+            )
+            if recent_count
+            else 0.0
+        )
+
+        passing_strength = (
+            round(
+                self._clamp(avg_pass_accuracy / 100.0) * 0.35
+                + self._clamp(avg_passes / 700.0) * 0.20
+                + self._clamp(avg_successful_passes / 600.0) * 0.25
+                + self._clamp(avg_possession / 100.0) * 0.20,
+                3,
+            )
+            if any(
+                v > 0
+                for v in [
+                    avg_pass_accuracy,
+                    avg_passes,
+                    avg_successful_passes,
+                    avg_possession,
+                ]
+            )
+            else 0.0
+        )
+
+        aerial_win_pct = self._safe_div(avg_aerial_duels_won, avg_aerial_duels, 0.0)
+        aerial_dominance = (
+            round(
+                aerial_win_pct * 0.70 + self._clamp(avg_aerial_duels / 25.0) * 0.30,
+                3,
+            )
+            if avg_aerial_duels > 0
+            else 0.0
+        )
+
+        pressing_strength = (
+            round(
+                self._clamp(avg_tackles / 25.0) * 0.30
+                + self._clamp(avg_interceptions / 20.0) * 0.25
+                + self._clamp(avg_pressures / 60.0) * 0.45,
+                3,
+            )
+            if any(v > 0 for v in [avg_tackles, avg_interceptions, avg_pressures])
+            else 0.0
+        )
+
+        defensive_stability = (
+            round(
+                clean_sheet_rate * 0.35
+                + self._clamp(1.0 - (avg_xg_against / 2.5)) * 0.30
+                + self._clamp(1.0 - (avg_goals_against / 3.0)) * 0.25
+                + self._clamp(avg_blocks / 20.0) * 0.10,
+                3,
+            )
+            if recent_count
+            else 0.5
+        )
+
+        shots_on_target_rate = self._safe_div(avg_shots_on_target, avg_shots, 0.0)
+        conversion_rate = self._safe_div(avg_goals_for, avg_shots, 0.0)
+        goal_to_xg = self._safe_div(avg_goals_for, avg_xg_for, 0.0)
+        attacking_efficiency = (
+            round(
+                self._clamp(avg_xg_for / 2.5) * 0.30
+                + self._clamp(avg_goals_for / 3.0) * 0.30
+                + self._clamp(shots_on_target_rate / 0.5) * 0.20
+                + self._clamp(conversion_rate / 0.25) * 0.20,
+                3,
+            )
+            if any(
+                v > 0
+                for v in [avg_xg_for, avg_goals_for, avg_shots_on_target, avg_shots]
+            )
+            else 0.0
+        )
+
+        finishing_quality = (
+            round(
+                self._clamp(goal_to_xg / 1.5) * 0.70
+                + self._clamp(shots_on_target_rate / 0.5) * 0.30,
+                3,
+            )
+            if any(
+                v > 0
+                for v in [avg_goals_for, avg_xg_for, avg_shots_on_target, avg_shots]
+            )
+            else 0.5
+        )
+
+        set_piece_strength = (
+            round(
+                self._clamp(avg_corners / 10.0) * 0.55 + aerial_win_pct * 0.45,
+                3,
+            )
+            if any(v > 0 for v in [avg_corners, avg_aerial_duels])
+            else 0.0
+        )
+
+        injured_names = {inj.player_name for inj in injuries if inj.player_name}
+        suspended_names = {susp.player_name for susp in suspensions if susp.player_name}
+        top_players = sorted(
+            nt_players, key=lambda player: player.market_value or 0.0, reverse=True
+        )
+        top_starters = top_players[:11]
+        unavailable_top_starters = sum(
+            1
+            for player in top_starters
+            if player.player_name in injured_names
+            or player.player_name in suspended_names
+        )
+        available_starters_ratio = self._safe_div(
+            max(11 - unavailable_top_starters, 0), 11, 1.0
+        )
+        player_availability_score = self._safe_div(
+            max(_SQUAD_SIZE - len(injuries) - len(suspensions), 0), _SQUAD_SIZE, 1.0
+        )
+        injury_impact_score = self._clamp(
+            sum(injury.player_market_value or 0.0 for injury in injuries) / 100.0
+        )
+        suspension_impact_score = self._clamp(
+            sum((susp.player_market_value or 0.0) for susp in suspensions) / 100.0
+        )
+        squad_availability = round(
+            player_availability_score * 0.50
+            + available_starters_ratio * 0.30
+            + (1.0 - injury_impact_score) * 0.10
+            + (1.0 - suspension_impact_score) * 0.10,
+            3,
+        )
+
+        if formations:
+            most_common_formation = max(set(formations), key=formations.count)
+            formation_consistency = formations.count(most_common_formation) / len(
+                formations
+            )
+        else:
+            formation_consistency = 0.5
+
+        lineup_overlaps: List[float] = []
+        for previous_lineup, next_lineup in zip(lineup_sets, lineup_sets[1:]):
+            union = previous_lineup | next_lineup
+            if union:
+                lineup_overlaps.append(len(previous_lineup & next_lineup) / len(union))
+        lineup_consistency = self._mean(lineup_overlaps, 0.5)
+        tactical_stability = round(
+            formation_consistency * 0.55 + lineup_consistency * 0.45, 3
+        )
+
+        available = {
+            "goalkeeper_strength": recent_count > 0,
+            "passing_strength": bool(
+                pass_accuracy or passes or successful_passes or possession
+            ),
+            "recent_form": recent_count > 0,
+            "aerial_dominance": bool(aerial_duels),
+            "pressing_strength": bool(tackles or interceptions or pressures),
+            "defensive_stability": recent_count > 0,
+            "attacking_efficiency": bool(
+                xg_for or goals_for or shots or shots_on_target
+            ),
+            "finishing_quality": bool(xg_for or goals_for or shots or shots_on_target),
+            "set_piece_strength": bool(corners or aerial_duels),
+            "midfield_control": bool(
+                pass_accuracy or possession or passes or successful_passes
+            ),
+            "squad_availability": True,
+            "tactical_stability": bool(formations or lineup_sets),
+        }
+
+        raw_inputs = {
+            "goalkeeper_strength": {
+                "goalkeeper_rating_score": round(avg_gk_rating_score, 3),
+                "saves_per_match": round(avg_gk_saves, 3),
+                "clean_sheet_rate": round(clean_sheet_rate, 3),
+                "goals_conceded_per_match": round(avg_goals_against, 3),
+            },
+            "passing_strength": {
+                "pass_accuracy": round(avg_pass_accuracy, 3),
+                "passes_per_match": round(avg_passes, 3),
+                "successful_passes_per_match": round(avg_successful_passes, 3),
+                "possession": round(avg_possession, 3),
+            },
+            "recent_form": {
+                "recent_matches": recent_count,
+                "wins": wins,
+                "draws": draws,
+                "losses": losses,
+                "goal_difference_per_match": round(avg_goal_diff, 3),
+                "xg_difference_per_match": round(avg_xg_diff, 3),
+                "points_ratio": round(points_ratio, 3),
+            },
+            "aerial_dominance": {
+                "aerial_duels_per_match": round(avg_aerial_duels, 3),
+                "aerial_duels_won_per_match": round(avg_aerial_duels_won, 3),
+                "aerial_win_pct": round(aerial_win_pct, 3),
+            },
+            "pressing_strength": {
+                "tackles_per_match": round(avg_tackles, 3),
+                "interceptions_per_match": round(avg_interceptions, 3),
+                "pressures_per_match": round(avg_pressures, 3),
+            },
+            "defensive_stability": {
+                "clean_sheet_rate": round(clean_sheet_rate, 3),
+                "xga_per_match": round(avg_xg_against, 3),
+                "goals_conceded_per_match": round(avg_goals_against, 3),
+                "blocks_per_match": round(avg_blocks, 3),
+            },
+            "attacking_efficiency": {
+                "goals_per_match": round(avg_goals_for, 3),
+                "xg_per_match": round(avg_xg_for, 3),
+                "shots_per_match": round(avg_shots, 3),
+                "shots_on_target_per_match": round(avg_shots_on_target, 3),
+                "conversion_rate": round(conversion_rate, 3),
+            },
+            "finishing_quality": {
+                "goals_per_xg": round(goal_to_xg, 3),
+                "shots_on_target_rate": round(shots_on_target_rate, 3),
+                "big_chances_scored": None,
+            },
+            "set_piece_strength": {
+                "corners_per_match": round(avg_corners, 3),
+                "aerial_win_pct": round(aerial_win_pct, 3),
+            },
+            "midfield_control": {
+                "pass_accuracy": round(avg_pass_accuracy, 3),
+                "successful_passes_per_match": round(avg_successful_passes, 3),
+                "passes_per_match": round(avg_passes, 3),
+                "possession": round(avg_possession, 3),
+            },
+            "squad_availability": {
+                "injuries": len(injuries),
+                "suspensions": len(suspensions),
+                "available_starters_ratio": round(available_starters_ratio, 3),
+                "player_availability_score": round(player_availability_score, 3),
+                "injury_impact_score": round(injury_impact_score, 3),
+                "suspension_impact_score": round(suspension_impact_score, 3),
+            },
+            "tactical_stability": {
+                "formation_consistency": round(formation_consistency, 3),
+                "lineup_consistency": round(lineup_consistency, 3),
+                "recent_formations": formations,
+            },
+        }
+
+        stats_source_set = set(context["stats_sources"])
+        performance_source_set = set(context["performance_sources"])
+        lineup_source_set = set(context["lineup_sources"])
+        availability_source_set = set(context["availability_sources"])
+        providers = {
+            "goalkeeper_strength": sorted({"FootballData"} | performance_source_set),
+            "passing_strength": sorted(stats_source_set),
+            "recent_form": sorted({"FootballData"} | stats_source_set),
+            "aerial_dominance": sorted(stats_source_set | performance_source_set),
+            "pressing_strength": sorted(stats_source_set | performance_source_set),
+            "defensive_stability": sorted(
+                {"FootballData"} | stats_source_set | performance_source_set
+            ),
+            "attacking_efficiency": sorted({"FootballData"} | stats_source_set),
+            "finishing_quality": sorted({"FootballData"} | stats_source_set),
+            "set_piece_strength": sorted(stats_source_set | performance_source_set),
+            "midfield_control": sorted(stats_source_set),
+            "squad_availability": sorted(availability_source_set or {"Transfermarkt"}),
+            "tactical_stability": sorted(lineup_source_set),
+        }
+
+        return {
+            "goalkeeper_strength": goalkeeper_strength,
+            "passing_strength": passing_strength,
+            "recent_form": recent_form,
+            "aerial_dominance": aerial_dominance,
+            "pressing_strength": pressing_strength,
+            "defensive_stability": defensive_stability,
+            "attacking_efficiency": attacking_efficiency,
+            "finishing_quality": finishing_quality,
+            "set_piece_strength": set_piece_strength,
+            "midfield_control": round(
+                self._clamp(avg_pass_accuracy / 100.0) * 0.40
+                + self._clamp(avg_successful_passes / 600.0) * 0.20
+                + self._clamp(avg_passes / 700.0) * 0.15
+                + self._clamp(avg_possession / 100.0) * 0.25,
+                3,
+            )
+            if any(
+                v > 0
+                for v in [
+                    avg_pass_accuracy,
+                    avg_successful_passes,
+                    avg_passes,
+                    avg_possession,
+                ]
+            )
+            else 0.0,
+            "squad_availability": squad_availability,
+            "tactical_stability": tactical_stability,
+            "raw_inputs": raw_inputs,
+            "providers": providers,
+            "available": available,
+        }
 
     def _calc_attacking_strength(
         self, db: Session, match: Match
@@ -293,37 +1010,29 @@ class IntelligenceService:
         return _team_def(match.home_team_id), _team_def(match.away_team_id)
 
     def _calc_midfield_control(self, db: Session, match: Match) -> Tuple[float, float]:
-        """Pass accuracy + possession differential from MatchStatistic."""
+        """Pass accuracy + possession + passing volume control score."""
         stats = self._get_match_stats(db, match.id)
         if stats:
-            home_pa = (stats.home_pass_accuracy or 0.0) / 100.0
-            away_pa = (stats.away_pass_accuracy or 0.0) / 100.0
-            home_pos = (stats.home_possession or 50.0) / 100.0
-            away_pos = (stats.away_possession or 50.0) / 100.0
-            home = round((home_pa * 0.5 + home_pos * 0.5), 3)
-            away = round((away_pa * 0.5 + away_pos * 0.5), 3)
-            return home, away
+            home = round(
+                self._clamp((stats.home_pass_accuracy or 0.0) / 100.0) * 0.40
+                + self._clamp((stats.home_successful_passes or 0.0) / 600.0) * 0.20
+                + self._clamp((stats.home_passes or 0.0) / 700.0) * 0.15
+                + self._clamp((stats.home_possession or 50.0) / 100.0) * 0.25,
+                3,
+            )
+            away = round(
+                self._clamp((stats.away_pass_accuracy or 0.0) / 100.0) * 0.40
+                + self._clamp((stats.away_successful_passes or 0.0) / 600.0) * 0.20
+                + self._clamp((stats.away_passes or 0.0) / 700.0) * 0.15
+                + self._clamp((stats.away_possession or 50.0) / 100.0) * 0.25,
+                3,
+            )
+            if home > 0 or away > 0:
+                return home, away
 
-        # Fallback: look at last N matches
         def _team_mid(team_id: int) -> float:
-            recent = self._get_recent_matches(db, team_id, match.utc_date)
-            vals = []
-            for m in recent:
-                s = self._get_match_stats(db, m.id)
-                if s:
-                    is_home = m.home_team_id == team_id
-                    pa = (
-                        (s.home_pass_accuracy or 0)
-                        if is_home
-                        else (s.away_pass_accuracy or 0)
-                    ) / 100.0
-                    pos = (
-                        (s.home_possession or 50)
-                        if is_home
-                        else (s.away_possession or 50)
-                    ) / 100.0
-                    vals.append(pa * 0.5 + pos * 0.5)
-            return round(sum(vals) / len(vals), 3) if vals else 0.0
+            engineered = self._build_team_engineered_metrics(db, match, team_id)
+            return engineered["midfield_control"]
 
         return _team_mid(match.home_team_id), _team_mid(match.away_team_id)
 
@@ -667,6 +1376,51 @@ class IntelligenceService:
         # Normalize to 0-1 range (input diffs range from -1 to +1)
         return round((total + 1.0) / 2.0, 3)
 
+    def explain_engineered_features(self, db: Session, match: Match) -> Dict[str, Any]:
+        """Return raw inputs, calculated value, and contributing providers for engineered ML features."""
+        home_team = db.query(Team).filter(Team.id == match.home_team_id).first()
+        away_team = db.query(Team).filter(Team.id == match.away_team_id).first()
+        home_data = self._build_team_engineered_metrics(db, match, match.home_team_id)
+        away_data = self._build_team_engineered_metrics(db, match, match.away_team_id)
+        feature_names = [
+            "goalkeeper_strength",
+            "passing_strength",
+            "recent_form",
+            "aerial_dominance",
+            "pressing_strength",
+            "defensive_stability",
+            "attacking_efficiency",
+            "finishing_quality",
+            "set_piece_strength",
+            "midfield_control",
+            "squad_availability",
+            "tactical_stability",
+        ]
+        features: Dict[str, Any] = {}
+        for name in feature_names:
+            features[name] = {
+                "home": {
+                    "team": getattr(home_team, "name", str(match.home_team_id)),
+                    "value": home_data[name],
+                    "raw_inputs": home_data["raw_inputs"].get(name, {}),
+                    "providers": home_data["providers"].get(name, []),
+                    "available": home_data["available"].get(name, False),
+                },
+                "away": {
+                    "team": getattr(away_team, "name", str(match.away_team_id)),
+                    "value": away_data[name],
+                    "raw_inputs": away_data["raw_inputs"].get(name, {}),
+                    "providers": away_data["providers"].get(name, []),
+                    "available": away_data["available"].get(name, False),
+                },
+                "diff": round(home_data[name] - away_data[name], 3),
+            }
+        return {
+            "match_id": match.id,
+            "fixture": f"{getattr(home_team, 'name', '?')} vs {getattr(away_team, 'name', '?')}",
+            "features": features,
+        }
+
     def _detect_sources(self, db: Session, match: Match) -> List[str]:
         """Detect which data sources contributed to this match."""
         sources = ["Database"]
@@ -763,6 +1517,51 @@ class IntelligenceService:
             "away_momentum_score": intelligence.away_momentum_score,
             "momentum_score_diff": intelligence.home_momentum_score
             - intelligence.away_momentum_score,
+            # Additional engineered ML-only features
+            "home_goalkeeper_strength": intelligence.home_goalkeeper_strength,
+            "away_goalkeeper_strength": intelligence.away_goalkeeper_strength,
+            "goalkeeper_strength_diff": intelligence.home_goalkeeper_strength
+            - intelligence.away_goalkeeper_strength,
+            "home_passing_strength": intelligence.home_passing_strength,
+            "away_passing_strength": intelligence.away_passing_strength,
+            "passing_strength_diff": intelligence.home_passing_strength
+            - intelligence.away_passing_strength,
+            "home_recent_form": intelligence.home_recent_form,
+            "away_recent_form": intelligence.away_recent_form,
+            "recent_form_diff": intelligence.home_recent_form
+            - intelligence.away_recent_form,
+            "home_aerial_dominance": intelligence.home_aerial_dominance,
+            "away_aerial_dominance": intelligence.away_aerial_dominance,
+            "aerial_dominance_diff": intelligence.home_aerial_dominance
+            - intelligence.away_aerial_dominance,
+            "home_pressing_strength": intelligence.home_pressing_strength,
+            "away_pressing_strength": intelligence.away_pressing_strength,
+            "pressing_strength_diff": intelligence.home_pressing_strength
+            - intelligence.away_pressing_strength,
+            "home_defensive_stability": intelligence.home_defensive_stability,
+            "away_defensive_stability": intelligence.away_defensive_stability,
+            "defensive_stability_diff": intelligence.home_defensive_stability
+            - intelligence.away_defensive_stability,
+            "home_attacking_efficiency": intelligence.home_attacking_efficiency,
+            "away_attacking_efficiency": intelligence.away_attacking_efficiency,
+            "attacking_efficiency_diff": intelligence.home_attacking_efficiency
+            - intelligence.away_attacking_efficiency,
+            "home_finishing_quality": intelligence.home_finishing_quality,
+            "away_finishing_quality": intelligence.away_finishing_quality,
+            "finishing_quality_diff": intelligence.home_finishing_quality
+            - intelligence.away_finishing_quality,
+            "home_set_piece_strength": intelligence.home_set_piece_strength,
+            "away_set_piece_strength": intelligence.away_set_piece_strength,
+            "set_piece_strength_diff": intelligence.home_set_piece_strength
+            - intelligence.away_set_piece_strength,
+            "home_squad_availability": intelligence.home_squad_availability,
+            "away_squad_availability": intelligence.away_squad_availability,
+            "squad_availability_diff": intelligence.home_squad_availability
+            - intelligence.away_squad_availability,
+            "home_tactical_stability": intelligence.home_tactical_stability,
+            "away_tactical_stability": intelligence.away_tactical_stability,
+            "tactical_stability_diff": intelligence.home_tactical_stability
+            - intelligence.away_tactical_stability,
             # Composite
             "confidence_score": intelligence.confidence_score,
             "data_completeness": intelligence.data_completeness,

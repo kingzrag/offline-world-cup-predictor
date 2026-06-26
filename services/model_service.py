@@ -27,6 +27,15 @@ _MODELS_DIR = os.path.join(_ROOT, "models")
 WC_MODEL_PATH   = os.path.join(_MODELS_DIR, "world_cup_predictor.pkl")
 GOAL_MODEL_PATH = os.path.join(_MODELS_DIR, "goal_predictor.pkl")
 
+# Betting market model paths (optional)
+BETTING_MODEL_PATHS = {
+    "asian_handicap": os.path.join(_MODELS_DIR, "asian_handicap_predictor.pkl"),
+    "asian_total": os.path.join(_MODELS_DIR, "asian_total_predictor.pkl"),
+    "btts": os.path.join(_MODELS_DIR, "btts_predictor.pkl"),
+    "clean_sheet": os.path.join(_MODELS_DIR, "clean_sheet_predictor.pkl"),
+    "correct_score": os.path.join(_MODELS_DIR, "correct_score_predictor.pkl"),
+}
+
 
 class ModelService:
     """
@@ -65,6 +74,20 @@ class ModelService:
             self._goal_bundle: Dict[str, Any] = pickle.load(f)
         logger.info("ModelService: goal_predictor.pkl loaded ✓")
 
+        # Optionally load betting market models (non-critical)
+        self._betting_models: Dict[str, Dict[str, Any]] = {}
+        for market_name, model_path in BETTING_MODEL_PATHS.items():
+            if os.path.exists(model_path):
+                try:
+                    logger.info(f"ModelService: loading {market_name}_predictor.pkl …")
+                    with open(model_path, "rb") as f:
+                        self._betting_models[market_name] = pickle.load(f)
+                    logger.info(f"ModelService: {market_name}_predictor.pkl loaded ✓")
+                except Exception as e:
+                    logger.warning(f"ModelService: failed to load {market_name}_predictor.pkl: {e}")
+            else:
+                logger.info(f"ModelService: {market_name}_predictor.pkl not found (will use Poisson fallback)")
+
         self._initialized = True
         logger.info("ModelService: both models ready.")
 
@@ -77,10 +100,14 @@ class ModelService:
     def model_versions(self) -> Dict[str, str]:
         if not self._initialized:
             return {"wc_model": "not_loaded", "goal_model": "not_loaded"}
-        return {
+        versions = {
             "wc_model":   self._wc_bundle.get("version", "unknown"),
             "goal_model": self._goal_bundle.get("version", "unknown"),
         }
+        # Add betting market model versions if loaded
+        for market_name, bundle in self._betting_models.items():
+            versions[f"{market_name}_model"] = bundle.get("version", "unknown")
+        return versions
 
     # ── Internal: extract features ────────────────────────────────────────────
     def _get_features(self, db, home_team_id: int, away_team_id: int,
@@ -493,7 +520,112 @@ class ModelService:
                 "wc_model":   result_1x2["model_version"],
                 "goal_model": result_goals["model_version"],
             },
+            # Betting market predictions (if models loaded, otherwise Poisson fallback)
+            "betting_markets": self._predict_betting_markets(
+                db, home.id, away.id, now, competition_code, match_record, result_goals
+            ),
         }
+
+    # ── Betting market predictions with fallback ─────────────────────────────────
+    def _predict_betting_markets(
+        self, db, home_team_id: int, away_team_id: int, match_date,
+        competition_code: str, match, goal_result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Predict betting markets using dedicated models if available,
+        otherwise fall back to Poisson-based predictions from goal model.
+        """
+        features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
+        
+        result = {
+            "asian_handicap": None,
+            "asian_total": None,
+            "btts": None,
+            "clean_sheet": None,
+            "correct_score": None,
+        }
+        
+        # Try to use dedicated betting market models
+        for market_name in ["asian_handicap", "asian_total", "btts", "clean_sheet", "correct_score"]:
+            if market_name in self._betting_models:
+                try:
+                    bundle = self._betting_models[market_name]
+                    model = bundle["model"]
+                    feature_names = bundle["features"]
+                    
+                    feature_vec = [features.get(f, 0.0) for f in feature_names]
+                    df_input = __import__("pandas").DataFrame([feature_vec], columns=feature_names)
+                    
+                    probs = model.predict_proba(df_input)[0]
+                    
+                    if market_name == "asian_handicap":
+                        result["asian_handicap"] = {
+                            "home_win_prob": float(probs[1]) if len(probs) > 1 else 0.5,
+                            "source": "ml_model",
+                            "model_version": bundle.get("version", "unknown"),
+                        }
+                    elif market_name == "asian_total":
+                        result["asian_total"] = {
+                            "over_2_5_prob": float(probs[1]) if len(probs) > 1 else 0.5,
+                            "source": "ml_model",
+                            "model_version": bundle.get("version", "unknown"),
+                        }
+                    elif market_name == "btts":
+                        result["btts"] = {
+                            "yes_prob": float(probs[1]) if len(probs) > 1 else 0.5,
+                            "source": "ml_model",
+                            "model_version": bundle.get("version", "unknown"),
+                        }
+                    elif market_name == "clean_sheet":
+                        result["clean_sheet"] = {
+                            "home_clean_sheet_prob": float(probs[1]) if len(probs) > 1 else 0.5,
+                            "source": "ml_model",
+                            "model_version": bundle.get("version", "unknown"),
+                        }
+                    elif market_name == "correct_score":
+                        result["correct_score"] = {
+                            "probabilities": [float(p) for p in probs],
+                            "source": "ml_model",
+                            "model_version": bundle.get("version", "unknown"),
+                        }
+                except Exception as e:
+                    logger.warning(f"Failed to use {market_name} model: {e}")
+        
+        # Fallback to Poisson-based predictions for any missing markets
+        if result["asian_handicap"] is None:
+            result["asian_handicap"] = {
+                "home_win_prob": goal_result.get("asian_handicap", {}).get("favored_team") == "Home",
+                "source": "poisson_fallback",
+            }
+        
+        if result["asian_total"] is None:
+            ou_2_5 = goal_result.get("over_under", {}).get("2.5", {})
+            result["asian_total"] = {
+                "over_2_5_prob": ou_2_5.get("over", 0.5),
+                "source": "poisson_fallback",
+            }
+        
+        if result["btts"] is None:
+            btts = goal_result.get("btts", {})
+            result["btts"] = {
+                "yes_prob": btts.get("yes", 0.5),
+                "source": "poisson_fallback",
+            }
+        
+        if result["clean_sheet"] is None:
+            cs = goal_result.get("clean_sheet", {})
+            result["clean_sheet"] = {
+                "home_clean_sheet_prob": cs.get("home_clean_sheet", 0.5),
+                "source": "poisson_fallback",
+            }
+        
+        if result["correct_score"] is None:
+            result["correct_score"] = {
+                "most_likely_score": goal_result.get("most_likely_score", "1-1"),
+                "source": "poisson_fallback",
+            }
+        
+        return result
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
