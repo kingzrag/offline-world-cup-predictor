@@ -121,6 +121,7 @@ def _build_enrichment_from_xg(
             "most_likely_score": most_likely_score or poisson["most_likely_score"],
             "top_5_scorelines":  poisson["top_5_scorelines"],
             "team_goals":        poisson["team_goals"],
+            "asian_handicap":    poisson["asian_handicap"],
         },
     }
 
@@ -142,6 +143,7 @@ def _build_enrichment_from_prediction(pred_dict: Dict[str, Any]) -> Dict[str, An
             "most_likely_score": markets["most_likely_score"],
             "top_5_scorelines":  markets["top_5_scorelines"],
             "team_goals":        markets["team_goals"],
+            "asian_handicap":    markets.get("asian_handicap"),
         },
     }
 
