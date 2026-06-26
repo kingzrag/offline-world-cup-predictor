@@ -1,13 +1,14 @@
 import csv
 import os
 import sys
+import random
 
 # Add root folder to sys.path so we can import from database/models
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import text, func
 from database.connection import SessionLocal
-from models import Match, Competition, Team, Injury, Suspension
+from models import Match, Competition, Team, Injury, Suspension, NationalTeamPlayer
 from ml.features import extract_ml_features
 from utils.logger import logger
 
@@ -27,6 +28,32 @@ INTERNATIONAL_COMPETITIONS = [
     "International Friendlies",
 ]
 
+def add_simulated_injuries(db, team_id):
+    """Add simulated realistic injuries to a team's players for training purposes."""
+    team = db.query(Team).filter_by(id=team_id).first()
+    if not team:
+        return
+    players = (
+        db.query(NationalTeamPlayer)
+        .filter_by(team_id=team_id)
+        .all()
+    )
+    if not players:
+        return
+
+    # Randomly injure 1-3 players
+    num_injuries = random.randint(0, 3)
+    injured_players = random.sample(players, min(num_injuries, len(players)))
+
+    for p in injured_players:
+        inj = Injury(
+            player_name=p.player_name,
+            team_id=team_id,
+            team_name=team.name,
+            injury_type="Simulated Training Injury",
+            player_market_value=p.market_value
+        )
+        db.add(inj)
 
 def build_dataset():
     """Build dataset_goals.csv using only international matches with recorded scores."""
@@ -112,6 +139,19 @@ def build_dataset():
                     home_team = db.query(Team).filter_by(id=m.home_team_id).first()
                     away_team = db.query(Team).filter_by(id=m.away_team_id).first()
 
+                    # --- SIMULATE INJURIES FOR TRAINING ---
+                    # Clear any existing injuries/suspensions for this iteration
+                    db.query(Injury).filter_by(team_id=m.home_team_id).delete()
+                    db.query(Injury).filter_by(team_id=m.away_team_id).delete()
+                    db.query(Suspension).filter_by(team_id=m.home_team_id).delete()
+                    db.query(Suspension).filter_by(team_id=m.away_team_id).delete()
+
+                    # Add simulated injuries
+                    add_simulated_injuries(db, m.home_team_id)
+                    add_simulated_injuries(db, m.away_team_id)
+                    db.flush()  # So queries see the new injuries
+                    # --- END SIMULATE ---
+
                     features = extract_ml_features(
                         db, m.home_team_id, m.away_team_id, m.utc_date, comp_code,
                         match_stage=m.stage
@@ -132,6 +172,7 @@ def build_dataset():
         logger.info(f"Goals dataset complete. Saved {rows_written} rows to {dataset_path}.")
 
     finally:
+        db.rollback()
         db.close()
 
 

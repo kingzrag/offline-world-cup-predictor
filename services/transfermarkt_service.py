@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
 
 from utils.logger import logger
-from models import Competition, Team, Standing, Injury, Suspension
+from models import Competition, Team, Standing, Injury, Suspension, NationalTeamPlayer
 
 # Static mapping for National Teams to automatically populate empty URLs
 NATIONAL_TEAM_TRANSFERMARKT_URLS = {
@@ -258,17 +258,27 @@ class TransfermarktService:
                     logger.info(f"Fetching injury data for team: {team_db.name}...")
                     injuries_list, _ = self._scrape_team_data(url)
                     
+                    # Build player name to market value map for this team
+                    player_market_values = {
+                        p.player_name: p.market_value
+                        for p in db.query(NationalTeamPlayer).filter_by(team_id=team_db.id).all()
+                    }
+                    
                     # Delete existing injury records for this team to prevent stale data
                     db.query(Injury).filter_by(team_id=team_db.id).delete()
                     
                     for inj in injuries_list:
+                        player_name = inj["player_name"]
+                        player_mv = player_market_values.get(player_name, 0.0)
+                        
                         injury_record = Injury(
-                            player_name=inj["player_name"],
+                            player_name=player_name,
                             team_id=team_db.id,
                             team_name=team_db.name,
                             injury_type=inj["injury_type"],
                             expected_return_date=inj["expected_return_date"],
-                            days_out=inj["days_out"]
+                            days_out=inj["days_out"],
+                            player_market_value=player_mv
                         )
                         db.add(injury_record)
                         summary["injuries"] += 1
@@ -311,16 +321,26 @@ class TransfermarktService:
                     logger.info(f"Fetching suspension data for team: {team_db.name}...")
                     _, suspensions_list = self._scrape_team_data(url)
                     
+                    # Build player name to market value map for this team
+                    player_market_values = {
+                        p.player_name: p.market_value
+                        for p in db.query(NationalTeamPlayer).filter_by(team_id=team_db.id).all()
+                    }
+                    
                     # Delete existing suspension records for this team to prevent stale data
                     db.query(Suspension).filter_by(team_id=team_db.id).delete()
                     
                     for susp in suspensions_list:
+                        player_name = susp["player_name"]
+                        player_mv = player_market_values.get(player_name, 0.0)
+                        
                         suspension_record = Suspension(
-                            player_name=susp["player_name"],
+                            player_name=player_name,
                             team_id=team_db.id,
                             team_name=team_db.name,
                             suspension_reason=susp["suspension_reason"],
-                            matches_remaining=susp["matches_remaining"]
+                            matches_remaining=susp["matches_remaining"],
+                            player_market_value=player_mv
                         )
                         db.add(suspension_record)
                         summary["suspensions"] += 1

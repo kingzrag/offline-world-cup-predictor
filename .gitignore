@@ -1,2 +1,15 @@
+# Database
 football.db
+# Environment
 .env
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+# macOS
+.DS_Store
+# Logs
+*.log
+# Temporary debug output
+features_before.json
+features_after.json
