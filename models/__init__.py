@@ -12,6 +12,11 @@ from models.bookmaker_odds import BookmakerOdds
 from models.national_team_player import NationalTeamPlayer
 from models.national_team_injury import NationalTeamInjury
 from models.national_team_suspension import NationalTeamSuspension
+from models.match_statistic import MatchStatistic
+from models.match_event import MatchEvent
+from models.player_match_performance import PlayerMatchPerformance
+from models.match_lineup import MatchLineup
+from models.suspension_history import SuspensionHistory, SuspensionStatus
 
 __all__ = [
     "Base",
@@ -27,5 +32,11 @@ __all__ = [
     "BookmakerOdds",
     "NationalTeamPlayer",
     "NationalTeamInjury",
-    "NationalTeamSuspension"
+    "NationalTeamSuspension",
+    "MatchStatistic",
+    "MatchEvent",
+    "PlayerMatchPerformance",
+    "MatchLineup",
+    "SuspensionHistory",
+    "SuspensionStatus",
 ]

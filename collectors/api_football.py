@@ -35,6 +35,24 @@ class APIFootballCollector:
         params = {"fixture": fixture_id}
         data = await self._request("fixtures/events", params)
         return data.get("response", [])
+    
+    async def fetch_fixture_statistics(self, fixture_id: int) -> Dict[str, Any]:
+        """Fetch match statistics (possession, shots, corners, xG, etc.)"""
+        params = {"fixture": fixture_id}
+        data = await self._request("fixtures/statistics", params)
+        return data.get("response", [])
+    
+    async def fetch_fixture_lineups(self, fixture_id: int) -> List[Dict[str, Any]]:
+        """Fetch match lineups and formations"""
+        params = {"fixture": fixture_id}
+        data = await self._request("fixtures/lineups", params)
+        return data.get("response", [])
+    
+    async def fetch_fixture_players(self, fixture_id: int) -> List[Dict[str, Any]]:
+        """Fetch player statistics for a match"""
+        params = {"fixture": fixture_id}
+        data = await self._request("fixtures/players", params)
+        return data.get("response", [])
 
     def parse_live_fixture(self, fixture_data: Dict[str, Any]) -> Dict[str, Any]:
         fixture = fixture_data.get("fixture", {})
@@ -74,3 +92,26 @@ class APIFootballCollector:
             "away_team": teams.get("away", {}),
             "date": fixture.get("date"),
         }
+    
+    @staticmethod
+    def parse_statistics(statistics_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Parse statistics response into home/away values"""
+        result = {"home": {}, "away": {}}
+
+        for i, team_stat in enumerate(statistics_data):
+            team_type = "home" if i == 0 else "away"
+            stats_dict = {}
+
+            for stat in team_stat.get("statistics", []):
+                type_name = stat.get("type")
+                value = stat.get("value")
+
+                # Convert percentage strings to floats (e.g., "58%" -> 58.0
+                if isinstance(value, str) and value.endswith("%"):
+                    value = float(value.strip("%"))
+
+                stats_dict[type_name] = value
+
+            result[team_type] = stats_dict
+
+        return result

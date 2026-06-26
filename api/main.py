@@ -100,7 +100,6 @@ app.include_router(tournament.router)
 from api.routes.admin import router as admin_router
 app.include_router(admin_router)
 
-
 async def run_live_match_sync():
     """
     Poll football-data.org and API-Football every 30 seconds
@@ -143,15 +142,18 @@ async def run_live_match_sync():
                     f"live matches fetched: {af_summary.get('live_matches_fetched', 0)}, "
                     f"matches updated: {af_summary.get('matches_updated', 0)}, "
                     f"red cards found: {af_summary.get('red_cards_found', 0)}, "
-                    f"minutes updated: {af_summary.get('minutes_updated', 0)}"
+                    f"minutes updated: {af_summary.get('minutes_updated', 0)}, "
+                    f"statistics updated: {af_summary.get('statistics_updated', 0)}, "
+                    f"lineups updated: {af_summary.get('lineups_updated', 0)}, "
+                    f"events updated: {af_summary.get('events_updated', 0)}"
                 )
-                
-                # Combine both summaries
+
+                # Combine all summaries
                 combined_summary = {
                     **fd_summary,
                     **af_summary,
                 }
-                
+
                 record_sync_complete(started_at, combined_summary)
                 
             except Exception as e:

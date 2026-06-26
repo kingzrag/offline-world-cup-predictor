@@ -1,7 +1,11 @@
 import logging
 logger = logging.getLogger(__name__)
 from sqlalchemy import desc, or_, and_
-from models import Match, Team, TeamElo, Competition, Injury, Suspension, NationalTeamPlayer, Standing, BookmakerOdds
+from models import (
+    Match, Team, TeamElo, Competition, Injury, Suspension,
+    NationalTeamPlayer, Standing, BookmakerOdds,
+    PlayerMatchPerformance, MatchStatistic
+)
 
 def get_team_elo(db, team_name: str) -> int:
     """Retrieves the ELO rating for a team, falling back to 1500 if not found."""
@@ -559,6 +563,60 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
             away_red_cards = match.away_red_cards
         red_card_diff = home_red_cards - away_red_cards
 
+    # ------------------------------------------------------------
+    # NEW: SOFASCORE INTELLIGENCE FEATURES!
+    # ------------------------------------------------------------
+    home_avg_rating = 0.0
+    away_avg_rating = 0.0
+    home_possession = None
+    away_possession = None
+    home_xg = None
+    away_xg = None
+    possession_diff = 0.0
+    xg_diff = 0.0
+
+    if match:
+        # 1. Player ratings (from PlayerMatchPerformance)
+        home_performances = db.query(PlayerMatchPerformance)\
+            .filter(PlayerMatchPerformance.match_id == match.id,
+                    PlayerMatchPerformance.team_id == match.home_team_id,
+                    PlayerMatchPerformance.is_starter == True)\
+            .all()
+        away_performances = db.query(PlayerMatchPerformance)\
+            .filter(PlayerMatchPerformance.match_id == match.id,
+                    PlayerMatchPerformance.team_id == match.away_team_id,
+                    PlayerMatchPerformance.is_starter == True)\
+            .all()
+        
+        if home_performances:
+            valid_home = [p.sofa_score_rating for p in home_performances if p.sofa_score_rating]
+            if valid_home:
+                home_avg_rating = sum(valid_home) / len(valid_home)
+        
+        if away_performances:
+            valid_away = [p.sofa_score_rating for p in away_performances if p.sofa_score_rating]
+            if valid_away:
+                away_avg_rating = sum(valid_away) / len(valid_away)
+        
+        # 2. Statistics from MatchStatistic
+        match_statistics = db.query(MatchStatistic)\
+            .filter(MatchStatistic.match_id == match.id)\
+            .first()
+        if match_statistics:
+            home_possession = match_statistics.home_possession
+            away_possession = match_statistics.away_possession
+            home_xg = match_statistics.home_expected_goals
+            away_xg = match_statistics.away_expected_goals
+            if home_possession and away_possession:
+                possession_diff = home_possession - away_possession
+            if home_xg and away_xg:
+                xg_diff = home_xg - away_xg
+        
+        logger.debug(
+            f"SofaScore features: home_avg_rating={home_avg_rating:.2f}, "
+            f"away_avg_rating={away_avg_rating:.2f}, possession_diff={possession_diff:.1f}, xg_diff={xg_diff:.2f}"
+        )
+
     return {
         # ---- Phase 1 core features ----
         "elo_diff":                       elo_diff,
@@ -626,4 +684,14 @@ def extract_ml_features(db, home_team_id: int, away_team_id: int, match_date, co
         "home_red_cards":                 home_red_cards,
         "away_red_cards":                 away_red_cards,
         "red_card_diff":                  red_card_diff,
+        # ---- NEW: SOFASCORE FEATURES ----
+        "home_avg_rating":                home_avg_rating,
+        "away_avg_rating":                away_avg_rating,
+        "avg_rating_diff":                home_avg_rating - away_avg_rating,
+        "home_possession":                home_possession,
+        "away_possession":                away_possession,
+        "possession_diff":                possession_diff,
+        "home_expected_goals":            home_xg,
+        "away_expected_goals":            away_xg,
+        "expected_goals_diff":            xg_diff,
     }

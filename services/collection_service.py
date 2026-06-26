@@ -1,12 +1,13 @@
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
 
 from utils.config import settings
 from utils.logger import logger
 from collectors import FootballDataCollector
 from collectors.api_football import APIFootballCollector
-from models import Competition, Team, Player, Injury, Match, Standing
+from collectors.sofascore import SofaScoreCollector
+from models import Competition, Team, Player, Injury, Match, Standing, Suspension, SuspensionHistory, SuspensionStatus, MatchStatistic, MatchEvent, MatchLineup, PlayerMatchPerformance
 
 class CollectionService:
     """
@@ -24,6 +25,7 @@ class CollectionService:
     def __init__(self):
         self.fd_collector = FootballDataCollector(settings.FOOTBALL_DATA_API_KEY)
         self.api_football_collector = APIFootballCollector(settings.API_FOOTBALL_KEY)
+        self.sofascore_collector = SofaScoreCollector()
 
     def _get_or_create_team(self, db: Session, api_id: str, name: str, short_name: str = None, tla: str = None, crest_url: str = None) -> Team:
         """
@@ -390,6 +392,7 @@ class CollectionService:
         - Fetches live matches
         - Tries to match to existing Match records
         - Updates current_minute, api_football_id, home/away red/yellow cards
+        - Fetches and stores statistics, lineups, events
         """
         logger.info("Starting API-Football live data ingestion...")
         summary = {
@@ -397,9 +400,12 @@ class CollectionService:
             "matches_updated": 0,
             "red_cards_found": 0,
             "minutes_updated": 0,
+            "statistics_updated": 0,
+            "lineups_updated": 0,
+            "events_updated": 0,
             "updated_match_ids": [],
         }
-        
+
         try:
             # Fetch all live fixtures
             live_fixtures = await self.api_football_collector.fetch_live_matches()
@@ -407,29 +413,22 @@ class CollectionService:
             logger.info(f"Fetched {len(live_fixtures)} live matches from API-Football")
 
             for fixture_data in live_fixtures:
-                # First, get events for this fixture to get red/yellow cards
                 fixture_id = fixture_data.get("fixture", {}).get("id")
                 if not fixture_id:
-                    try:
-                        events = await self.api_football_collector.fetch_fixture_events(fixture_id)
-                        fixture_data["events"] = events
-                    except Exception as e:
-                            logger.debug(f"Could not fetch events for fixture {fixture_id}: {e}")
-                    
+                    continue
+
                 parsed = self.api_football_collector.parse_live_fixture(fixture_data)
-                
-                # Try to match the match in our DB
+
                 # Try to match using team names
                 home_team_name = parsed["home_team"].get("name")
                 away_team_name = parsed["away_team"].get("name")
 
-                # Find matches with same home/away team
                 home_team = db.query(Team).filter(Team.name.ilike(home_team_name)).first()
                 away_team = db.query(Team).filter(Team.name.ilike(away_team_name)).first()
                 if not home_team or not away_team:
                     continue
-                
-                # Now find the actual match (latest match between these teams that's not finished
+
+                # Find the match in our DB
                 match = (
                     db.query(Match)
                     .filter(
@@ -440,68 +439,403 @@ class CollectionService:
                     .order_by(Match.utc_date.desc())
                     .first()
                 )
-                
+
                 if not match:
-                    continue  # Skip if we don't have this match in DB
-                
-                # Okay, we found a match to update!
+                    continue
+
                 updated = False
-                
-                # Update api_football_id
-                if match.api_football_id != parsed["api_football_id"]:
-                    match.api_football_id = parsed["api_football_id"]
+
+                # Update api_football_id if missing
+                if match.api_football_id != str(fixture_id):
+                    match.api_football_id = str(fixture_id)
                     updated = True
-                
+
                 # Update current minute
                 if parsed["current_minute"] is not None:
                     if match.current_minute != parsed["current_minute"]:
                         match.current_minute = parsed["current_minute"]
                         summary["minutes_updated"] += 1
                         updated = True
-                
+
                 # Update red/yellow cards
-                old_home_red = match.home_red_cards
-                old_away_red = match.away_red_cards
-                
+                old_home_red = match.home_red_cards or 0
+                old_away_red = match.away_red_cards or 0
+
                 match.home_red_cards = parsed["home_red_cards"]
                 match.away_red_cards = parsed["away_red_cards"]
                 match.home_yellow_cards = parsed["home_yellow_cards"]
                 match.away_yellow_cards = parsed["away_yellow_cards"]
-                
-                if old_home_red != match.home_red_cards or old_away_red != match.away_red_cards:
+
+                if old_home_red != (match.home_red_cards or 0) or old_away_red != (match.away_red_cards or 0):
                     summary["red_cards_found"] += (
-                        (match.home_red_cards + match.away_red_cards) - (old_home_red + old_away_red)
+                        ((match.home_red_cards or 0) + (match.away_red_cards or 0)) - 
+                        (old_home_red + old_away_red)
                     )
                     updated = True
-                
-                # Update current scores too!
+
+                # Update current scores
                 if parsed["current_home_score"] is not None:
                     match.current_home_score = parsed["current_home_score"]
                     updated = True
                 if parsed["current_away_score"] is not None:
                     match.current_away_score = parsed["current_away_score"]
                     updated = True
-                
+
+                # Now fetch and store statistics, lineups, events
+                try:
+                    # 1. Fetch and store statistics
+                    stats = await self.api_football_collector.fetch_fixture_statistics(fixture_id)
+                    parsed_stats = self.api_football_collector.parse_statistics(stats)
+                    await self.store_match_statistics(db, match, parsed_stats)
+                    summary["statistics_updated"] += 1
+
+                    # 2. Fetch and store lineups
+                    lineups = await self.api_football_collector.fetch_fixture_lineups(fixture_id)
+                    await self.store_match_lineups(db, match, lineups)
+                    summary["lineups_updated"] += 1
+
+                    # 3. Fetch and store events
+                    events = await self.api_football_collector.fetch_fixture_events(fixture_id)
+                    await self.store_match_events(db, match, events)
+                    summary["events_updated"] += 1
+
+                except Exception as e:
+                    logger.warning(f"Could not fetch extra data for fixture {fixture_id}: {e}")
+
                 if updated:
                     summary["matches_updated"] += 1
                     summary["updated_match_ids"].append(match.id)
                     logger.info(
-                        f"Updated match {match.id} ({home_team_name} vs {away_team_name}: "
+                        f"Updated match {match.id} ({home_team_name} vs {away_team_name}): "
                         f"min: {match.current_minute}, "
                         f"home red: {match.home_red_cards}, away red: {match.away_red_cards}"
                     )
-            
+
             db.commit()
-            
+
         except Exception as e:
             db.rollback()
-            logger.error(f"Error in API-Football live ingestion: {str(e)}", exc_info=True)
+            logger.error(f"Error in API-Football live ingestion: {e}", exc_info=True)
             raise
-        
+
         logger.info(f"API-Football live data ingestion complete: {summary}")
         return summary
 
+    async def store_match_statistics(self, db: Session, match: Match, statistics: Dict[str, Any]) -> None:
+        """Store match statistics in match_statistics table"""
+        logger.info(f"Storing statistics for match {match.id}")
+        # Delete old stats for this match first
+        logger.debug(f"Deleting existing statistics for match {match.id}")
+        db.query(MatchStatistic).filter_by(match_id=match.id).delete()
+
+        home_stats = statistics.get("home", {})
+        away_stats = statistics.get("away", {})
+
+        match_stat = MatchStatistic(
+            match_id=match.id,
+            home_possession=home_stats.get("Ball possession"),
+            away_possession=away_stats.get("Ball possession"),
+            home_shots=home_stats.get("Total shots"),
+            away_shots=away_stats.get("Total shots"),
+            home_shots_on_target=home_stats.get("Shots on target"),
+            away_shots_on_target=away_stats.get("Shots on target"),
+            home_corners=home_stats.get("Corner kicks"),
+            away_corners=away_stats.get("Corner kicks"),
+            home_expected_goals=home_stats.get("Expected goals (xG)"),
+            away_expected_goals=away_stats.get("Expected goals (xG)"),
+            home_fouls=home_stats.get("Fouls"),
+            away_fouls=away_stats.get("Fouls"),
+            home_offsides=home_stats.get("Offsides"),
+            away_offsides=away_stats.get("Offsides"),
+        )
+
+        db.add(match_stat)
+        logger.debug(f"Added new statistics record for match {match.id}")
+
+        # Also update match table with formation/xG/possession if available
+        logger.debug(f"Updating match {match.id} with new stats in match table")
+        if home_stats.get("Expected goals (xG)"):
+            match.home_expected_goals = home_stats.get("Expected goals (xG)")
+        if home_stats.get("Ball possession"):
+            match.home_possession = home_stats.get("Ball possession")
+        if away_stats.get("Expected goals (xG)"):
+            match.away_expected_goals = away_stats.get("Expected goals (xG)")
+        if away_stats.get("Ball possession"):
+            match.away_possession = away_stats.get("Ball possession")
+
+    async def store_match_lineups(self, db: Session, match: Match, lineups: Dict[str, Any]) -> None:
+        """Store match lineups in match_lineups table"""
+        logger.info(f"Storing lineups for match {match.id}")
+        # Delete old lineups first
+        logger.debug(f"Deleting existing lineups for match {match.id}")
+        db.query(MatchLineup).filter_by(match_id=match.id).delete()
+
+        for side in ["home", "away"]:
+            team_data = lineups.get(side)
+            if not team_data:
+                continue
+
+            # Find team in our DB - map via side
+            team = None
+            if side == "home" and match.home_team:
+                team = match.home_team
+            elif side == "away" and match.away_team:
+                team = match.away_team
+
+            # Create lineup record
+            lineup = MatchLineup(
+                match_id=match.id,
+                team_id=team.id if team else None,
+                formation=team_data.get("formation"),
+                starting_xi=str([p for p in team_data.get("players", []) if p.get("is_starter")]),
+                substitutes=str([p for p in team_data.get("players", []) if not p.get("is_starter")]),
+            )
+
+            db.add(lineup)
+            logger.debug(f"Added lineup record for {side} team for match {match.id}")
+
+            # Update match formations
+            if team_data.get("formation"):
+                if side == "home":
+                    match.home_formation = team_data.get("formation")
+                else:
+                    match.away_formation = team_data.get("formation")
+
+            # Also store player ratings in PlayerMatchPerformance
+            await self.store_player_performances(db, match, side, team_data.get("players", []), team)
+
+    async def store_player_performances(self, db: Session, match: Match, side: str, players: List[Dict], team):
+        """Store player performances (ratings) in PlayerMatchPerformance table"""
+        logger.debug(f"Storing {len(players)} player performances for match {match.id}, side: {side}")
+        for player in players:
+            # Check for existing record first
+            existing = None
+            if player.get("sofa_score_player_id"):
+                existing = db.query(PlayerMatchPerformance).filter(
+                    PlayerMatchPerformance.match_id == match.id,
+                    PlayerMatchPerformance.sofa_score_id == str(player.get("sofa_score_player_id"))
+                ).first()
+
+            if existing:
+                # Update existing
+                logger.debug(f"Updating existing player performance for {player.get('player_name')}")
+                existing.player_name = player.get("player_name")
+                existing.position = player.get("position")
+                existing.is_starter = player.get("is_starter")
+                existing.sofa_score_rating = player.get("sofa_score_rating")
+            else:
+                # Create new
+                logger.debug(f"Creating new player performance for {player.get('player_name')}")
+                perf = PlayerMatchPerformance(
+                    match_id=match.id,
+                    team_id=team.id if team else None,
+                    sofa_score_id=str(player.get("sofa_score_player_id")) if player.get("sofa_score_player_id") else None,
+                    player_name=player.get("player_name"),
+                    position=player.get("position"),
+                    is_starter=player.get("is_starter"),
+                    sofa_score_rating=player.get("sofa_score_rating"),
+                )
+                db.add(perf)
+
+    async def store_match_events(self, db: Session, match: Match, events: List[Dict[str, Any]]) -> None:
+        """Store match events (goals, cards, substitutions) in match_events table"""
+        logger.info(f"Storing {len(events)} events for match {match.id}")
+
+        for event in events:
+            # Check for existing event by SofaScore ID to avoid duplicates
+            existing = db.query(MatchEvent).filter(
+                MatchEvent.match_id == match.id,
+                MatchEvent.sofa_score_id == event.get("sofa_score_id")
+            ).first()
+
+            # Find team for event
+            team = None
+            if event.get("is_home") and match.home_team:
+                team = match.home_team
+            elif not event.get("is_home") and match.away_team:
+                team = match.away_team
+
+            if existing:
+                # Update existing
+                logger.debug(f"Updating existing event {event.get('sofa_score_id')}")
+                existing.type = event.get("type")
+                existing.minute = event.get("minute")
+                existing.description = event.get("description")
+                existing.player_name = event.get("player_name")
+                existing.team_id = team.id if team else None
+            else:
+                # Create new
+                logger.debug(f"Creating new event {event.get('sofa_score_id')}")
+                db_event = MatchEvent(
+                    match_id=match.id,
+                    team_id=team.id if team else None,
+                    type=event.get("type"),
+                    minute=event.get("minute"),
+                    description=event.get("description"),
+                    player_name=event.get("player_name"),
+                    sofa_score_id=event.get("sofa_score_id"),
+                )
+                db.add(db_event)
+            
+            # Check if it's a red card and handle suspension!
+            if event.get("type") in ["RED_CARD", "SECOND_YELLOW_CARD"] and team and event.get("player_name"):
+                logger.info(f"Red card detected! Handling suspension for {event.get('player_name')}")
+                self.handle_red_card_for_suspension(db, match.id, team.id, event.get("player_name"))
+
+    async def ingest_sofascore_live(self, db: Session) -> Dict[str, Any]:
+        """
+        Ingest live match data from SofaScore
+        """
+        logger.info("Starting SofaScore live data ingestion...")
+        summary = {
+            "live_matches_fetched": 0,
+            "matches_updated": 0,
+            "statistics_updated": 0,
+            "lineups_updated": 0,
+            "events_updated": 0,
+            "errors": []
+        }
+
+        try:
+            # Fetch all live matches
+            live_data = self.sofascore_collector.get_live_matches()
+            if not live_data or not live_data.get("events"):
+                logger.warning("No live events returned from SofaScore")
+                return summary
+
+            summary["live_matches_fetched"] = len(live_data["events"])
+            logger.info(f"Fetched {summary['live_matches_fetched']} live matches from SofaScore")
+
+            for event_data in live_data["events"]:
+                try:
+                    sofa_score_id = str(event_data.get("id"))
+                    home_team_name = event_data.get("homeTeam", {}).get("name")
+                    away_team_name = event_data.get("awayTeam", {}).get("name")
+
+                    logger.info(f"Processing SofaScore event {sofa_score_id}: {home_team_name} vs {away_team_name}")
+
+                    # Find the match in our database
+                    home_team = db.query(Team).filter(Team.name.ilike(home_team_name)).first()
+                    away_team = db.query(Team).filter(Team.name.ilike(away_team_name)).first()
+
+                    if not home_team or not away_team:
+                        logger.debug(f"Skipping event {sofa_score_id}: Teams {home_team_name}/{away_team_name} not found in DB")
+                        continue
+
+                    match = (
+                        db.query(Match)
+                        .filter(
+                            Match.home_team_id == home_team.id,
+                            Match.away_team_id == away_team.id,
+                            Match.status != "FINISHED"
+                        )
+                        .order_by(Match.utc_date.desc())
+                        .first()
+                    )
+
+                    if not match:
+                        logger.debug(f"Skipping event {sofa_score_id}: No matching match in DB")
+                        continue
+
+                    # Update match with SofaScore ID if missing
+                    if not match.sofa_score_id:
+                        match.sofa_score_id = sofa_score_id
+
+                    # Fetch and store statistics
+                    raw_stats = self.sofascore_collector.get_match_statistics(sofa_score_id)
+                    if raw_stats:
+                        parsed_stats = self.sofascore_collector.parse_match_statistics(raw_stats)
+                        await self.store_match_statistics(db, match, parsed_stats)
+                        summary["statistics_updated"] += 1
+
+                    # Fetch and store lineups
+                    raw_lineups = self.sofascore_collector.get_match_lineups(sofa_score_id)
+                    if raw_lineups:
+                        parsed_lineups = self.sofascore_collector.parse_match_lineups(raw_lineups)
+                        await self.store_match_lineups(db, match, parsed_lineups)
+                        summary["lineups_updated"] += 1
+
+                    # Fetch and store events
+                    raw_events = self.sofascore_collector.get_match_events(sofa_score_id)
+                    if raw_events:
+                        parsed_events = self.sofascore_collector.parse_match_events(raw_events)
+                        await self.store_match_events(db, match, parsed_events)
+                        summary["events_updated"] += 1
+
+                    summary["matches_updated"] += 1
+                    summary["updated_match_ids"].append(match.id)
+
+                except Exception as e:
+                    logger.error(f"Error processing SofaScore event {event_data.get('id')}: {e}", exc_info=True)
+                    summary["errors"].append(str(e))
+                    continue
+
+            db.commit()
+            logger.info("Committed changes to database")
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error in SofaScore live ingestion: {e}", exc_info=True)
+            summary["errors"].append(str(e))
+            raise
+
+        logger.info(f"SofaScore live data ingestion complete: {summary}")
+        return summary
+
+    def handle_red_card_for_suspension(self, db: Session, match_id: int, team_id: int, player_name: str):
+        """
+        Create a pending suspension when a red card is detected
+        """
+        try:
+            # Check if there's already a pending suspension for this player
+            existing = db.query(Suspension).filter_by(
+                team_id=team_id,
+                player_name=player_name,
+                status=SuspensionStatus.PENDING
+            ).first()
+
+            if existing:
+                logger.info(f"Pending suspension already exists for {player_name}")
+                return
+
+            # Get team info
+            team = db.query(Team).filter_by(id=team_id).first()
+            if not team:
+                logger.error(f"Team not found for id {team_id}")
+                return
+
+            # Create new pending suspension
+            suspension = Suspension(
+                player_name=player_name,
+                team_id=team_id,
+                team_name=team.name,
+                source="SofaScore",
+                status=SuspensionStatus.PENDING,
+                reason="Red Card",
+                suspension_reason="Red Card"
+            )
+            db.add(suspension)
+            db.flush()
+
+            # Create history entry
+            history = SuspensionHistory(
+                suspension_id=suspension.id,
+                old_status=None,
+                new_status=SuspensionStatus.PENDING,
+                changed_by="SofaScore Collector",
+                reason="Red card detected in live match"
+            )
+            db.add(history)
+
+            db.commit()
+            logger.info(f"Created pending suspension for {player_name}")
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error handling red card suspension: {e}", exc_info=True)
+
     async def ingest_football_data(self, db: Session, competition_code: str = "WC") -> Dict[str, Any]:
+
         """
         Orchestrates the entire ingestion pipeline:
         Step 1: Football-Data.org (competitions, teams, standings)
