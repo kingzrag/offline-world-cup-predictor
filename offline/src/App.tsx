@@ -39,7 +39,10 @@ import {
 } from './dateTimeUtils';
 import { formatXG } from './xgUtils';
 import { motion } from 'motion/react';
+import { Canvas } from '@react-three/fiber';
+import { Football3D } from './components/Football3D';
 import { BestPredictionsCarousel } from './components/BestPredictionsCarousel';
+import { checkHealth } from './api';
 import {
   Search,
   Trophy,
@@ -598,6 +601,7 @@ export default function App() {
 
 
   const [perfLoading, setPerfLoading] = useState(false);
+  const [healthData, setHealthData] = useState<any>(null);
 
   // Fetch model performance statistics from backend API on mount or tab select
   const fetchPerformanceData = async () => {
@@ -612,6 +616,15 @@ export default function App() {
     }
   };
 
+  const fetchHealthData = async () => {
+    try {
+      const data = await checkHealth();
+      setHealthData(data);
+    } catch (err) {
+      console.error("Failed to connect to backend health endpoint:", err);
+    }
+  };
+
   // useEffect(() => {
   //   if (activeTab === 'tournament') {
   //     loadTournamentData();
@@ -621,6 +634,12 @@ export default function App() {
   useEffect(() => {
     if (activeTab === 'model') {
       fetchPerformanceData();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'intelligence') {
+      fetchHealthData();
     }
   }, [activeTab]);
 
@@ -1261,20 +1280,32 @@ export default function App() {
         animate={{ opacity: showTransitionSuccess ? 0 : 1 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Dark Cinematic Stadium Background */}
+        {/* Dark Cinematic Stadium Background - Enhanced */}
         <div className="absolute inset-0 pointer-events-none">
-          {/* Left Floodlight */}
-          <div className="absolute top-[-100px] left-[5%] w-[400px] h-[400px] rounded-full bg-white/[0.015] blur-[100px] animate-[floodlight_12s_ease-in-out_infinite]" />
-          <div className="absolute top-[-30px] left-[12%] w-[100px] h-[100px] bg-white/[0.02] blur-[25px]" />
-          <div className="absolute top-[-10px] left-[14%] w-[30px] h-[30px] bg-white/[0.04] blur-[5px]" />
+          {/* Soft vignette around edges */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.6)_100%)]" />
           
-          {/* Right Floodlight */}
-          <div className="absolute top-[-100px] right-[5%] w-[400px] h-[400px] rounded-full bg-white/[0.015] blur-[100px] animate-[floodlight_12s_ease-in-out_infinite_6s]" />
-          <div className="absolute top-[-30px] right-[12%] w-[100px] h-[100px] bg-white/[0.02] blur-[25px]" />
-          <div className="absolute top-[-10px] right-[14%] w-[30px] h-[30px] bg-white/[0.04] blur-[5px]" />
+          {/* Left Floodlight - Enhanced */}
+          <div className="absolute top-[-150px] left-[3%] w-[500px] h-[500px] rounded-full bg-white/[0.02] blur-[120px] animate-[floodlight_12s_ease-in-out_infinite]" />
+          <div className="absolute top-[-40px] left-[10%] w-[120px] h-[120px] bg-white/[0.025] blur-[30px]" />
+          <div className="absolute top-[-15px] left-[12%] w-[40px] h-[40px] bg-white/[0.05] blur-[6px]" />
           
-          {/* Faint ambient pitch glow */}
-          <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-green-accent/[0.02] to-transparent blur-3xl" />
+          {/* Right Floodlight - Enhanced */}
+          <div className="absolute top-[-150px] right-[3%] w-[500px] h-[500px] rounded-full bg-white/[0.02] blur-[120px] animate-[floodlight_12s_ease-in-out_infinite_6s]" />
+          <div className="absolute top-[-40px] right-[10%] w-[120px] h-[120px] bg-white/[0.025] blur-[30px]" />
+          <div className="absolute top-[-15px] right-[12%] w-[40px] h-[40px] bg-white/[0.05] blur-[6px]" />
+          
+          {/* Enhanced ambient pitch glow */}
+          <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-green-accent/[0.03] to-transparent blur-3xl" />
+          
+          {/* Subtle dust particles in background */}
+          {!prefersReducedMotion && (
+            <>
+              <div className="absolute top-1/4 left-1/5 w-1 h-1 bg-white/10 rounded-full animate-[dust_12s_infinite]" style={{ animationDelay: '0s' }} />
+              <div className="absolute top-1/3 right-1/4 w-1.5 h-1.5 bg-green-accent/20 rounded-full animate-[dust_15s_infinite]" style={{ animationDelay: '2s' }} />
+              <div className="absolute bottom-1/4 left-1/3 w-1 h-1 bg-white/8 rounded-full animate-[dust_18s_infinite]" style={{ animationDelay: '4s' }} />
+            </>
+          )}
         </div>
 
         <div className="max-w-md w-full space-y-10 text-center relative z-10">
@@ -1288,103 +1319,66 @@ export default function App() {
             </span>
           </div>
 
-          {/* 3D Floating Football Scene */}
-          <div className="relative h-32 w-32 mx-auto flex items-center justify-center my-6">
+          {/* 3D Floating Football Scene - Premium Cinematic */}
+          <div className="relative h-48 w-full mx-auto flex items-center justify-center my-8">
             
-            {/* Center Circle of Football Pitch */}
-            <div className="absolute bottom-[-16px] left-1/2 -translate-x-1/2 w-44 h-16 pointer-events-none z-0 overflow-hidden">
+            {/* Center Circle of Football Pitch - Enhanced */}
+            <div className="absolute bottom-[-24px] left-1/2 -translate-x-1/2 w-64 h-24 pointer-events-none z-0 overflow-hidden">
               <div 
                 className="w-full h-full border border-white/10 rounded-full relative flex items-center justify-center"
                 style={{
                   transform: 'rotateX(72deg)',
-                  background: 'radial-gradient(circle, rgba(16,185,129,0.18) 0%, rgba(9,9,11,0.9) 70%)',
-                  boxShadow: 'inset 0 0 25px rgba(16,185,129,0.06)',
-                  backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.003) 0px, rgba(255,255,255,0.003) 2px, transparent 2px, transparent 10px)'
+                  background: 'radial-gradient(circle, rgba(16,185,129,0.22) 0%, rgba(9,9,11,0.92) 70%)',
+                  boxShadow: 'inset 0 0 35px rgba(16,185,129,0.08)',
+                  backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.004) 0px, rgba(255,255,255,0.004) 2px, transparent 2px, transparent 10px)'
                 }}
               >
                 {/* Center Spot */}
-                <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                <div className="w-2 h-2 rounded-full bg-white/35" />
                 {/* Center Line */}
-                <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/10 -translate-y-1/2" />
+                <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/12 -translate-y-1/2" />
               </div>
             </div>
 
-            {/* Subtle green glow coming from beneath the football */}
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-20 h-6 bg-green-accent/15 rounded-full blur-md pointer-events-none z-0" />
+            {/* Enhanced green glow beneath the football */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-32 h-10 bg-green-accent/20 rounded-full blur-lg pointer-events-none z-0" />
             
-            {/* Soft circular shadow beneath the football */}
+            {/* Soft realistic shadow beneath the football */}
             <div 
-              className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-12 h-2.5 bg-black/75 rounded-full blur-[2px] z-10 origin-center"
+              className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-24 h-6 bg-black/80 rounded-full blur-[3px] z-10 origin-center"
               style={{
-                animation: !prefersReducedMotion ? 'shadowScale 3.5s ease-in-out infinite' : 'none'
+                animation: !prefersReducedMotion ? 'shadowScale 4s ease-in-out infinite' : 'none'
               }}
             />
 
-            {/* Rotating & Floating 3D Football */}
-            <div 
-              className="relative w-[72px] h-[72px] z-20"
-              style={{
-                animation: !prefersReducedMotion ? 'footballFloat 3.5s ease-in-out infinite' : 'none'
-              }}
-            >
-              <svg 
-                viewBox="0 0 100 100" 
-                className="w-full h-full drop-shadow-[0_8px_16px_rgba(0,0,0,0.65)]"
-                xmlns="http://www.w3.org/2000/svg"
+            {/* 3D Football Canvas - 250-300% larger */}
+            <div className="relative w-48 h-48 z-20">
+              <Canvas
+                camera={{ position: [0, 0, 3], fov: 45 }}
+                style={{ width: '100%', height: '100%' }}
+                dpr={[1, 2]}
               >
-                <defs>
-                  <clipPath id="ball-clip">
-                    <circle cx="50" cy="50" r="45" />
-                  </clipPath>
-                  <radialGradient id="ball-shading" cx="30%" cy="30%" r="70%">
-                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25" />
-                    <stop offset="45%" stop-color="#000000" stop-opacity="0" />
-                    <stop offset="90%" stop-color="#000000" stop-opacity="0.8" />
-                    <stop offset="100%" stop-color="#000000" stop-opacity="0.95" />
-                  </radialGradient>
-                  <radialGradient id="ball-rim-light" cx="50%" cy="50%" r="50%">
-                    <stop offset="90%" stop-color="#10b981" stop-opacity="0" />
-                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.25" />
-                  </radialGradient>
-                </defs>
-                
-                <g clipPath="url(#ball-clip)">
-                  {/* Leather surface base */}
-                  <circle cx="50" cy="50" r="45" fill="#fafafa" />
-                  
-                  {/* Moving panels simulating rotation */}
-                  <g style={{
-                    animation: !prefersReducedMotion ? 'soccerRotation 9s linear infinite' : 'none'
-                  }}>
-                    {renderSoccerPanels(15)}
-                  </g>
-                  
-                  {/* 3D shadows and lighting */}
-                  <circle cx="50" cy="50" r="45" fill="url(#ball-shading)" />
-                  <circle cx="50" cy="50" r="45" fill="url(#ball-rim-light)" />
-                  
-                  {/* Glossy specular highlight */}
-                  <ellipse cx="32" cy="32" rx="14" ry="7" fill="#ffffff" opacity="0.16" transform="rotate(-30 32 32)" />
-                </g>
-                {/* 3D boundary lines */}
-                <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="0.8" />
-                <circle cx="50" cy="50" r="45" fill="none" stroke="#18181b" strokeWidth="0.8" />
-              </svg>
+                <ambientLight intensity={0.4} />
+                <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
+                <pointLight position={[-5, -5, -5]} intensity={0.3} color="#10b981" />
+                <Football3D />
+              </Canvas>
             </div>
 
-            {/* Dust/particles floating around the ball */}
+            {/* Enhanced dust/particles floating around the ball */}
             {!prefersReducedMotion && (
               <div className="absolute inset-0 pointer-events-none overflow-hidden z-25">
-                <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-green-accent/40 rounded-full animate-[dust_6s_infinite]" style={{ animationDelay: '0s' }} />
-                <div className="absolute top-1/3 right-1/4 w-1.5 h-1.5 bg-white/20 rounded-full animate-[dust_8s_infinite]" style={{ animationDelay: '1.5s' }} />
-                <div className="absolute bottom-1/3 left-1/3 w-1.5 h-1.5 bg-green-accent/30 rounded-full animate-[dust_10s_infinite]" style={{ animationDelay: '3s' }} />
-                <div className="absolute top-1/2 right-1/5 w-1 h-1 bg-white/15 rounded-full animate-[dust_7s_infinite]" style={{ animationDelay: '4.5s' }} />
+                <div className="absolute top-1/4 left-1/4 w-1.5 h-1.5 bg-green-accent/40 rounded-full animate-[dust_6s_infinite]" style={{ animationDelay: '0s' }} />
+                <div className="absolute top-1/3 right-1/4 w-2 h-2 bg-white/20 rounded-full animate-[dust_8s_infinite]" style={{ animationDelay: '1.5s' }} />
+                <div className="absolute bottom-1/3 left-1/3 w-2 h-2 bg-green-accent/30 rounded-full animate-[dust_10s_infinite]" style={{ animationDelay: '3s' }} />
+                <div className="absolute top-1/2 right-1/5 w-1.5 h-1.5 bg-white/15 rounded-full animate-[dust_7s_infinite]" style={{ animationDelay: '4.5s' }} />
+                <div className="absolute top-2/5 left-1/5 w-1 h-1 bg-green-accent/35 rounded-full animate-[dust_9s_infinite]" style={{ animationDelay: '2s' }} />
               </div>
             )}
           </div>
 
-          {/* Animated status pipeline */}
-          <div className="space-y-6">
+          {/* Animated status pipeline - Increased vertical spacing */}
+          <div className="space-y-8">
             <motion.div
               key={showTransitionSuccess ? 'success' : loadingStageIndex}
               initial={{ opacity: 0, y: 10 }}
@@ -1392,7 +1386,7 @@ export default function App() {
               transition={{ duration: 0.5 }}
               className="space-y-2"
             >
-              <h2 className="text-white font-serif text-lg tracking-wide uppercase">
+              <h2 className="text-white font-serif text-xl tracking-wide uppercase">
                 {showTransitionSuccess ? "✓ Prediction Engine Online" : startupStages[loadingStageIndex]}
               </h2>
               <p className="text-zinc-400 font-sans text-xs tracking-wider">
@@ -2805,7 +2799,9 @@ export default function App() {
             })).sort((a, b) => b.probability - a.probability);
           };
 
-          const enrichedMatches = sourceMatches.filter(m => m.isLiveData || m.status === 'COMPLETED');
+          // Filter to only scheduled/upcoming fixtures for prediction widgets
+          // Exclude COMPLETED matches - they should not appear in prediction widgets
+          const enrichedMatches = sourceMatches.filter(m => m.status === 'UPCOMING' || m.status === 'LIVE');
 
           // Section 1: HIGHEST CONFIDENCE PICKS
           const sortedConfidencePicks = [...enrichedMatches]
@@ -2838,12 +2834,8 @@ export default function App() {
           // Section 2: GOAL FEST FORECAST — backend data only, no synthetic formulas
           const sortedGoalForecasts = [...enrichedMatches]
             .map(m => {
-              // totalExpectedGoals from backend prediction; for COMPLETED matches use actual goals scored
-              const totalXG: number | null = m.totalExpectedGoals
-                ? m.totalExpectedGoals
-                : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
-                  ? (m.xGA + m.xGB)
-                  : null;
+              // totalExpectedGoals from backend prediction only - no fallback to actual goals
+              const totalXG: number | null = m.totalExpectedGoals ?? null;
               // Backend market only — null signals N/A
               const over25: number | null = m.overUnder?.["2.5"]
                 ? Math.round((m.overUnder["2.5"].over ?? 0) * 100)
@@ -2869,11 +2861,7 @@ export default function App() {
               const bttsNo: number | null = m.bttsMarket
                 ? Math.round((m.bttsMarket.no ?? 0) * 100)
                 : null;
-              const totalXG: number | null = m.totalExpectedGoals
-                ? m.totalExpectedGoals
-                : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
-                  ? (m.xGA + m.xGB)
-                  : null;
+              const totalXG: number | null = m.totalExpectedGoals ?? null;
 
               return { ...m, bttsYes, bttsNo, totalXG };
             })
@@ -2967,12 +2955,8 @@ export default function App() {
           // Section 8: MATCH INTELLIGENCE LEADERBOARD — backend data only, no synthetic formulas
           const matchIntelligenceResult = [...enrichedMatches]
             .map(m => {
-              // Real xG from backend; actual goals for COMPLETED; null if unavailable
-              const totalXG: number | null = m.totalExpectedGoals
-                ? m.totalExpectedGoals
-                : (m.status === 'COMPLETED' && (m.xGA + m.xGB) > 0)
-                  ? (m.xGA + m.xGB)
-                  : null;
+              // Real xG from backend only - no fallback to actual goals
+              const totalXG: number | null = m.totalExpectedGoals ?? null;
               // Backend markets only — null renders as N/A
               const bttsYes: number | null = m.bttsMarket
                 ? Math.round((m.bttsMarket.yes ?? 0) * 100)
@@ -3330,32 +3314,24 @@ export default function App() {
                       </div>
                       <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 font-mono text-[11px]">
                         <div className="flex items-center space-x-2 text-zinc-300">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-accent animate-pulse" />
-                          <span>✓ Injury Data Updated</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${healthData?.status === 'healthy' ? 'bg-green-accent animate-pulse' : 'bg-red-500'}`} />
+                          <span>{healthData?.status === 'healthy' ? '✓' : '✗'} Backend Status: {healthData?.status || 'Unknown'}</span>
                         </div>
                         <div className="flex items-center space-x-2 text-zinc-300">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-accent animate-pulse" />
-                          <span>✓ Squad Value Updated</span>
+                          <span>✓ Prediction Engine: {healthData?.model_version || 'Active'}</span>
                         </div>
                         <div className="flex items-center space-x-2 text-zinc-300">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-accent animate-pulse" />
-                          <span>✓ ELO Ratings Updated</span>
+                          <span>✓ Database: {healthData?.database_status || 'Connected'}</span>
                         </div>
                         <div className="flex items-center space-x-2 text-zinc-300">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-accent animate-pulse" />
-                          <span>✓ Goal Model Updated</span>
-                        </div>
-                        <div className="flex items-center space-x-2 text-zinc-300">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-accent animate-pulse" />
-                          <span>✓ Poisson Engine Active</span>
-                        </div>
-                        <div className="flex items-center space-x-2 text-zinc-300">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-accent animate-pulse" />
-                          <span>✓ Prediction Engine Healthy</span>
+                          <span>✓ Cache: {healthData?.cache_status || 'Operational'}</span>
                         </div>
                         <div className="col-span-1 sm:col-span-2 pt-3 border-t border-zinc-900 mt-2 flex justify-between text-[9.5px] text-zinc-500 uppercase tracking-wider">
-                          <span>Status: Online</span>
-                          <span className="text-zinc-600">Last Refresh: Today</span>
+                          <span>Status: {healthData?.status || 'Checking...'}</span>
+                          <span className="text-zinc-600">Last Refresh: {healthData?.timestamp ? new Date(healthData.timestamp).toLocaleTimeString() : 'Now'}</span>
                         </div>
                       </div>
                     </div>
@@ -3913,13 +3889,17 @@ export default function App() {
               <div className="bg-zinc-900/15 border border-zinc-900/60 p-4 rounded text-xs flex flex-col md:flex-row md:justify-between items-start md:items-center gap-4">
                 <div className="text-zinc-550 text-[10.5px] max-w-lg">
                   <span className="font-semibold text-zinc-405 block mb-0.5 md:inline md:mb-0 md:mr-1">Last Updated:</span>
-                  {performanceData.last_updated}
+                  {performanceData.last_updated || healthData?.timestamp ? new Date(healthData?.timestamp || Date.now()).toLocaleString() : 'Loading...'}
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-5 text-[10px] font-mono uppercase tracking-wider text-zinc-450">
                   <div className="flex items-center space-x-1.5">
+                    <span className="text-zinc-600 lowercase">Upcoming Fixtures:</span>
+                    <span className="text-white font-bold">{sourceMatches.filter(f => f.status === 'UPCOMING' || f.status === 'LIVE').length}</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5 border-l border-zinc-900 pl-4">
                     <span className="text-zinc-600 lowercase">Model Status:</span>
-                    <span className="text-green-accent font-bold">🟢 {performanceData.model_status}</span>
+                    <span className={`font-bold ${healthData?.status === 'healthy' ? 'text-green-accent' : 'text-red-500'}`}>{healthData?.status === 'healthy' ? '🟢 Online' : '🔴 Offline'}</span>
                   </div>
                   <div className="flex items-center space-x-1.5 border-l border-zinc-900 pl-4">
                     <span className="text-zinc-600 lowercase">Coverage:</span>
