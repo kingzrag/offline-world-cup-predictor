@@ -251,7 +251,7 @@ export default function App() {
           
           setMatchError(null);
           setIsLoadingMatches(false);
-          setIsInitializing(false);
+          setIsBackendConnected(true);
           setIsRetrying(false);
 
           // ── Phase 2: hydrate ML predictions in background ───────────────
@@ -1130,16 +1130,109 @@ export default function App() {
 
   const totalSearchResultsCount = filteredMatches.length + filteredTeams.length + filteredInsights.length;
 
+  // Loading screen state for animated status pipeline
+  const [loadingStageIndex, setLoadingStageIndex] = useState(0);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [showTransitionSuccess, setShowTransitionSuccess] = useState(false);
+
+  const startupStages = [
+    "Loading Football Intelligence Core",
+    "Connecting Prediction Engine",
+    "Loading FIFA World Cup Database",
+    "Loading 48 National Teams",
+    "Loading Historical Match Data",
+    "Initializing Poisson Simulation Engine",
+    "Calculating Expected Goals (xG)",
+    "Building Betting Markets",
+    "Preparing Live Predictions",
+    "Synchronizing Live Match Intelligence",
+    "Waiting for Prediction Server..."
+  ];
+
+  const systemChecklist = [
+    { id: 1, text: "Football Database Loaded", completed: true },
+    { id: 2, text: "Team Statistics Loaded", completed: true },
+    { id: 3, text: "Fixture Index Ready", completed: true },
+    { id: 4, text: "AI Model Initialized", completed: true },
+    { id: 5, text: "Connecting Live Prediction Server...", completed: isBackendConnected, animated: !isBackendConnected }
+  ];
+
+  // Detect prefers-reduced-motion
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReducedMotion(mediaQuery.matches);
+
+    const listener = (e: MediaQueryListEvent) => {
+      setPrefersReducedMotion(e.matches);
+    };
+    mediaQuery.addEventListener("change", listener);
+    return () => mediaQuery.removeEventListener("change", listener);
+  }, []);
+
+  // Cycle through startup stages
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setLoadingStageIndex(startupStages.length - 1); // Skip to final stage
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setLoadingStageIndex(prev => {
+        if (prev < startupStages.length - 1) {
+          return prev + 1;
+        }
+        return prev; // Stay on final stage
+      });
+    }, 3000); // 3 seconds per stage
+
+    return () => clearInterval(interval);
+  }, [prefersReducedMotion]);
+
+  // Handle transition when backend connects
+  useEffect(() => {
+    if (isBackendConnected && !showTransitionSuccess) {
+      setShowTransitionSuccess(true);
+      // Wait 500ms then fade out
+      setTimeout(() => {
+        setIsInitializing(false);
+      }, 500);
+    }
+  }, [isBackendConnected, showTransitionSuccess]);
+
   if (isInitializing) {
     return (
-      <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-6 select-none animate-fade-in">
-        {/* Background Decorative Grid */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(28,219,94,0.03)_0%,transparent_70%)] pointer-events-none" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.003)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.003)_1px,transparent_1px)] bg-[size:30px_30px] pointer-events-none" />
+      <motion.div
+        className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-6 select-none"
+        initial={{ opacity: 1 }}
+        animate={{ opacity: showTransitionSuccess ? 0 : 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        {/* Enhanced Background */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Breathing radial light */}
+          <div className={`absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(28,219,94,0.04)_0%,rgba(28,219,94,0.02)_30%,transparent_70%)] ${!prefersReducedMotion ? 'animate-pulse' : ''}`} style={{ animationDuration: '8s' }} />
+          
+          {/* Moving grid */}
+          <div className={`absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.004)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.004)_1px,transparent_1px)] bg-[size:40px_40px] ${!prefersReducedMotion ? 'animate-[gridMove_20s_linear_infinite]' : ''}`} style={{ opacity: 0.3 }} />
+          
+          {/* Faint emerald glow */}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-green-accent/[0.01] to-transparent" />
+          
+          {/* Soft floating particles */}
+          {!prefersReducedMotion && (
+            <>
+              <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-green-accent/20 rounded-full animate-[float_8s_ease-in-out_infinite]" />
+              <div className="absolute top-1/3 right-1/3 w-1.5 h-1.5 bg-green-accent/15 rounded-full animate-[float_10s_ease-in-out_infinite_2s]" />
+              <div className="absolute bottom-1/3 left-1/3 w-1 h-1 bg-green-accent/10 rounded-full animate-[float_12s_ease-in-out_infinite_4s]" />
+              <div className="absolute bottom-1/4 right-1/4 w-0.5 h-0.5 bg-green-accent/25 rounded-full animate-[float_6s_ease-in-out_infinite_1s]" />
+            </>
+          )}
+        </div>
 
-        <div className="max-w-md w-full space-y-12 text-center relative z-10">
-          {/* Logo / Brand */}
-          <div className="flex flex-col items-center space-y-2 animate-pulse">
+        <div className="max-w-md w-full space-y-10 text-center relative z-10">
+          {/* Logo with breathing animation */}
+          <div className={`flex flex-col items-center space-y-2 ${!prefersReducedMotion ? 'animate-[breathe_6s_ease-in-out_infinite]' : ''}`}>
             <span className="text-3xl font-serif text-white tracking-[0.45em] font-light pl-[0.45em] uppercase">
               OFFLINE
             </span>
@@ -1148,47 +1241,125 @@ export default function App() {
             </span>
           </div>
 
-          {/* Animated Spinner with Pulsing Halo */}
-          <div className="relative flex items-center justify-center h-24 w-24 mx-auto">
-            <div className="absolute inset-0 rounded-full border border-green-accent/10 animate-ping opacity-45" />
-            <div className="absolute inset-2 rounded-full border border-green-accent/20 animate-pulse opacity-65" />
-            <div className="bg-zinc-950 border border-zinc-900 h-16 w-16 rounded-full flex items-center justify-center shadow-2xl">
-              <Loader2 className="w-6 h-6 text-green-accent animate-spin" />
+          {/* Premium circular loader */}
+          <div className="relative flex items-center justify-center h-28 w-28 mx-auto">
+            {/* Outer glow */}
+            <div className={`absolute inset-0 rounded-full border border-green-accent/10 ${!prefersReducedMotion ? 'animate-[pulse_4s_ease-in-out_infinite]' : ''}`} style={{ boxShadow: '0 0 60px rgba(28,219,94,0.1)' }} />
+            
+            {/* Rotating ring */}
+            {!prefersReducedMotion && (
+              <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-green-accent/30 border-r-green-accent/20 animate-[spin_3s_linear_infinite]" />
+            )}
+            
+            {/* Inner expanding/contracting circle */}
+            <div className={`absolute inset-4 rounded-full bg-green-accent/5 ${!prefersReducedMotion ? 'animate-[expandContract_2s_ease-in-out_infinite]' : ''}`} />
+            
+            {/* Center circle with soft pulse */}
+            <div className={`absolute inset-6 rounded-full bg-zinc-950 border border-zinc-900 flex items-center justify-center ${!prefersReducedMotion ? 'animate-[softPulse_3s_ease-in-out_infinite]' : ''}`}>
+              <div className="w-8 h-8 rounded-full bg-green-accent/10 flex items-center justify-center">
+                <div className={`w-4 h-4 rounded-full bg-green-accent ${!prefersReducedMotion ? 'animate-[innerGlow_2s_ease-in-out_infinite]' : ''}`} />
+              </div>
             </div>
           </div>
 
-          {/* Loading status text */}
-          <div className="space-y-4">
-            <div className="space-y-2">
+          {/* Animated status pipeline */}
+          <div className="space-y-6">
+            <motion.div
+              key={showTransitionSuccess ? 'success' : loadingStageIndex}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="space-y-2"
+            >
               <h2 className="text-white font-serif text-lg tracking-wide uppercase">
-                Initializing Football Intelligence Engine…
+                {showTransitionSuccess ? "✓ Prediction Engine Online" : startupStages[loadingStageIndex]}
               </h2>
               <p className="text-zinc-400 font-sans text-xs tracking-wider">
-                Connecting to prediction servers…
+                {showTransitionSuccess ? "Ready to deliver live predictions" : (loadingStageIndex < startupStages.length - 1 ? "Initializing prediction systems..." : "Waiting for backend response...")}
               </p>
+            </motion.div>
+
+            {/* Progress timeline */}
+            <div className="flex items-center justify-center gap-1.5">
+              {startupStages.map((_, index) => (
+                <div
+                  key={index}
+                  className={`h-0.5 rounded-full transition-all duration-500 ${
+                    index <= loadingStageIndex ? 'bg-green-accent' : 'bg-zinc-800'
+                  }`}
+                  style={{
+                    width: index === loadingStageIndex ? '24px' : '8px',
+                    opacity: index <= loadingStageIndex ? 1 : 0.3
+                  }}
+                />
+              ))}
             </div>
 
-            {/* Retrying message */}
-            {isRetrying && (
-              <motion.div
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="pt-2"
-              >
-                <span className="inline-block px-3 py-1.5 bg-green-accent/5 border border-green-accent/15 rounded text-[10px] font-mono text-green-accent uppercase tracking-wider animate-pulse">
-                  Prediction engine is waking up. This may take a few moments.
-                </span>
-              </motion.div>
-            )}
+            {/* System checklist */}
+            <div className="space-y-2 pt-2">
+              {systemChecklist.map((item) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: item.id * 0.1 }}
+                  className="flex items-center justify-center gap-2 text-[10px] font-mono tracking-wider"
+                >
+                  {item.completed ? (
+                    <span className="text-green-accent">✓</span>
+                  ) : item.animated ? (
+                    <span className={`text-green-accent ${!prefersReducedMotion ? 'animate-spin' : ''}`}>⟳</span>
+                  ) : (
+                    <span className="text-zinc-600">○</span>
+                  )}
+                  <span className={item.completed ? 'text-zinc-400' : item.animated ? 'text-zinc-300' : 'text-zinc-600'}>
+                    {item.text}
+                  </span>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+
+        {/* Custom animations in style tag */}
+        <style>{`
+          @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.95; }
+          }
+          @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(40px, 40px); }
+          }
+          @keyframes float {
+            0%, 100% { transform: translate(0, 0); opacity: 0.1; }
+            50% { transform: translate(20px, -20px); opacity: 0.3; }
+          }
+          @keyframes expandContract {
+            0%, 100% { transform: scale(1); opacity: 0.05; }
+            50% { transform: scale(1.1); opacity: 0.08; }
+          }
+          @keyframes softPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(28,219,94,0.05); }
+            50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(28,219,94,0.1); }
+          }
+          @keyframes innerGlow {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+          }
+        `}</style>
+      </motion.div>
     );
   }
 
   return (
-    <div id="app-root" className="min-h-screen bg-black text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased">
+    <motion.div
+      id="app-root"
+      className="min-h-screen bg-black text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5, delay: 0.1 }}
+    >
       
       {/* Top Premium Editorial Header */}
       <header id="app-header" className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full">
@@ -5341,6 +5512,6 @@ export default function App() {
       )}
 
 
-    </div>
+    </motion.div>
   );
 }
