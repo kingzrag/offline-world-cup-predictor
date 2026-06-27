@@ -219,6 +219,7 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [isRetrying, setIsRetrying] = useState<boolean>(false);
   const [retryTrigger, setRetryTrigger] = useState<number>(0);
+  const [errorType, setErrorType] = useState<'network' | 'timeout' | '404' | '500' | 'unreachable' | 'unknown' | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -231,24 +232,31 @@ export default function App() {
       setMatchError(null);
       setIsInitializing(true);
       setIsRetrying(false);
+      setErrorType(null);
 
-      while (true) {
+      let attempt = 0;
+      const maxAttempts = Infinity; // Keep retrying indefinitely
+      const baseDelayMs = 1000; // Start with 1 second
+      const maxDelayMs = 30000; // Cap at 30 seconds
+
+      while (attempt < maxAttempts) {
         if (signal.aborted) return;
+        attempt++;
         const attemptStart = performance.now();
 
         try {
           // ── Phase 1: render fixtures instantly (no ML inference) ────────────
-          console.log("[App] Phase 1 → loading fixtures instantly...");
+          console.log(`[App] Attempt ${attempt} → loading fixtures instantly...`);
           const fixtures = await loadFixturesInstant(undefined, showHistorical, signal, currentLimit);
           if (signal.aborted) return;
 
-          console.log(`[App] Phase 1 complete: ${fixtures.length} fixtures rendered instantly.`);
+          console.log(`[App] Attempt ${attempt} succeeded: ${fixtures.length} fixtures rendered instantly.`);
           setSourceMatches(sortSourceMatches(fixtures));
           setHasMore(fixtures.length === currentLimit);
-          
+
           // Load Monte Carlo tournament simulation results in the background
           loadTournamentData();
-          
+
           setMatchError(null);
           setIsLoadingMatches(false);
           setIsBackendConnected(true);
@@ -272,37 +280,45 @@ export default function App() {
             signal,
             t0Page
           );
-          break; // successfully completed everything, break the retry loop
+          return; // Successfully completed, exit function
 
         } catch (err: any) {
           if (signal.aborted) return;
           const attemptEnd = performance.now();
-          console.warn(`[App] Connection/Load attempt failed in ${(attemptEnd - attemptStart).toFixed(0)}ms:`, err?.message ?? err);
+          const duration = (attemptEnd - attemptStart).toFixed(0);
 
-          const timeElapsed = Date.now() - startTime;
-          if (timeElapsed >= 60000) {
-            console.error(`[App] Connection timed out after 60 seconds (${timeElapsed}ms elapsed). Disabling fallback.`);
-            setMatchError(
-              err?.message?.includes("unreachable")
-                ? "Backend is unreachable. Please check your connection and reload."
-                : "Could not load fixtures from the prediction engine. Please reload."
-            );
-            setIsInitializing(false);
-            setIsLoadingMatches(false);
-            setIsRetrying(false);
-            break; // Exceeded 60 seconds budget, show error screen
-          } else {
-            setIsRetrying(true);
-            console.log(`[App] Retrying connection in 5 seconds... (${Math.round((60000 - timeElapsed) / 1000)}s budget remaining)`);
-            // Wait 5 seconds before retrying
-            await new Promise(resolve => {
-              const timer = setTimeout(resolve, 5000);
-              signal.addEventListener('abort', () => {
-                clearTimeout(timer);
-                resolve(null);
-              });
+          // Determine error type for better messaging
+          const isNetworkError = err?.message?.includes('fetch') || err?.message?.includes('network') || err?.name === 'TypeError';
+          const isTimeoutError = err?.message?.includes('timeout') || err?.name === 'AbortError';
+          const is404Error = err?.message?.includes('404');
+          const is500Error = err?.message?.includes('500');
+          const isUnreachable = err?.message?.includes('unreachable');
+
+          // Set error type state
+          if (isNetworkError) setErrorType('network');
+          else if (isTimeoutError) setErrorType('timeout');
+          else if (is404Error) setErrorType('404');
+          else if (is500Error) setErrorType('500');
+          else if (isUnreachable) setErrorType('unreachable');
+          else setErrorType('unknown');
+
+          console.warn(`[App] Attempt ${attempt} failed in ${duration}ms:`, err?.message ?? err);
+
+          // Calculate exponential backoff delay
+          const delayMs = Math.min(baseDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
+          const delaySeconds = (delayMs / 1000).toFixed(1);
+
+          setIsRetrying(true);
+          console.log(`[App] Retrying in ${delaySeconds}s (exponential backoff)...`);
+
+          // Wait with exponential backoff
+          await new Promise(resolve => {
+            const timer = setTimeout(resolve, delayMs);
+            signal.addEventListener('abort', () => {
+              clearTimeout(timer);
+              resolve(null);
             });
-          }
+          });
         }
       }
     }
@@ -1137,16 +1153,13 @@ export default function App() {
   const [showTransitionSuccess, setShowTransitionSuccess] = useState(false);
 
   const startupStages = [
-    "Loading Football Intelligence Core",
-    "Connecting Prediction Engine",
-    "Loading FIFA World Cup Database",
-    "Loading 48 National Teams",
-    "Loading Historical Match Data",
-    "Initializing Poisson Simulation Engine",
-    "Calculating Expected Goals (xG)",
-    "Building Betting Markets",
-    "Preparing Live Predictions",
-    "Synchronizing Live Match Intelligence",
+    "Connecting to prediction engine...",
+    "Loading World Cup fixtures...",
+    "Running Poisson simulations...",
+    "Generating betting markets...",
+    "Preparing dashboard...",
+    "Loading tactical intelligence...",
+    "Finalising predictions...",
     "Waiting for Prediction Server..."
   ];
 
@@ -1184,7 +1197,7 @@ export default function App() {
         }
         return prev; // Stay on final stage
       });
-    }, 3000); // 3 seconds per stage
+    }, 2500); // 2.5 seconds per stage for faster progression
 
     return () => clearInterval(interval);
   }, [prefersReducedMotion]);
@@ -1812,44 +1825,39 @@ export default function App() {
             </div>
 
 
-            {isInitializing ? (
-              <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-16">
-                <div className="bg-zinc-950 border border-zinc-900 rounded-lg p-12 flex flex-col items-center justify-center text-center space-y-6">
-                  <div className="p-4 bg-green-500/10 rounded-full text-green-400">
-                    <Loader2 className="w-8 h-8 animate-spin" />
-                  </div>
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-mono tracking-[0.25em] text-green-accent uppercase font-bold">Starting Prediction Engine</span>
-                    <h3 className="text-2xl font-serif text-white uppercase tracking-tight font-light">Waking up ML models</h3>
-                  </div>
-                  <p className="text-zinc-400 text-sm max-w-lg leading-relaxed font-sans">
-                    {isRetrying 
-                      ? "Reconnecting to the prediction engine... This may take a few moments."
-                      : "Starting prediction engine... This may take up to 30–60 seconds on the free server as ML models load into memory."
-                    }
-                  </p>
-                  {isRetrying && (
-                    <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
-                      <Clock className="w-3 h-3" />
-                      <span>Automatic retry with exponential backoff</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : matchError ? (
+            {matchError ? (
               <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-16">
                 <div className="bg-zinc-950 border border-red-500/25 rounded-lg p-12 flex flex-col items-center justify-center text-center space-y-6">
                   <div className="p-4 bg-red-500/10 rounded-full text-red-400">
                     <AlertCircle className="w-8 h-8 animate-pulse" />
                   </div>
                   <div className="space-y-2">
-                    <span className="text-[10px] font-mono tracking-[0.25em] text-red-400 uppercase font-bold">Connection Failed</span>
-                    <h3 className="text-2xl font-serif text-white uppercase tracking-tight font-light">Could not connect to backend</h3>
+                    <span className="text-[10px] font-mono tracking-[0.25em] text-red-400 uppercase font-bold">
+                      {errorType === 'network' ? 'Network Error' :
+                       errorType === 'timeout' ? 'Request Timeout' :
+                       errorType === '404' ? 'Route Not Found' :
+                       errorType === '500' ? 'Server Error' :
+                       errorType === 'unreachable' ? 'Backend Unreachable' :
+                       'Connection Failed'}
+                    </span>
+                    <h3 className="text-2xl font-serif text-white uppercase tracking-tight font-light">
+                      {errorType === 'network' ? 'Network connection lost' :
+                       errorType === 'timeout' ? 'Request timed out' :
+                       errorType === '404' ? 'API endpoint not found' :
+                       errorType === '500' ? 'Backend server error' :
+                       errorType === 'unreachable' ? 'Backend is unreachable' :
+                       'Could not connect to backend'}
+                    </h3>
                   </div>
                   <p className="text-zinc-400 text-sm max-w-lg leading-relaxed font-sans">
-                    The prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Please check your connection and try again.
+                    {errorType === 'network' ? 'Your network connection appears to be offline. Please check your internet connection and try again.' :
+                     errorType === 'timeout' ? 'The request took too long to complete. The backend may be experiencing high load. Retrying automatically...' :
+                     errorType === '404' ? `The API route was not found at ${API_BASE || "(no API URL configured)"}. This may indicate a configuration issue.` :
+                     errorType === '500' ? 'The backend encountered an internal error. This has been logged and will be investigated.' :
+                     errorType === 'unreachable' ? `The prediction engine is currently unreachable at ${API_BASE || "(no API URL configured)"}. Please check your connection.` :
+                     'An unexpected error occurred while connecting to the prediction engine.'}
                   </p>
-                  <button 
+                  <button
                     onClick={() => setRetryTrigger(prev => prev + 1)}
                     className="px-5 py-3 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-mono font-bold tracking-widest uppercase transition duration-300 cursor-pointer"
                   >

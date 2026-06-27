@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from database.connection import get_db
 from models import Match, Competition, Team, Prediction
+from models.team_elo import TeamElo
 from utils.logger import logger
 
 router = APIRouter(prefix="/api/tournament", tags=["Tournament Progression"])

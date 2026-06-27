@@ -37,14 +37,30 @@ import { MOCK_MATCHES } from "./data";
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
 // Development  → "/fastapi"  (Express proxy in server.ts rewrites to /api/*)
-// Production   → VITE_API_URL  (direct Railway backend; set in Vercel env vars)
+// Production   → VITE_API_URL  (direct backend; set in Vercel env vars)
 //
 // import.meta.env.PROD is injected by Vite at build time:
 //   true  when running `vite build`  (Vercel deploy)
-//   false when running `vite dev`    (local Express proxy)
-export const API_BASE: string = (import.meta as any).env.PROD
+//   false when running `vite dev'    (local Express proxy)
+//
+// IMPORTANT: All API paths should NOT include /api prefix. The BASE should include it.
+// This ensures consistent routing regardless of environment.
+let rawApiBase: string = (import.meta as any).env.PROD
   ? ((import.meta as any).env.VITE_API_URL as string) ?? ""
   : "/fastapi";
+
+// Ensure BASE always ends with /api for production, or /fastapi for development
+// If VITE_API_URL doesn't include /api, append it automatically
+if ((import.meta as any).env.PROD && rawApiBase && !rawApiBase.endsWith('/api')) {
+  if (rawApiBase.endsWith('/')) {
+    rawApiBase = rawApiBase + 'api';
+  } else {
+    rawApiBase = rawApiBase + '/api';
+  }
+  console.warn(`[api] VITE_API_URL didn't include /api suffix. Auto-appended. New BASE: "${rawApiBase}"`);
+}
+
+export const API_BASE: string = rawApiBase;
 
 // Log the resolved API base so it is visible in the browser console on first load.
 console.info(
@@ -1510,7 +1526,7 @@ export interface ModelPerformanceStats {
 }
 
 /**
- * GET /api/tournament/standings
+ * GET /tournament/standings
  */
 export async function getStandings(): Promise<GroupStandings> {
   const cacheKey = getCacheKey('/tournament/standings');
@@ -1522,14 +1538,14 @@ export async function getStandings(): Promise<GroupStandings> {
 
   const result = await withDeduplication<GroupStandings>(
     cacheKey,
-    () => apiFetch<GroupStandings>("/api/tournament/standings")
+    () => apiFetch<GroupStandings>("/tournament/standings")
   );
   setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
   return result;
 }
 
 /**
- * GET /api/tournament/bracket
+ * GET /tournament/bracket
  */
 export async function getBracket(): Promise<BracketData> {
   const cacheKey = getCacheKey('/tournament/bracket');
@@ -1541,7 +1557,7 @@ export async function getBracket(): Promise<BracketData> {
 
   const result = await withDeduplication<BracketData>(
     cacheKey,
-    () => apiFetch<BracketData>("/api/tournament/bracket")
+    () => apiFetch<BracketData>("/tournament/bracket")
   );
   setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
   return result;
@@ -1549,7 +1565,7 @@ export async function getBracket(): Promise<BracketData> {
 
 
 /**
- * GET /api/tournament/model-performance
+ * GET /tournament/model-performance
  */
 export async function getModelPerformance(): Promise<ModelPerformanceStats> {
   const cacheKey = getCacheKey('/tournament/model-performance');
@@ -1561,7 +1577,7 @@ export async function getModelPerformance(): Promise<ModelPerformanceStats> {
 
   const result = await withDeduplication<ModelPerformanceStats>(
     cacheKey,
-    () => apiFetch<ModelPerformanceStats>("/api/tournament/model-performance")
+    () => apiFetch<ModelPerformanceStats>("/tournament/model-performance")
   );
   setCachedData(cacheKey, result, 10 * 60 * 1000); // 10 minute cache
   return result;
@@ -1585,7 +1601,7 @@ export interface TournamentSimulationResponse {
 }
 
 /**
- * GET /api/tournament/simulation
+ * GET /tournament/simulation
  */
 export async function getTournamentSimulation(): Promise<TournamentSimulationResponse> {
   const cacheKey = getCacheKey('/tournament/simulation');
@@ -1597,7 +1613,7 @@ export async function getTournamentSimulation(): Promise<TournamentSimulationRes
 
   const result = await withDeduplication<TournamentSimulationResponse>(
     cacheKey,
-    () => apiFetch<TournamentSimulationResponse>("/api/tournament/simulation")
+    () => apiFetch<TournamentSimulationResponse>("/tournament/simulation")
   );
   setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
   return result;
