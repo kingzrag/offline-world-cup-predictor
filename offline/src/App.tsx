@@ -1317,22 +1317,22 @@ export default function App() {
           )}
         </div>
 
-        <div className="max-w-md w-full space-y-10 text-center relative z-10">
+        <div className="max-w-2xl w-full text-center relative z-10 flex flex-col items-center">
           {/* Logo with breathing animation */}
-          <div className={`flex flex-col items-center space-y-2 ${!prefersReducedMotion ? 'animate-[breathe_6s_ease-in-out_infinite]' : ''}`}>
-            <span className="text-3xl font-serif text-white tracking-[0.45em] font-light pl-[0.45em] uppercase">
+          <div className={`flex flex-col items-center space-y-3 mb-10 ${!prefersReducedMotion ? 'animate-[breathe_6s_ease-in-out_infinite]' : ''}`}>
+            <span className="text-4xl font-serif text-white tracking-[0.45em] font-light pl-[0.45em] uppercase">
               OFFLINE
             </span>
-            <span className="text-[9px] font-mono tracking-[0.5em] text-zinc-500 uppercase pl-[0.5em]">
+            <span className="text-[11px] font-mono tracking-[0.5em] text-zinc-500 uppercase pl-[0.5em]">
               FOOTBALL INTELLIGENCE
             </span>
           </div>
 
           {/* 3D Floating Football Scene - Premium Cinematic */}
-          <div className="relative h-48 w-full mx-auto flex items-center justify-center my-8">
+          <div className="relative w-full flex items-center justify-center mb-16">
             
             {/* Center Circle of Football Pitch - Enhanced */}
-            <div className="absolute bottom-[-24px] left-1/2 -translate-x-1/2 w-64 h-24 pointer-events-none z-0 overflow-hidden">
+            <div className="absolute bottom-[-40px] left-1/2 -translate-x-1/2 w-96 h-32 pointer-events-none z-0 overflow-hidden">
               <div 
                 className="w-full h-full border border-white/10 rounded-full relative flex items-center justify-center"
                 style={{
@@ -1350,18 +1350,18 @@ export default function App() {
             </div>
 
             {/* Enhanced green glow beneath the football */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-32 h-10 bg-green-accent/20 rounded-full blur-lg pointer-events-none z-0" />
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-48 h-12 bg-green-accent/20 rounded-full blur-lg pointer-events-none z-0" />
             
             {/* Soft realistic shadow beneath the football */}
             <div 
-              className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-24 h-6 bg-black/80 rounded-full blur-[3px] z-10 origin-center"
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 w-36 h-8 bg-black/80 rounded-full blur-[3px] z-10 origin-center"
               style={{
                 animation: !prefersReducedMotion ? 'shadowScale 4s ease-in-out infinite' : 'none'
               }}
             />
 
             {/* 3D Football Canvas — PBR with stadium lighting */}
-            <div className="relative w-56 h-56 z-20">
+            <div className="relative w-80 h-80 z-20">
               <Canvas
                 camera={{ position: [0, 0, 2.8], fov: 40 }}
                 style={{ width: '100%', height: '100%', background: 'transparent' }}
@@ -1386,32 +1386,32 @@ export default function App() {
           </div>
 
           {/* Animated status pipeline - Increased vertical spacing */}
-          <div className="space-y-8">
+          <div className="space-y-10">
             <motion.div
               key={showTransitionSuccess ? 'success' : loadingStageIndex}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="space-y-2"
+              className="space-y-3"
             >
-              <h2 className="text-white font-serif text-xl tracking-wide uppercase">
+              <h2 className="text-white font-serif text-3xl tracking-wide uppercase">
                 {showTransitionSuccess ? "✓ Prediction Engine Online" : startupStages[loadingStageIndex]}
               </h2>
-              <p className="text-zinc-400 font-sans text-xs tracking-wider">
+              <p className="text-zinc-400 font-sans text-sm tracking-wider">
                 {showTransitionSuccess ? "Ready to deliver live predictions" : (loadingStageIndex < startupStages.length - 1 ? "Initializing prediction systems..." : "Waiting for backend response...")}
               </p>
             </motion.div>
 
             {/* Progress timeline */}
-            <div className="flex items-center justify-center gap-1.5">
+            <div className="flex items-center justify-center gap-2">
               {startupStages.map((_, index) => (
                 <div
                   key={index}
-                  className={`h-0.5 rounded-full transition-all duration-500 ${
+                  className={`h-1 rounded-full transition-all duration-500 ${
                     index <= loadingStageIndex ? 'bg-green-accent' : 'bg-zinc-800'
                   }`}
                   style={{
-                    width: index === loadingStageIndex ? '24px' : '8px',
+                    width: index === loadingStageIndex ? '32px' : '10px',
                     opacity: index <= loadingStageIndex ? 1 : 0.3
                   }}
                 />
@@ -1419,14 +1419,14 @@ export default function App() {
             </div>
 
             {/* System checklist */}
-            <div className="space-y-2 pt-2">
+            <div className="space-y-3 pt-3">
               {systemChecklist.map((item) => (
                 <motion.div
                   key={item.id}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3, delay: item.id * 0.1 }}
-                  className="flex items-center justify-center gap-2 text-[10px] font-mono tracking-wider"
+                  className="flex items-center justify-center gap-3 text-xs font-mono tracking-wider"
                 >
                   {item.completed ? (
                     <span className="text-green-accent">✓</span>
