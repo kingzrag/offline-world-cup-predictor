@@ -559,8 +559,12 @@ class ModelService:
                     probs = model.predict_proba(df_input)[0]
                     
                     if market_name == "asian_handicap":
+                        # Use Poisson structure for consistency with frontend expectations
+                        poisson_handicap = goal_result.get("asian_handicap", {})
                         result["asian_handicap"] = {
-                            "home_win_prob": float(probs[1]) if len(probs) > 1 else 0.5,
+                            "label": poisson_handicap.get("label", "Level (0)"),
+                            "lines": poisson_handicap.get("lines", {}),
+                            "favored_team": poisson_handicap.get("favored_team", "Home"),
                             "source": "ml_model",
                             "model_version": bundle.get("version", "unknown"),
                         }
@@ -593,8 +597,12 @@ class ModelService:
         
         # Fallback to Poisson-based predictions for any missing markets
         if result["asian_handicap"] is None:
+            # Use the full Poisson handicap structure from goal_result
+            poisson_handicap = goal_result.get("asian_handicap", {})
             result["asian_handicap"] = {
-                "home_win_prob": goal_result.get("asian_handicap", {}).get("favored_team") == "Home",
+                "label": poisson_handicap.get("label", "Level (0)"),
+                "lines": poisson_handicap.get("lines", {}),
+                "favored_team": poisson_handicap.get("favored_team", "Home"),
                 "source": "poisson_fallback",
             }
         
