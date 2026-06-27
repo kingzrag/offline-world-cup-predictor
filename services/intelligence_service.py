@@ -1230,7 +1230,7 @@ class IntelligenceService:
         return _fatigue(match.home_team_id), _fatigue(match.away_team_id)
 
     def _calc_substitution_impact(
-        self, db: Session, match: Match
+        self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None
     ) -> Tuple[float, float]:
         """
         Difference in avg performance rating between starters and substitutes.
