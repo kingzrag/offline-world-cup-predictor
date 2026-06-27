@@ -291,38 +291,80 @@ function mergeAbortSignals(
 async function apiFetch<T>(
   path: string,
   options?: RequestInit,
-  timeoutMs = 30000
+  timeoutMs = 30000,
+  maxRetries = 3
 ): Promise<T> {
   const url = `${BASE}${path}`;
-  const { signal, cleanup } = mergeAbortSignals(options?.signal ?? undefined, timeoutMs);
-  const tStart = performance.now();
-  try {
-    console.log(`[api] → ${options?.method ?? "GET"} ${url}`);
-    const res = await fetch(url, {
-      ...options,
-      signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options?.headers ?? {}),
-      },
-    });
-    const tEnd = performance.now();
-    const duration = (tEnd - tStart).toFixed(0);
-    if (!res.ok) {
-      const body = await res.text();
-      console.error(`[api] ✗ ${res.status} ${url} in ${duration}ms: ${body.slice(0, 300)}`);
-      throw new Error(`API ${res.status}: ${body.slice(0, 300)}`);
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const { signal, cleanup } = mergeAbortSignals(options?.signal ?? undefined, timeoutMs);
+    const tStart = performance.now();
+    
+    try {
+      console.log(`[api] → ${options?.method ?? "GET"} ${url}${attempt > 0 ? ` (retry ${attempt}/${maxRetries})` : ''}`);
+      const res = await fetch(url, {
+        ...options,
+        signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(options?.headers ?? {}),
+        },
+      });
+      const tEnd = performance.now();
+      const duration = (tEnd - tStart).toFixed(0);
+      
+      if (!res.ok) {
+        const body = await res.text();
+        console.error(`[api] ✗ ${res.status} ${url} in ${duration}ms: ${body.slice(0, 300)}`);
+        lastError = new Error(`API ${res.status}: ${body.slice(0, 300)}`);
+        
+        // Don't retry on 4xx errors (client errors)
+        if (res.status >= 400 && res.status < 500) {
+          throw lastError;
+        }
+        
+        // Retry on 5xx errors and network errors
+        if (attempt < maxRetries) {
+          const delayMs = Math.min(1000 * Math.pow(2, attempt), 10000); // Exponential backoff, max 10s
+          console.log(`[api] Retrying in ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+        
+        throw lastError;
+      }
+      
+      console.log(`[api] ← ${res.status} ${url} in ${duration}ms`);
+      return (await res.json()) as T;
+    } catch (err) {
+      const tEnd = performance.now();
+      const duration = (tEnd - tStart).toFixed(0);
+      lastError = err as Error;
+      
+      // Don't retry if aborted
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.error(`[api] ✗ Request aborted for ${url} in ${duration}ms`);
+        throw err;
+      }
+      
+      console.error(`[api] ✗ Request failed for ${url} in ${duration}ms:`, err);
+      
+      // Retry on network errors
+      if (attempt < maxRetries) {
+        const delayMs = Math.min(1000 * Math.pow(2, attempt), 10000); // Exponential backoff, max 10s
+        console.log(`[api] Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+      
+      throw lastError;
+    } finally {
+      cleanup();
     }
-    console.log(`[api] ← ${res.status} ${url} in ${duration}ms`);
-    return (await res.json()) as T;
-  } catch (err) {
-    const tEnd = performance.now();
-    const duration = (tEnd - tStart).toFixed(0);
-    console.error(`[api] ✗ Request failed for ${url} in ${duration}ms:`, err);
-    throw err;
-  } finally {
-    cleanup();
   }
+  
+  throw lastError || new Error('Max retries exceeded');
 }
 
 // ── Public API functions ──────────────────────────────────────────────────────
@@ -1468,7 +1510,7 @@ export interface ModelPerformanceStats {
 }
 
 /**
- * GET /fastapi/tournament/standings
+ * GET /api/tournament/standings
  */
 export async function getStandings(): Promise<GroupStandings> {
   const cacheKey = getCacheKey('/tournament/standings');
@@ -1480,14 +1522,14 @@ export async function getStandings(): Promise<GroupStandings> {
 
   const result = await withDeduplication<GroupStandings>(
     cacheKey,
-    () => apiFetch<GroupStandings>("/tournament/standings")
+    () => apiFetch<GroupStandings>("/api/tournament/standings")
   );
   setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
   return result;
 }
 
 /**
- * GET /fastapi/tournament/bracket
+ * GET /api/tournament/bracket
  */
 export async function getBracket(): Promise<BracketData> {
   const cacheKey = getCacheKey('/tournament/bracket');
@@ -1499,7 +1541,7 @@ export async function getBracket(): Promise<BracketData> {
 
   const result = await withDeduplication<BracketData>(
     cacheKey,
-    () => apiFetch<BracketData>("/tournament/bracket")
+    () => apiFetch<BracketData>("/api/tournament/bracket")
   );
   setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
   return result;
@@ -1507,7 +1549,7 @@ export async function getBracket(): Promise<BracketData> {
 
 
 /**
- * GET /fastapi/tournament/model-performance
+ * GET /api/tournament/model-performance
  */
 export async function getModelPerformance(): Promise<ModelPerformanceStats> {
   const cacheKey = getCacheKey('/tournament/model-performance');
@@ -1519,7 +1561,7 @@ export async function getModelPerformance(): Promise<ModelPerformanceStats> {
 
   const result = await withDeduplication<ModelPerformanceStats>(
     cacheKey,
-    () => apiFetch<ModelPerformanceStats>("/tournament/model-performance")
+    () => apiFetch<ModelPerformanceStats>("/api/tournament/model-performance")
   );
   setCachedData(cacheKey, result, 10 * 60 * 1000); // 10 minute cache
   return result;
@@ -1543,7 +1585,7 @@ export interface TournamentSimulationResponse {
 }
 
 /**
- * GET /fastapi/tournament/simulation
+ * GET /api/tournament/simulation
  */
 export async function getTournamentSimulation(): Promise<TournamentSimulationResponse> {
   const cacheKey = getCacheKey('/tournament/simulation');
@@ -1555,7 +1597,7 @@ export async function getTournamentSimulation(): Promise<TournamentSimulationRes
 
   const result = await withDeduplication<TournamentSimulationResponse>(
     cacheKey,
-    () => apiFetch<TournamentSimulationResponse>("/tournament/simulation")
+    () => apiFetch<TournamentSimulationResponse>("/api/tournament/simulation")
   );
   setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
   return result;

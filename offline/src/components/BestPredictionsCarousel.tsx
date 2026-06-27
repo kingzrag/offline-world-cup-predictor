@@ -95,7 +95,7 @@ function PredictionCard({ match, isActive, onViewAnalysis }: PredictionCardProps
     <div
       className={`bg-zinc-950 border rounded-lg px-7 py-6 flex flex-col justify-between min-h-[400px] h-full transition-colors duration-300 ${
         isActive
-          ? "border-zinc-700 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.85)]"
+          ? "border-zinc-700 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(16,185,129,0.15)]"
           : "border-zinc-900 hover:border-zinc-800"
       }`}
     >
@@ -453,7 +453,7 @@ export function BestPredictionsCarousel({
                   initial={false}
                   animate={{
                     x: offset * stride - cardWidth / 2,
-                    scale: isActive ? 1 : 0.92,
+                    scale: isActive ? 1.02 : 0.92,
                     opacity: isActive ? 1 : 0.7,
                     zIndex: isActive ? 20 : 10 - Math.abs(offset),
                   }}
@@ -491,7 +491,7 @@ export function BestPredictionsCarousel({
                         key={`${i}-${activeIndex}-${shouldAutoSlide}`}
                         initial={{ width: 0 }}
                         animate={{ width: "100%" }}
-                        transition={{ duration: 7, ease: "linear" }}
+                        transition={{ duration: 6, ease: "linear" }}
                         className="absolute left-0 top-0 bottom-0 bg-green-accent rounded-full"
                         onAnimationComplete={goNext}
                       />

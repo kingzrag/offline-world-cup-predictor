@@ -1194,73 +1194,73 @@ export default function App() {
       <header id="app-header" className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full">
         
         {/* Tactical Editorial Sections Navigation (Col 1 on desktop) */}
-        <nav id="header-nav" className="flex items-center space-x-5 lg:space-x-8 text-[11px] font-bold tracking-widest uppercase text-zinc-400 justify-center md:justify-start order-2 md:order-1 select-none">
+        <nav id="header-nav" className="flex items-center space-x-3 sm:space-x-4 md:space-x-5 lg:space-x-8 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase text-zinc-400 justify-center md:justify-start order-2 md:order-1 select-none overflow-x-auto scrollbar-none">
           <button
             onClick={() => navigateTo('predictions')}
-            className={`hover:text-white transition-all py-1 border-b-2 ${activeTab === 'predictions' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'predictions' ? 'text-white border-green-accent' : 'border-transparent'}`}
           >
             Predictions
           </button>
           <button
             onClick={() => navigateTo('favorites')}
-            className={`hover:text-white transition-all py-1 border-b-2 ${activeTab === 'favorites' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'favorites' ? 'text-white border-green-accent' : 'border-transparent'}`}
           >
             Favorites {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length > 0 && (
-              <span className="ml-1 bg-green-accent/10 border border-green-accent/30 text-green-accent text-[9px] px-1.5 py-0.5 font-mono rounded">
+              <span className="ml-1 bg-green-accent/10 border border-green-accent/30 text-green-accent text-[8px] sm:text-[9px] px-1 py-0.5 font-mono rounded">
                 {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length}
               </span>
             )}
           </button>
           <button
             onClick={() => navigateTo('intelligence')}
-            className={`hover:text-white transition-all py-1 border-b-2 ${activeTab === 'intelligence' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'intelligence' ? 'text-white border-green-accent' : 'border-transparent'}`}
           >
             Intelligence
           </button>
           <button
             onClick={() => navigateTo('tournament')}
-            className={`hover:text-white transition-all py-1 border-b-2 ${activeTab === 'tournament' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'tournament' ? 'text-white border-green-accent' : 'border-transparent'}`}
           >
             Tournament
           </button>
           <button
             onClick={() => navigateTo('model')}
-            className={`hover:text-white transition-all py-1 border-b-2 ${activeTab === 'model' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'model' ? 'text-white border-green-accent' : 'border-transparent'}`}
           >
             The Model
           </button>
         </nav>
 
         {/* Brand identity: elegant serif wordmark with premium editorial hierarchy (Col 2 on desktop) */}
-        <div 
-          onClick={() => navigateTo('home')} 
+        <div
+          onClick={() => navigateTo('home')}
           className="flex flex-col items-center justify-center cursor-pointer group select-none text-center order-1 md:order-2 animate-fade-in py-1"
           id="offline-logo-container"
         >
-          <span className="text-xl md:text-2xl font-serif text-white tracking-[0.35em] font-light leading-none group-hover:text-green-accent transition-colors duration-300 pl-[0.35em] uppercase">
+          <span className="text-lg sm:text-xl md:text-2xl font-serif text-white tracking-[0.35em] font-light leading-none group-hover:text-green-accent transition-colors duration-300 pl-[0.35em] uppercase">
             OFFLINE
           </span>
-          <span className="text-[7.5px] font-mono tracking-[0.45em] text-zinc-550 uppercase mt-2 group-hover:text-zinc-400 transition-colors duration-300 pl-[0.45em]">
+          <span className="text-[7px] sm:text-[7.5px] font-mono tracking-[0.45em] text-zinc-550 uppercase mt-1.5 sm:mt-2 group-hover:text-zinc-400 transition-colors duration-300 pl-[0.45em]">
             FOOTBALL INTELLIGENCE
           </span>
         </div>
 
         {/* Global actions: Dynamic Countdown and Tactical Search (Col 3 on desktop) */}
-        <div id="header-actions" className="flex items-center justify-center md:justify-end space-x-6 order-3">
-          <button 
+        <div id="header-actions" className="flex items-center justify-center md:justify-end space-x-3 sm:space-x-4 md:space-x-6 order-3">
+          <button
             onClick={() => setShowSearchModal(true)}
-            className="flex items-center space-x-2 text-zinc-400 hover:text-white bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 px-3.5 py-1.5 rounded transition-all group"
+            className="flex items-center space-x-1.5 sm:space-x-2 text-zinc-400 hover:text-white bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 px-2.5 sm:px-3 py-1.5 rounded transition-all group"
           >
             <Search className="w-3.5 h-3.5 group-hover:text-green-accent transition-colors" />
-            <span className="text-[10px] tracking-widest uppercase font-mono text-zinc-500 group-hover:text-zinc-300">Search</span>
+            <span className="hidden sm:inline-block text-[10px] tracking-widest uppercase font-mono text-zinc-500 group-hover:text-zinc-300">Search</span>
             <kbd className="hidden md:inline-block font-mono text-[9px] bg-zinc-900 text-zinc-600 px-1 py-0.5 rounded border border-zinc-800">/</kbd>
           </button>
 
-          <div className="flex flex-col items-end md:border-l border-zinc-900 md:pl-6 leading-tight">
-            <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono truncate max-w-[180px]" title={countdownLabel}>
+          <div className="flex flex-col items-end md:border-l border-zinc-900 md:pl-4 sm:md:pl-6 leading-tight">
+            <span className="text-[8px] sm:text-[9px] text-zinc-500 uppercase tracking-widest font-mono truncate max-w-[120px] sm:max-w-[180px]" title={countdownLabel}>
               {countdownLabel}
             </span>
-            <span className="text-lg font-mono tracking-wider text-green-accent font-semibold tabular-nums">{countdown}</span>
+            <span className="text-base sm:text-lg font-mono tracking-wider text-green-accent font-semibold tabular-nums">{countdown}</span>
           </div>
         </div>
       </header>
@@ -1306,26 +1306,26 @@ export default function App() {
               </div>
 
               {/* Floating content wrapped in standard content grid alignment */}
-              <div className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 pt-6 lg:pt-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-                
+              <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-12 pt-6 lg:pt-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center">
+
                 {/* Left Column (60%): Editorial layout */}
                 <div className="lg:col-span-7 flex flex-col justify-center animate-fade-in text-left">
-                  <span className="text-xs font-mono font-bold tracking-[0.3em] text-green-accent mb-3 uppercase block leading-none">
+                  <span className="text-[10px] sm:text-xs font-mono font-bold tracking-[0.3em] text-green-accent mb-2 sm:mb-3 uppercase block leading-none">
                     FIFA WORLD CUP 2026
                   </span>
-                  <h1 className="text-4xl md:text-6xl lg:text-[76px] font-serif tracking-tight leading-[0.95] text-white mb-4">
+                  <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-[76px] font-serif tracking-tight leading-[0.95] text-white mb-3 sm:mb-4">
                     Football <br />
                     <span className="italic font-normal">Intelligence<span className="text-green-accent">.</span></span>
                   </h1>
-                  <p className="text-zinc-300 text-xs md:text-sm lg:text-base max-w-xl font-light leading-relaxed mb-5">
+                  <p className="text-zinc-300 text-[11px] sm:text-xs md:text-sm lg:text-base max-w-xl font-light leading-relaxed mb-4 sm:mb-5">
                     A quantitative simulation index and elite football intelligence publication built for analysts, experts, and readers who understand the game.
-                    <span className="block mt-2 text-zinc-400 text-xs md:text-sm">Dynamic expected value curves free of noise, promotional slop, or gambling bias.</span>
+                    <span className="block mt-2 text-zinc-400 text-[10px] sm:text-xs md:text-sm">Dynamic expected value curves free of noise, promotional slop, or gambling bias.</span>
                   </p>
-                  
-                  <div className="flex flex-wrap gap-4">
-                    <button 
+
+                  <div className="flex flex-wrap gap-3 sm:gap-4">
+                    <button
                       onClick={() => navigateTo('predictions')}
-                      className="px-6 py-3 bg-white hover:bg-zinc-100 text-black font-bold text-xs uppercase tracking-widest transition-all duration-300 flex items-center gap-1.5 border border-transparent shadow-lg shadow-white/5 active:scale-[0.98] cursor-pointer"
+                      className="px-5 sm:px-6 py-2.5 sm:py-3 bg-white hover:bg-zinc-100 text-black font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 flex items-center gap-1.5 border border-transparent shadow-lg shadow-white/5 active:scale-[0.98] cursor-pointer"
                     >
                       VIEW PREDICTIONS →
                     </button>
@@ -1641,18 +1641,42 @@ export default function App() {
             </div>
 
 
-            {matchError ? (
+            {isInitializing ? (
+              <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-16">
+                <div className="bg-zinc-950 border border-zinc-900 rounded-lg p-12 flex flex-col items-center justify-center text-center space-y-6">
+                  <div className="p-4 bg-green-500/10 rounded-full text-green-400">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-mono tracking-[0.25em] text-green-accent uppercase font-bold">Starting Prediction Engine</span>
+                    <h3 className="text-2xl font-serif text-white uppercase tracking-tight font-light">Waking up ML models</h3>
+                  </div>
+                  <p className="text-zinc-400 text-sm max-w-lg leading-relaxed font-sans">
+                    {isRetrying 
+                      ? "Reconnecting to the prediction engine... This may take a few moments."
+                      : "Starting prediction engine... This may take up to 30–60 seconds on the free server as ML models load into memory."
+                    }
+                  </p>
+                  {isRetrying && (
+                    <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
+                      <Clock className="w-3 h-3" />
+                      <span>Automatic retry with exponential backoff</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : matchError ? (
               <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-16">
                 <div className="bg-zinc-950 border border-red-500/25 rounded-lg p-12 flex flex-col items-center justify-center text-center space-y-6">
                   <div className="p-4 bg-red-500/10 rounded-full text-red-400">
                     <AlertCircle className="w-8 h-8 animate-pulse" />
                   </div>
                   <div className="space-y-2">
-                    <span className="text-[10px] font-mono tracking-[0.25em] text-red-400 uppercase font-bold">Prediction Engine Offline</span>
-                    <h3 className="text-2xl font-serif text-white uppercase tracking-tight font-light">Failed to connect to FastAPI Backend</h3>
+                    <span className="text-[10px] font-mono tracking-[0.25em] text-red-400 uppercase font-bold">Connection Failed</span>
+                    <h3 className="text-2xl font-serif text-white uppercase tracking-tight font-light">Could not connect to backend</h3>
                   </div>
                   <p className="text-zinc-400 text-sm max-w-lg leading-relaxed font-sans">
-                    The live machine learning prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Offline/fallback predictions have been disabled to prevent displaying inaccurate or mock information. Please ensure the backend server is running and reload.
+                    The prediction engine is currently unreachable at <code className="text-red-400 font-mono">{API_BASE || "(no API URL configured)"}</code>. Please check your connection and try again.
                   </p>
                   <button 
                     onClick={() => setRetryTrigger(prev => prev + 1)}
@@ -1689,9 +1713,9 @@ export default function App() {
                           <button
                             key={item}
                             onClick={() => setSelectedFilter(item)}
-                            className={`whitespace-nowrap px-4 py-2.5 text-xs font-mono uppercase tracking-widest rounded transition-all duration-200 cursor-pointer shrink-0 border ${
-                              active 
-                                ? 'bg-white border-white text-black font-semibold' 
+                            className={`whitespace-nowrap px-3 sm:px-4 py-2 sm:py-2.5 text-[10px] sm:text-xs font-mono uppercase tracking-widest rounded transition-all duration-200 cursor-pointer shrink-0 border ${
+                              active
+                                ? 'bg-white border-white text-black font-semibold'
                                 : 'bg-zinc-950 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-700 text-zinc-400 hover:text-white'
                             }`}
                           >
@@ -1701,19 +1725,19 @@ export default function App() {
                       })}
                     </div>
                     {/* Toggle Switch */}
-                    <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0 bg-zinc-950/60 border border-zinc-900 rounded px-4 py-2 hover:border-zinc-800 transition duration-300">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                        Show Historical Matches
+                    <div className="flex items-center justify-between lg:justify-end gap-2 sm:gap-3 shrink-0 bg-zinc-950/60 border border-zinc-900 rounded px-3 sm:px-4 py-2 hover:border-zinc-800 transition duration-300">
+                      <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                        Show Historical
                       </span>
                       <button
                         onClick={() => setShowHistorical(!showHistorical)}
-                        className={`w-9 h-5 rounded-full transition-colors duration-200 relative outline-none cursor-pointer ${
+                        className={`w-8 h-5 sm:w-9 sm:h-5 rounded-full transition-colors duration-200 relative outline-none cursor-pointer ${
                           showHistorical ? 'bg-green-accent' : 'bg-zinc-800'
                         }`}
                       >
                         <span
-                          className={`absolute top-0.5 left-0.5 bg-zinc-100 w-4 h-4 rounded-full transition-transform duration-200 ${
-                            showHistorical ? 'translate-x-4' : 'translate-x-0'
+                          className={`absolute top-0.5 left-0.5 bg-zinc-100 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full transition-transform duration-200 ${
+                            showHistorical ? 'translate-x-3.5 sm:translate-x-4' : 'translate-x-0'
                           }`}
                         />
                       </button>
@@ -1722,7 +1746,7 @@ export default function App() {
                 </div>
 
                 {/* MAIN CONTENT SPLIT (Top Insight Panel and Match Feed) */}
-                <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-10 space-y-12">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 w-full py-8 sm:py-10 space-y-8 sm:space-y-12">
                   
                   {/* TOP INTUITIVE INSIGHT PANEL: Highest Confidence Prediction Today */}
                   {selectedFilter === 'All Matches' && (() => {
@@ -1744,12 +1768,12 @@ export default function App() {
                       'Highest Confidence Prediction';
 
                     return (
-                    <div className="bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-905 rounded-lg p-6 md:p-8 flex flex-col md:flex-row items-stretch justify-between gap-8 relative overflow-hidden group">
+                    <div className="bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-905 rounded-lg p-4 sm:p-6 md:p-8 flex flex-col md:flex-row items-stretch justify-between gap-6 sm:gap-8 relative overflow-hidden group">
                       {/* Subtle background flare */}
-                      <div className="absolute right-0 top-0 w-80 h-80 bg-green-accent/5 rounded-full blur-3xl pointer-events-none group-hover:bg-green-accent/10 transition-colors duration-1000"></div>
-                      
-                      <div className="space-y-4 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-green-accent/10 border border-green-accent/30 px-3 py-1 rounded text-[9px] uppercase tracking-widest text-green-accent font-mono font-extrabold">
+                      <div className="absolute right-0 top-0 w-64 h-64 sm:w-80 sm:h-80 bg-green-accent/5 rounded-full blur-3xl pointer-events-none group-hover:bg-green-accent/10 transition-colors duration-1000"></div>
+
+                      <div className="space-y-3 sm:space-y-4 flex-1">
+                        <div className="inline-flex items-center space-x-2 bg-green-accent/10 border border-green-accent/30 px-2.5 sm:px-3 py-1 rounded text-[8px] sm:text-[9px] uppercase tracking-widest text-green-accent font-mono font-extrabold">
                           {heroMatch.status === 'LIVE' ? (
                             <span className="relative flex h-2 w-2">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
@@ -1762,12 +1786,12 @@ export default function App() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <span className="text-xs uppercase font-mono tracking-widest text-[#1cdb5e] block font-bold">{heroMatch.stage}</span>
-                          <h3 className="text-3xl font-serif text-white uppercase tracking-tight">
+                          <span className="text-[10px] sm:text-xs uppercase font-mono tracking-widest text-[#1cdb5e] block font-bold">{heroMatch.stage}</span>
+                          <h3 className="text-2xl sm:text-3xl font-serif text-white uppercase tracking-tight">
                             {heroMatch.teamA} vs {heroMatch.teamB}
                           </h3>
                           {(heroMatch.status === 'LIVE' || heroMatch.status === 'COMPLETED') && (
-                            <div className="flex items-center gap-3 text-4xl font-black text-white font-mono tracking-wider pt-2">
+                            <div className="flex items-center gap-3 text-3xl sm:text-4xl font-black text-white font-mono tracking-wider pt-2">
                               <span>{heroMatch.liveScore?.home ?? 0}</span>
                               <span className="text-zinc-600 font-light">—</span>
                               <span>{heroMatch.liveScore?.away ?? 0}</span>
