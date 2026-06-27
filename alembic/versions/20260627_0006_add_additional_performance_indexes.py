@@ -98,9 +98,6 @@ def upgrade():
     if 'ix_prediction_accuracy_market_type' not in existing_indexes.get('prediction_accuracy', set()):
         op.create_index('ix_prediction_accuracy_market_type', 'prediction_accuracy', ['market_type'])
     
-    if 'ix_prediction_accuracy_window_days' not in existing_indexes.get('prediction_accuracy', set()):
-        op.create_index('ix_prediction_accuracy_window_days', 'prediction_accuracy', ['window_days'])
-    
     # Indexes for rolling_accuracy table
     if 'ix_rolling_accuracy_market_type' not in existing_indexes.get('rolling_accuracy', set()):
         op.create_index('ix_rolling_accuracy_market_type', 'rolling_accuracy', ['market_type'])
@@ -108,8 +105,8 @@ def upgrade():
     if 'ix_rolling_accuracy_window_days' not in existing_indexes.get('rolling_accuracy', set()):
         op.create_index('ix_rolling_accuracy_window_days', 'rolling_accuracy', ['window_days'])
     
-    if 'ix_rolling_accuracy_date' not in existing_indexes.get('rolling_accuracy', set()):
-        op.create_index('ix_rolling_accuracy_date', 'rolling_accuracy', ['date'])
+    if 'ix_rolling_accuracy_calculated_at' not in existing_indexes.get('rolling_accuracy', set()):
+        op.create_index('ix_rolling_accuracy_calculated_at', 'rolling_accuracy', ['calculated_at'])
 
 
 def downgrade():
@@ -149,9 +146,8 @@ def downgrade():
     
     # Remove indexes from prediction_accuracy table
     op.drop_index('ix_prediction_accuracy_market_type', table_name='prediction_accuracy')
-    op.drop_index('ix_prediction_accuracy_window_days', table_name='prediction_accuracy')
     
     # Remove indexes from rolling_accuracy table
     op.drop_index('ix_rolling_accuracy_market_type', table_name='rolling_accuracy')
     op.drop_index('ix_rolling_accuracy_window_days', table_name='rolling_accuracy')
-    op.drop_index('ix_rolling_accuracy_date', table_name='rolling_accuracy')
+    op.drop_index('ix_rolling_accuracy_calculated_at', table_name='rolling_accuracy')
