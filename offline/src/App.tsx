@@ -1563,6 +1563,7 @@ export default function App() {
               onViewAnalysis={openMatchAnalysis}
               onViewAll={() => navigateTo('predictions')}
               onRetry={() => setRetryTrigger(prev => prev + 1)}
+              isModalOpen={!!selectedMatch || showSearchModal}
             />
 
             {/* THE MODEL section (Full-Width editorial block at bottom of Home) */}

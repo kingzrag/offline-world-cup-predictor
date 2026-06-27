@@ -266,6 +266,7 @@ export interface BestPredictionsCarouselProps {
   onViewAnalysis: (match: MatchPrediction) => void;
   onViewAll?: () => void;
   onRetry?: () => void;
+  isModalOpen?: boolean;
 }
 
 export function BestPredictionsCarousel({
@@ -276,12 +277,32 @@ export function BestPredictionsCarousel({
   onViewAnalysis,
   onViewAll,
   onRetry,
+  isModalOpen = false,
 }: BestPredictionsCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const { cardWidth, stride } = useCarouselMetrics(containerRef);
 
   const total = matches.length;
+
+  // Easing curve duration adjusted to 600ms (within 500-700ms range)
+  const premiumTransition = { duration: 0.6, ease: [0.16, 1, 0.3, 1] as const };
+
+  // Detect prefers-reduced-motion setting
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReducedMotion(mediaQuery.matches);
+
+    const listener = (e: MediaQueryListEvent) => {
+      setPrefersReducedMotion(e.matches);
+    };
+    mediaQuery.addEventListener("change", listener);
+    return () => mediaQuery.removeEventListener("change", listener);
+  }, []);
 
   const goNext = useCallback(() => {
     if (total === 0) return;
@@ -293,8 +314,13 @@ export function BestPredictionsCarousel({
     setActiveIndex(i => (i - 1 + total) % total);
   }, [total]);
 
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
+  }, []);
+
   const handleDragEnd = useCallback(
     (_: unknown, info: PanInfo) => {
+      setIsDragging(false);
       if (info.offset.x < -DRAG_THRESHOLD || info.velocity.x < -VELOCITY_THRESHOLD) {
         goNext();
       } else if (info.offset.x > DRAG_THRESHOLD || info.velocity.x > VELOCITY_THRESHOLD) {
@@ -319,8 +345,17 @@ export function BestPredictionsCarousel({
     return () => window.removeEventListener("keydown", onKey);
   }, [goNext, goPrev]);
 
+  // Auto slide configuration: pause on hover, dragging, modal open, or accessibility preference
+  const isSystemPaused = isHovered || isDragging || isModalOpen;
+  const shouldAutoSlide = !prefersReducedMotion && !isSystemPaused && total > 0;
+
   return (
-    <div id="todays-best-predictions" className="max-w-7xl mx-auto px-6 md:px-12 w-full py-16 scroll-mt-24">
+    <div
+      id="todays-best-predictions"
+      className="max-w-7xl mx-auto px-6 md:px-12 w-full py-16 scroll-mt-24"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-zinc-900 pb-6 mb-10 gap-6">
         <div>
           <span className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold mb-1.5 animate-pulse">
@@ -398,6 +433,7 @@ export function BestPredictionsCarousel({
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.12}
+            onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             role="region"
             aria-roledescription="carousel"
@@ -421,7 +457,7 @@ export function BestPredictionsCarousel({
                     opacity: isActive ? 1 : 0.7,
                     zIndex: isActive ? 20 : 10 - Math.abs(offset),
                   }}
-                  transition={TRANSITION}
+                  transition={premiumTransition}
                 >
                   <PredictionCard
                     match={match}
@@ -434,20 +470,38 @@ export function BestPredictionsCarousel({
           </motion.div>
 
           <div className="flex justify-center gap-2 mt-6">
-            {matches.map((match, i) => (
-              <button
-                key={match.id}
-                type="button"
-                aria-label={`Go to ${match.teamA} vs ${match.teamB}`}
-                aria-current={i === activeIndex ? "true" : undefined}
-                onClick={() => setActiveIndex(i)}
-                className={`h-1.5 rounded-full transition-all duration-[450ms] ${
-                  i === activeIndex
-                    ? "w-8 bg-green-accent"
-                    : "w-1.5 bg-zinc-800 hover:bg-zinc-600"
-                }`}
-              />
-            ))}
+            {matches.map((match, i) => {
+              const isActive = i === activeIndex;
+              return (
+                <button
+                  key={match.id}
+                  type="button"
+                  aria-label={`Go to ${match.teamA} vs ${match.teamB}`}
+                  aria-current={isActive ? "true" : undefined}
+                  onClick={() => setActiveIndex(i)}
+                  className={`h-1.5 rounded-full relative overflow-hidden transition-all duration-[450ms] ${
+                    isActive
+                      ? "w-8 bg-zinc-800"
+                      : "w-1.5 bg-zinc-800 hover:bg-zinc-605"
+                  }`}
+                >
+                  {isActive && (
+                    shouldAutoSlide ? (
+                      <motion.span
+                        key={`${i}-${activeIndex}-${shouldAutoSlide}`}
+                        initial={{ width: 0 }}
+                        animate={{ width: "100%" }}
+                        transition={{ duration: 7, ease: "linear" }}
+                        className="absolute left-0 top-0 bottom-0 bg-green-accent rounded-full"
+                        onAnimationComplete={goNext}
+                      />
+                    ) : (
+                      <span className="absolute inset-0 bg-green-accent rounded-full" />
+                    )
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
