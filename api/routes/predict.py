@@ -25,7 +25,7 @@ from database.connection import get_db
 from services.model_service import model_service
 from utils.logger import logger
 
-router = APIRouter(prefix="/api", tags=["Predictions API"])
+router = APIRouter(tags=["Predictions API"])
 
 
 def _compile_team_injuries_and_suspensions(db, team_id: int, team_obj=None) -> tuple[list[str], list[str]]:

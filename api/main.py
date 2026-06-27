@@ -152,6 +152,7 @@ app.include_router(injuries.router, prefix="/api/v1")
 app.include_router(predictions.router, prefix="/api/v1")
 
 # ── New ML prediction API (ModelService-backed) ───────────────────────────────
+app.include_router(predict_router.router, prefix="/api")
 app.include_router(predict_router.router)
 
 # ── Tournament Progression Routing ──────────────────────────────────────────
