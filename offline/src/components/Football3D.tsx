@@ -19,7 +19,7 @@ function FootballMesh() {
       }
     });
     // Scale the model appropriately
-    cloned.scale.set(5.0, 5.0, 5.0);
+    cloned.scale.set(6.5, 6.5, 6.5);
     return cloned;
   }, [scene]);
 
