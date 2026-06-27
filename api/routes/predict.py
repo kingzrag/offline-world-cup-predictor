@@ -130,6 +130,10 @@ def _build_enrichment_from_prediction(pred_dict: Dict[str, Any]) -> Dict[str, An
     """Map a full model_service.predict() payload to fixtures-enriched enrichment."""
     goals = pred_dict["goals"]
     markets = pred_dict["markets"]
+    asian_handicap = markets.get("asian_handicap")
+    logger.info(f"[API_ENRICHMENT] Asian handicap from prediction: {asian_handicap}")
+    if asian_handicap and isinstance(asian_handicap, dict):
+        logger.info(f"[API_ENRICHMENT] Asian handicap lines: {asian_handicap.get('lines', {})}")
     return {
         "goals": {
             "home_xg":  goals["expected_home_goals"],
@@ -143,7 +147,7 @@ def _build_enrichment_from_prediction(pred_dict: Dict[str, Any]) -> Dict[str, An
             "most_likely_score": markets["most_likely_score"],
             "top_5_scorelines":  markets["top_5_scorelines"],
             "team_goals":        markets["team_goals"],
-            "asian_handicap":    markets.get("asian_handicap"),
+            "asian_handicap":    asian_handicap,
         },
     }
 
@@ -1073,10 +1077,12 @@ def get_fixtures_enriched(
                         most_likely_score=f"{m.home_score}-{m.away_score}",
                     )
                     enrichment_source_counts["finished_score"] += 1
+                    ah = enrichment.get("markets", {}).get("asian_handicap")
                     logger.info(
                         f"[fixtures-enriched] match_id={m.id} source=finished_score "
                         f"{home_t.name} vs {away_t.name} "
-                        f"xg=({h_xg:.4f}, {a_xg:.4f})"
+                        f"xg=({h_xg:.4f}, {a_xg:.4f}) "
+                        f"asian_handicap={ah}"
                     )
                 elif (
                     stored_pred
@@ -1090,10 +1096,12 @@ def get_fixtures_enriched(
                         a_xg,
                     )
                     enrichment_source_counts["stored_prediction"] += 1
+                    ah = enrichment.get("markets", {}).get("asian_handicap")
                     logger.info(
                         f"[fixtures-enriched] match_id={m.id} source=stored_prediction "
                         f"{home_t.name} vs {away_t.name} "
-                        f"xg=({h_xg:.4f}, {a_xg:.4f})"
+                        f"xg=({h_xg:.4f}, {a_xg:.4f}) "
+                        f"asian_handicap={ah}"
                     )
                 else:
                     enrichment = _lookup_cached_enrichment(

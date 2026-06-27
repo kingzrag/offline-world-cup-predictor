@@ -312,6 +312,7 @@ class ModelService:
             "probability_matrix":  poisson["probability_matrix"],
             "model_version":       self._goal_bundle.get("version", "v1.0"),
         }
+        logger.info(f"[PREDICT_GOALS] Asian handicap from Poisson: label={asian_handicap_label}, lines={poisson['asian_handicap']['suggested_lines']}, favored={poisson['asian_handicap']['favored_team_prefix']}")
 
     # ── Combined full prediction ───────────────────────────────────────────────
     def predict(self, db, home_team_name: str, away_team_name: str,
@@ -605,6 +606,19 @@ class ModelService:
                 "favored_team": poisson_handicap.get("favored_team", "Home"),
                 "source": "poisson_fallback",
             }
+            logger.info(f"[BETTING_MARKETS] Asian Handicap Poisson fallback: {result['asian_handicap']}")
+        else:
+            logger.info(f"[BETTING_MARKETS] Asian Handicap from ML model: {result['asian_handicap']}")
+        
+        # Ensure lines is never empty - generate from Poisson if needed
+        if result["asian_handicap"] and isinstance(result["asian_handicap"], dict):
+            if not result["asian_handicap"].get("lines") or len(result["asian_handicap"].get("lines", {})) == 0:
+                logger.warning(f"[BETTING_MARKETS] Asian Handicap lines is empty, generating from Poisson")
+                poisson_handicap = goal_result.get("asian_handicap", {})
+                result["asian_handicap"]["lines"] = poisson_handicap.get("lines", {})
+                result["asian_handicap"]["label"] = result["asian_handicap"].get("label", poisson_handicap.get("label", "Level (0)"))
+                result["asian_handicap"]["favored_team"] = result["asian_handicap"].get("favored_team", poisson_handicap.get("favored_team", "Home"))
+                logger.info(f"[BETTING_MARKETS] Generated lines from Poisson: {result['asian_handicap']['lines']}")
         
         if result["asian_total"] is None:
             ou_2_5 = goal_result.get("over_under", {}).get("2.5", {})
@@ -633,6 +647,7 @@ class ModelService:
                 "source": "poisson_fallback",
             }
         
+        logger.info(f"[BETTING_MARKETS] Final result: {result}")
         return result
 
 
