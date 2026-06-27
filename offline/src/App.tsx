@@ -8,19 +8,19 @@ import {
   refreshFixturesFromApi,
   refreshLiveScoresInto,
   API_BASE,
-  getStandings,
-  getBracket,
+  // getStandings,
+  // getBracket,
   getModelPerformance,
   getTeamProfile,
   getH2h,
   predictMatch,
   mapBackendPrediction,
-  getTournamentSimulation,
-  type GroupStandingTeam,
-  type GroupStandings,
-  type BracketMatch,
-  type BracketData,
-  type TeamSimulationResult
+  // getTournamentSimulation,
+  // type GroupStandingTeam,
+  // type GroupStandings,
+  // type BracketMatch,
+  // type BracketData,
+  // type TeamSimulationResult
 } from './api';
 import { MatchPrediction, TrophyProbability, IntelligenceInsight } from './types';
 import {
@@ -199,7 +199,7 @@ export default function App() {
       if (path === '/favorites') return 'favorites';
       if (path === '/intelligence') return 'intelligence';
       if (path === '/model') return 'model';
-      if (path === '/tournament') return 'tournament';
+      // if (path === '/tournament') return 'tournament'; // HIDE TOURNAMENT ROUTE
     }
     return 'home';
   });
@@ -255,7 +255,7 @@ export default function App() {
           setHasMore(fixtures.length === currentLimit);
 
           // Load Monte Carlo tournament simulation results in the background
-          loadTournamentData();
+          // loadTournamentData(); // HIDE TOURNAMENT LOAD
 
           setMatchError(null);
           setIsLoadingMatches(false);
@@ -465,7 +465,7 @@ export default function App() {
       else if (path === '/favorites') setActiveTab('favorites');
       else if (path === '/intelligence') setActiveTab('intelligence');
       else if (path === '/model') setActiveTab('model');
-      else if (path === '/tournament') setActiveTab('tournament');
+      // else if (path === '/tournament') setActiveTab('tournament'); // HIDE TOURNAMENT ROUTE
       else setActiveTab('home');
       
       try {
@@ -567,34 +567,34 @@ export default function App() {
       { fixture: 47, accuracy: 72.3 }
     ]
   });
-  // Tournament progression state variables
-  const [standings, setStandings] = useState<GroupStandings>({});
-  const [bracket, setBracket] = useState<BracketData>({});
-  const [simulationResults, setSimulationResults] = useState<Record<string, TeamSimulationResult>>({});
-  const [loadingTournament, setLoadingTournament] = useState<boolean>(true);
-  const [tournamentError, setTournamentError] = useState<string | null>(null);
+  // Tournament progression state variables — stubs kept so JSX inside the hidden block compiles
+  // To fully restore: uncomment imports + loadTournamentData + useEffect + nav links
+  const [standings] = useState<Record<string, unknown[]>>({});
+  const [bracket] = useState<Record<string, unknown>>({});
+  const [simulationResults] = useState<Record<string, Record<string, number>>>({});
+  const [loadingTournament] = useState<boolean>(false);
+  const [tournamentError] = useState<string | null>(null);
   const [tournamentSubTab, setTournamentSubTab] = useState<'bracket' | 'standings'>('bracket');
 
-
-  const loadTournamentData = async () => {
-    try {
-      setLoadingTournament(true);
-      const [standingsData, bracketData, simData] = await Promise.all([
-        getStandings(),
-        getBracket(),
-        getTournamentSimulation().catch(() => ({ results: {} }))
-      ]);
-      setStandings(standingsData);
-      setBracket(bracketData);
-      setSimulationResults(simData.results || {});
-      setTournamentError(null);
-    } catch (err) {
-      console.error("Failed to load tournament standings or bracket:", err);
-      setTournamentError("Could not fetch tournament progression data.");
-    } finally {
-      setLoadingTournament(false);
-    }
-  };
+  // const loadTournamentData = async () => {
+  //   try {
+  //     setLoadingTournament(true);
+  //     const [standingsData, bracketData, simData] = await Promise.all([
+  //       getStandings(),
+  //       getBracket(),
+  //       getTournamentSimulation().catch(() => ({ results: {} }))
+  //     ]);
+  //     setStandings(standingsData);
+  //     setBracket(bracketData);
+  //     setSimulationResults(simData.results || {});
+  //     setTournamentError(null);
+  //   } catch (err) {
+  //     console.error("Failed to load tournament standings or bracket:", err);
+  //     setTournamentError("Could not fetch tournament progression data.");
+  //   } finally {
+  //     setLoadingTournament(false);
+  //   }
+  // };
 
 
   const [perfLoading, setPerfLoading] = useState(false);
@@ -612,11 +612,11 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'tournament') {
-      loadTournamentData();
-    }
-  }, [activeTab]);
+  // useEffect(() => {
+  //   if (activeTab === 'tournament') {
+  //     loadTournamentData();
+  //   }
+  // }, [activeTab]);
 
   useEffect(() => {
     if (activeTab === 'model') {
@@ -1214,33 +1214,67 @@ export default function App() {
   }, [isBackendConnected, showTransitionSuccess]);
 
   if (isInitializing) {
+    // Helper to render realistic repeating soccer ball panels dynamically
+    const renderSoccerPanels = (S: number) => {
+      const dx = 1.5 * S; // 22.5 for S=15
+      const dy = Math.sqrt(3) * S; // 25.98 for S=15
+      
+      const isPentagon = (c: number, r: number) => {
+        const pc = ((c % 4) + 4) % 4;
+        const pr = ((r % 2) + 2) % 2;
+        return (pc === 0 && pr === 0) || (pc === 2 && pr === 1);
+      };
+
+      const panels = [];
+      for (let c = -4; c <= 12; c++) {
+        for (let r = -2; r <= 6; r++) {
+          const cx = c * dx;
+          const cy = (c % 2 === 0 ? r : r + 0.5) * dy;
+          const dark = isPentagon(c, r);
+          
+          const pts = [];
+          for (let a = 0; a < 6; a++) {
+            const angle = (a * 60 * Math.PI) / 180;
+            const px = cx + S * Math.cos(angle);
+            const py = cy + S * Math.sin(angle);
+            pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+          }
+          
+          panels.push(
+            <polygon
+              key={`${c}-${r}`}
+              points={pts.join(" ")}
+              fill={dark ? "#09090b" : "#f4f4f5"}
+              stroke="#27272a"
+              strokeWidth="0.8"
+            />
+          );
+        }
+      }
+      return panels;
+    };
+
     return (
       <motion.div
-        className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-6 select-none"
+        className="fixed inset-0 bg-gradient-to-b from-zinc-950 via-black to-zinc-950 z-50 flex flex-col items-center justify-center p-6 select-none overflow-hidden"
         initial={{ opacity: 1 }}
         animate={{ opacity: showTransitionSuccess ? 0 : 1 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Enhanced Background */}
+        {/* Dark Cinematic Stadium Background */}
         <div className="absolute inset-0 pointer-events-none">
-          {/* Breathing radial light */}
-          <div className={`absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(28,219,94,0.04)_0%,rgba(28,219,94,0.02)_30%,transparent_70%)] ${!prefersReducedMotion ? 'animate-pulse' : ''}`} style={{ animationDuration: '8s' }} />
+          {/* Left Floodlight */}
+          <div className="absolute top-[-100px] left-[5%] w-[400px] h-[400px] rounded-full bg-white/[0.015] blur-[100px] animate-[floodlight_12s_ease-in-out_infinite]" />
+          <div className="absolute top-[-30px] left-[12%] w-[100px] h-[100px] bg-white/[0.02] blur-[25px]" />
+          <div className="absolute top-[-10px] left-[14%] w-[30px] h-[30px] bg-white/[0.04] blur-[5px]" />
           
-          {/* Moving grid */}
-          <div className={`absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.004)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.004)_1px,transparent_1px)] bg-[size:40px_40px] ${!prefersReducedMotion ? 'animate-[gridMove_20s_linear_infinite]' : ''}`} style={{ opacity: 0.3 }} />
+          {/* Right Floodlight */}
+          <div className="absolute top-[-100px] right-[5%] w-[400px] h-[400px] rounded-full bg-white/[0.015] blur-[100px] animate-[floodlight_12s_ease-in-out_infinite_6s]" />
+          <div className="absolute top-[-30px] right-[12%] w-[100px] h-[100px] bg-white/[0.02] blur-[25px]" />
+          <div className="absolute top-[-10px] right-[14%] w-[30px] h-[30px] bg-white/[0.04] blur-[5px]" />
           
-          {/* Faint emerald glow */}
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-green-accent/[0.01] to-transparent" />
-          
-          {/* Soft floating particles */}
-          {!prefersReducedMotion && (
-            <>
-              <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-green-accent/20 rounded-full animate-[float_8s_ease-in-out_infinite]" />
-              <div className="absolute top-1/3 right-1/3 w-1.5 h-1.5 bg-green-accent/15 rounded-full animate-[float_10s_ease-in-out_infinite_2s]" />
-              <div className="absolute bottom-1/3 left-1/3 w-1 h-1 bg-green-accent/10 rounded-full animate-[float_12s_ease-in-out_infinite_4s]" />
-              <div className="absolute bottom-1/4 right-1/4 w-0.5 h-0.5 bg-green-accent/25 rounded-full animate-[float_6s_ease-in-out_infinite_1s]" />
-            </>
-          )}
+          {/* Faint ambient pitch glow */}
+          <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-green-accent/[0.02] to-transparent blur-3xl" />
         </div>
 
         <div className="max-w-md w-full space-y-10 text-center relative z-10">
@@ -1254,25 +1288,99 @@ export default function App() {
             </span>
           </div>
 
-          {/* Premium circular loader */}
-          <div className="relative flex items-center justify-center h-28 w-28 mx-auto">
-            {/* Outer glow */}
-            <div className={`absolute inset-0 rounded-full border border-green-accent/10 ${!prefersReducedMotion ? 'animate-[pulse_4s_ease-in-out_infinite]' : ''}`} style={{ boxShadow: '0 0 60px rgba(28,219,94,0.1)' }} />
+          {/* 3D Floating Football Scene */}
+          <div className="relative h-32 w-32 mx-auto flex items-center justify-center my-6">
             
-            {/* Rotating ring */}
-            {!prefersReducedMotion && (
-              <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-green-accent/30 border-r-green-accent/20 animate-[spin_3s_linear_infinite]" />
-            )}
-            
-            {/* Inner expanding/contracting circle */}
-            <div className={`absolute inset-4 rounded-full bg-green-accent/5 ${!prefersReducedMotion ? 'animate-[expandContract_2s_ease-in-out_infinite]' : ''}`} />
-            
-            {/* Center circle with soft pulse */}
-            <div className={`absolute inset-6 rounded-full bg-zinc-950 border border-zinc-900 flex items-center justify-center ${!prefersReducedMotion ? 'animate-[softPulse_3s_ease-in-out_infinite]' : ''}`}>
-              <div className="w-8 h-8 rounded-full bg-green-accent/10 flex items-center justify-center">
-                <div className={`w-4 h-4 rounded-full bg-green-accent ${!prefersReducedMotion ? 'animate-[innerGlow_2s_ease-in-out_infinite]' : ''}`} />
+            {/* Center Circle of Football Pitch */}
+            <div className="absolute bottom-[-16px] left-1/2 -translate-x-1/2 w-44 h-16 pointer-events-none z-0 overflow-hidden">
+              <div 
+                className="w-full h-full border border-white/10 rounded-full relative flex items-center justify-center"
+                style={{
+                  transform: 'rotateX(72deg)',
+                  background: 'radial-gradient(circle, rgba(16,185,129,0.18) 0%, rgba(9,9,11,0.9) 70%)',
+                  boxShadow: 'inset 0 0 25px rgba(16,185,129,0.06)',
+                  backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.003) 0px, rgba(255,255,255,0.003) 2px, transparent 2px, transparent 10px)'
+                }}
+              >
+                {/* Center Spot */}
+                <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                {/* Center Line */}
+                <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/10 -translate-y-1/2" />
               </div>
             </div>
+
+            {/* Subtle green glow coming from beneath the football */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-20 h-6 bg-green-accent/15 rounded-full blur-md pointer-events-none z-0" />
+            
+            {/* Soft circular shadow beneath the football */}
+            <div 
+              className="absolute bottom-[-2px] left-1/2 -translate-x-1/2 w-12 h-2.5 bg-black/75 rounded-full blur-[2px] z-10 origin-center"
+              style={{
+                animation: !prefersReducedMotion ? 'shadowScale 3.5s ease-in-out infinite' : 'none'
+              }}
+            />
+
+            {/* Rotating & Floating 3D Football */}
+            <div 
+              className="relative w-[72px] h-[72px] z-20"
+              style={{
+                animation: !prefersReducedMotion ? 'footballFloat 3.5s ease-in-out infinite' : 'none'
+              }}
+            >
+              <svg 
+                viewBox="0 0 100 100" 
+                className="w-full h-full drop-shadow-[0_8px_16px_rgba(0,0,0,0.65)]"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <clipPath id="ball-clip">
+                    <circle cx="50" cy="50" r="45" />
+                  </clipPath>
+                  <radialGradient id="ball-shading" cx="30%" cy="30%" r="70%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25" />
+                    <stop offset="45%" stop-color="#000000" stop-opacity="0" />
+                    <stop offset="90%" stop-color="#000000" stop-opacity="0.8" />
+                    <stop offset="100%" stop-color="#000000" stop-opacity="0.95" />
+                  </radialGradient>
+                  <radialGradient id="ball-rim-light" cx="50%" cy="50%" r="50%">
+                    <stop offset="90%" stop-color="#10b981" stop-opacity="0" />
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.25" />
+                  </radialGradient>
+                </defs>
+                
+                <g clipPath="url(#ball-clip)">
+                  {/* Leather surface base */}
+                  <circle cx="50" cy="50" r="45" fill="#fafafa" />
+                  
+                  {/* Moving panels simulating rotation */}
+                  <g style={{
+                    animation: !prefersReducedMotion ? 'soccerRotation 9s linear infinite' : 'none'
+                  }}>
+                    {renderSoccerPanels(15)}
+                  </g>
+                  
+                  {/* 3D shadows and lighting */}
+                  <circle cx="50" cy="50" r="45" fill="url(#ball-shading)" />
+                  <circle cx="50" cy="50" r="45" fill="url(#ball-rim-light)" />
+                  
+                  {/* Glossy specular highlight */}
+                  <ellipse cx="32" cy="32" rx="14" ry="7" fill="#ffffff" opacity="0.16" transform="rotate(-30 32 32)" />
+                </g>
+                {/* 3D boundary lines */}
+                <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="0.8" />
+                <circle cx="50" cy="50" r="45" fill="none" stroke="#18181b" strokeWidth="0.8" />
+              </svg>
+            </div>
+
+            {/* Dust/particles floating around the ball */}
+            {!prefersReducedMotion && (
+              <div className="absolute inset-0 pointer-events-none overflow-hidden z-25">
+                <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-green-accent/40 rounded-full animate-[dust_6s_infinite]" style={{ animationDelay: '0s' }} />
+                <div className="absolute top-1/3 right-1/4 w-1.5 h-1.5 bg-white/20 rounded-full animate-[dust_8s_infinite]" style={{ animationDelay: '1.5s' }} />
+                <div className="absolute bottom-1/3 left-1/3 w-1.5 h-1.5 bg-green-accent/30 rounded-full animate-[dust_10s_infinite]" style={{ animationDelay: '3s' }} />
+                <div className="absolute top-1/2 right-1/5 w-1 h-1 bg-white/15 rounded-full animate-[dust_7s_infinite]" style={{ animationDelay: '4.5s' }} />
+              </div>
+            )}
           </div>
 
           {/* Animated status pipeline */}
@@ -1340,25 +1448,26 @@ export default function App() {
             0%, 100% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.02); opacity: 0.95; }
           }
-          @keyframes gridMove {
-            0% { transform: translate(0, 0); }
-            100% { transform: translate(40px, 40px); }
+          @keyframes floodlight {
+            0%, 100% { opacity: 0.012; }
+            50% { opacity: 0.022; }
           }
-          @keyframes float {
-            0%, 100% { transform: translate(0, 0); opacity: 0.1; }
-            50% { transform: translate(20px, -20px); opacity: 0.3; }
+          @keyframes soccerRotation {
+            from { transform: translateX(0px); }
+            to { transform: translateX(-90px); }
           }
-          @keyframes expandContract {
-            0%, 100% { transform: scale(1); opacity: 0.05; }
-            50% { transform: scale(1.1); opacity: 0.08; }
+          @keyframes footballFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
           }
-          @keyframes softPulse {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(28,219,94,0.05); }
-            50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(28,219,94,0.1); }
+          @keyframes shadowScale {
+            0%, 100% { transform: scale(1) translateX(-50%); opacity: 0.75; }
+            50% { transform: scale(0.82) translateX(-50%); opacity: 0.45; }
           }
-          @keyframes innerGlow {
-            0%, 100% { opacity: 0.6; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.2); }
+          @keyframes dust {
+            0% { transform: translate(0, 0) scale(0.8); opacity: 0; }
+            50% { transform: translate(6px, -12px) scale(1.2); opacity: 0.4; }
+            100% { transform: translate(12px, -24px) scale(0.8); opacity: 0; }
           }
         `}</style>
       </motion.div>
@@ -1401,12 +1510,13 @@ export default function App() {
           >
             Intelligence
           </button>
-          <button
+          {/* Tournament tab temporarily hidden - can be re-enabled when tab is restored */}
+          {/* <button
             onClick={() => navigateTo('tournament')}
             className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'tournament' ? 'text-white border-green-accent' : 'border-transparent'}`}
           >
             Tournament
-          </button>
+          </button> */}
           <button
             onClick={() => navigateTo('model')}
             className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'model' ? 'text-white border-green-accent' : 'border-transparent'}`}
@@ -2376,7 +2486,8 @@ export default function App() {
 
             </div>
 
-            {/* ROAD TO THE TROPHY SIDEBAR (Column size 4) */}
+            {/* ROAD TO THE TROPHY SIDEBAR — temporarily hidden alongside Tournament tab */}
+            {(false) && (
             <div id="road-to-the-trophy" className="lg:col-span-4 border-l border-zinc-950 lg:pl-10 space-y-8 scroll-mt-24">
               
               <div className="border-b border-zinc-900 pb-4">
@@ -2433,6 +2544,7 @@ export default function App() {
               </div>
 
             </div>
+            )}
 
             </motion.div>
             </div>
@@ -3826,8 +3938,8 @@ export default function App() {
           </div>
         )}
 
-        {/* TOURNAMENT PROGRESSION VIEW */}
-        {activeTab === 'tournament' && (
+        {/* TOURNAMENT PROGRESSION VIEW — temporarily hidden; set to (true &&) to restore */}
+        {(false) && (
           <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-10 md:py-16">
             <div className="space-y-8 animate-fade-in">
               
@@ -3945,7 +4057,7 @@ export default function App() {
                           { key: 'SEMI_FINALS', label: 'Semi Finals', count: 2 },
                           { key: 'FINAL', label: 'Finals & Playoffs', count: 2 }
                         ].map((stage) => {
-                          let matches: BracketMatch[] = bracket[stage.key] || [];
+                          let matches: any[] = bracket[stage.key] || [];
                           if (stage.key === 'FINAL') {
                             const thirdPlace = bracket['THIRD_PLACE'] || [];
                             matches = [...matches, ...thirdPlace];
@@ -4090,7 +4202,7 @@ export default function App() {
               <span onClick={() => navigateTo('predictions')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Predictions</span>
               <span onClick={() => navigateTo('favorites')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Favorites</span>
               <span onClick={() => navigateTo('intelligence')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Intelligence Hub</span>
-              <span onClick={() => navigateTo('tournament')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Tournament</span>
+              {/* <span onClick={() => navigateTo('tournament')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Tournament</span> */}
               <span onClick={() => navigateTo('model')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">The Model</span>
             </div>
           </div>
@@ -4484,42 +4596,43 @@ export default function App() {
           }
         };
 
-        const findStanding = (teamName: string) => {
-          for (const [grp, teams] of Object.entries(standings)) {
-            const found = (teams as GroupStandingTeam[]).find(t => t.name.toLowerCase() === teamName.toLowerCase());
-            if (found) return { group: grp, position: found.position, points: found.points };
-          }
-          return null;
-        };
-
-        const isKnockout = !match.stage.toLowerCase().includes("group stage");
-        const simA = simulationResults[match.teamA];
-        const simB = simulationResults[match.teamB];
-
-        let qualA = isKnockout ? Math.round(probA + 0.5 * probD) : (simA ? Math.round(simA.qualify_probability ?? simA.r32) : 50);
-        let qualB = isKnockout ? 100 - qualA : (simB ? Math.round(simB.qualify_probability ?? simB.r32) : 50);
-
-        const standingA = findStanding(match.teamA);
-        const standingB = findStanding(match.teamB);
-
-        const groupPosA = isKnockout
-          ? "N/A (Knockout stage)"
-          : (standingA
-            ? `Currently ${standingA.position === 1 ? '1st' : standingA.position === 2 ? '2nd' : standingA.position === 3 ? '3rd' : '4th'} (${standingA.points} pts)`
-            : (simA ? `Projected Group Qualification: ${Math.round(simA.qualify_probability ?? simA.r32)}%` : "TBD"));
-
-        const groupPosB = isKnockout
-          ? "N/A (Knockout stage)"
-          : (standingB
-            ? `Currently ${standingB.position === 1 ? '1st' : standingB.position === 2 ? '2nd' : standingB.position === 3 ? '3rd' : '4th'} (${standingB.points} pts)`
-            : (simB ? `Projected Group Qualification: ${Math.round(simB.qualify_probability ?? simB.r32)}%` : "TBD"));
-
-        const tournamentAdvA = simA
-          ? `R16: ${Math.round(simA.r16)}% | QF: ${Math.round(simA.qf)}% | SF: ${Math.round(simA.sf)}% | Winner: ${Math.round(simA.winner)}%`
-          : "TBD";
-        const tournamentAdvB = simB
-          ? `R16: ${Math.round(simB.r16)}% | QF: ${Math.round(simB.qf)}% | SF: ${Math.round(simB.sf)}% | Winner: ${Math.round(simB.winner)}%`
-          : "TBD";
+        // Tournament impact helpers — temporarily commented out
+        // const findStanding = (teamName: string) => {
+        //   for (const [grp, teams] of Object.entries(standings)) {
+        //     const found = (teams as GroupStandingTeam[]).find(t => t.name.toLowerCase() === teamName.toLowerCase());
+        //     if (found) return { group: grp, position: found.position, points: found.points };
+        //   }
+        //   return null;
+        // };
+        //
+        // const isKnockout = !match.stage.toLowerCase().includes("group stage");
+        // const simA = simulationResults[match.teamA];
+        // const simB = simulationResults[match.teamB];
+        //
+        // let qualA = isKnockout ? Math.round(probA + 0.5 * probD) : (simA ? Math.round(simA.qualify_probability ?? simA.r32) : 50);
+        // let qualB = isKnockout ? 100 - qualA : (simB ? Math.round(simB.qualify_probability ?? simB.r32) : 50);
+        //
+        // const standingA = findStanding(match.teamA);
+        // const standingB = findStanding(match.teamB);
+        //
+        // const groupPosA = isKnockout
+        //   ? "N/A (Knockout stage)"
+        //   : (standingA
+        //     ? `Currently ${standingA.position === 1 ? '1st' : standingA.position === 2 ? '2nd' : standingA.position === 3 ? '3rd' : '4th'} (${standingA.points} pts)`
+        //     : (simA ? `Projected Group Qualification: ${Math.round(simA.qualify_probability ?? simA.r32)}%` : "TBD"));
+        //
+        // const groupPosB = isKnockout
+        //   ? "N/A (Knockout stage)"
+        //   : (standingB
+        //     ? `Currently ${standingB.position === 1 ? '1st' : standingB.position === 2 ? '2nd' : standingB.position === 3 ? '3rd' : '4th'} (${standingB.points} pts)`
+        //     : (simB ? `Projected Group Qualification: ${Math.round(simB.qualify_probability ?? simB.r32)}%` : "TBD"));
+        //
+        // const tournamentAdvA = simA
+        //   ? `R16: ${Math.round(simA.r16)}% | QF: ${Math.round(simA.qf)}% | SF: ${Math.round(simA.sf)}% | Winner: ${Math.round(simA.winner)}%`
+        //   : "TBD";
+        // const tournamentAdvB = simB
+        //   ? `R16: ${Math.round(simB.r16)}% | QF: ${Math.round(simB.qf)}% | SF: ${Math.round(simB.sf)}% | Winner: ${Math.round(simB.winner)}%`
+        //   : "TBD";
 
         return (
           <div id="match-analysis-backdrop" className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end" onClick={() => setSelectedMatch(null)}>
@@ -5073,8 +5186,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* SECTION 12 — TOURNAMENT IMPACT */}
-                {!match.isLiveData ? renderPredictionLoading("Tournament Impact Projections") : (
+                {/* SECTION 12 — TOURNAMENT IMPACT — temporarily hidden */}
+                {/* {!match.isLiveData ? renderPredictionLoading("Tournament Impact Projections") : (
                   <div className="space-y-2 p-4 bg-zinc-950 border border-zinc-900 rounded font-mono text-xs">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 border-b border-zinc-900 pb-2">
                       SECTION 12 — Tournament Impact &amp; Bracket Projections
@@ -5088,7 +5201,7 @@ export default function App() {
                       <div className="flex justify-between"><span>Tournament Advancement ({match.teamBCode}):</span> <span className="text-zinc-300">{tournamentAdvB}</span></div>
                     </div>
                   </div>
-                )}
+                )} */}
 
                 {/* SECTION 13 — HISTORICAL DATA */}
                 <div className="space-y-3 p-4 bg-zinc-950 border border-zinc-900 rounded text-xs">
