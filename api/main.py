@@ -69,16 +69,18 @@ def get_allowed_origins():
         default_origins.append(f"https://{vercel_domain}")
         default_origins.append(f"https://www.{vercel_domain}")
     
-    # Allow all Vercel preview deployments
-    default_origins.append("https://*.vercel.app")
-    
     return default_origins
 
 ALLOWED_ORIGINS = get_allowed_origins()
 
+# Regex to match all Vercel preview deployments
+# Matches: https://*.vercel.app and https://*.vercel.app/*
+ALLOWED_ORIGIN_REGEX = r"https://.*\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],

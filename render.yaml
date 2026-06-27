@@ -13,7 +13,7 @@ services:
       - key: PORT
         value: 8000
       - key: VERCEL_DOMAIN
-        value: your-frontend-domain.vercel.app
+        value: offline-world-cup-predictor.vercel.app
       - key: PYTHONUNBUFFERED
         value: "1"
     healthCheckPath: /health
