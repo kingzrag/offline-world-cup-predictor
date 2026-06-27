@@ -41,6 +41,7 @@ import { formatXG } from './xgUtils';
 import { motion } from 'motion/react';
 import { Canvas } from '@react-three/fiber';
 import { Football3D } from './components/Football3D';
+import stadiumBg from './assets/images/football2.png';
 import { BestPredictionsCarousel } from './components/BestPredictionsCarousel';
 import { checkHealth } from './api';
 import {
@@ -572,8 +573,8 @@ export default function App() {
   });
   // Tournament progression state variables — stubs kept so JSX inside the hidden block compiles
   // To fully restore: uncomment imports + loadTournamentData + useEffect + nav links
-  const [standings] = useState<Record<string, unknown[]>>({});
-  const [bracket] = useState<Record<string, unknown>>({});
+  const [standings] = useState<Record<string, any[]>>({});
+  const [bracket] = useState<Record<string, any>>({});;
   const [simulationResults] = useState<Record<string, Record<string, number>>>({});
   const [loadingTournament] = useState<boolean>(false);
   const [tournamentError] = useState<string | null>(null);
@@ -1275,35 +1276,57 @@ export default function App() {
 
     return (
       <motion.div
-        className="fixed inset-0 bg-gradient-to-b from-zinc-950 via-black to-zinc-950 z-50 flex flex-col items-center justify-center p-6 select-none overflow-hidden"
+        className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 select-none overflow-hidden"
+        style={{ background: '#050508' }}
         initial={{ opacity: 1 }}
         animate={{ opacity: showTransitionSuccess ? 0 : 1 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Dark Cinematic Stadium Background - Enhanced */}
+        {/* ── CINEMATIC STADIUM BACKGROUND ─────────────────────────────── */}
         <div className="absolute inset-0 pointer-events-none">
-          {/* Soft vignette around edges */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.6)_100%)]" />
-          
-          {/* Left Floodlight - Enhanced */}
-          <div className="absolute top-[-150px] left-[3%] w-[500px] h-[500px] rounded-full bg-white/[0.02] blur-[120px] animate-[floodlight_12s_ease-in-out_infinite]" />
-          <div className="absolute top-[-40px] left-[10%] w-[120px] h-[120px] bg-white/[0.025] blur-[30px]" />
-          <div className="absolute top-[-15px] left-[12%] w-[40px] h-[40px] bg-white/[0.05] blur-[6px]" />
-          
-          {/* Right Floodlight - Enhanced */}
-          <div className="absolute top-[-150px] right-[3%] w-[500px] h-[500px] rounded-full bg-white/[0.02] blur-[120px] animate-[floodlight_12s_ease-in-out_infinite_6s]" />
-          <div className="absolute top-[-40px] right-[10%] w-[120px] h-[120px] bg-white/[0.025] blur-[30px]" />
-          <div className="absolute top-[-15px] right-[12%] w-[40px] h-[40px] bg-white/[0.05] blur-[6px]" />
-          
-          {/* Enhanced ambient pitch glow */}
-          <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-green-accent/[0.03] to-transparent blur-3xl" />
-          
-          {/* Subtle dust particles in background */}
+
+          {/* Real night stadium photograph - blurred + darkened */}
+          <img
+            src={stadiumBg}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{
+              filter: 'blur(3px) brightness(0.22) saturate(0.7)',
+              transform: 'scale(1.05)',
+              objectPosition: 'center 40%',
+            }}
+          />
+
+          {/* Deep dark overlay — ensures cinematic black feel */}
+          <div className="absolute inset-0" style={{ background: 'rgba(2,4,8,0.72)' }} />
+
+          {/* Vignette — edges darker than center */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_70%_at_50%_50%,transparent_30%,rgba(0,0,0,0.75)_100%)]" />
+
+          {/* Floodlight bloom — upper corners, warm white */}
+          <div className="absolute top-[-80px] left-[5%] w-[420px] h-[420px] rounded-full animate-[floodlight_14s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgba(255,252,240,0.055) 0%, transparent 70%)' }} />
+          <div className="absolute top-[-80px] right-[5%] w-[420px] h-[420px] rounded-full animate-[floodlight_14s_ease-in-out_infinite_7s]" style={{ background: 'radial-gradient(circle, rgba(255,252,240,0.055) 0%, transparent 70%)' }} />
+
+          {/* Floodlight source points */}
+          <div className="absolute top-[2px] left-[11%] w-[5px] h-[5px] rounded-full bg-white/30 blur-[2px]" />
+          <div className="absolute top-[2px] right-[11%] w-[5px] h-[5px] rounded-full bg-white/30 blur-[2px]" />
+
+          {/* Pitch green ambient glow at bottom */}
+          <div className="absolute bottom-0 inset-x-0 h-[40%]" style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 100%, rgba(16,185,129,0.07) 0%, transparent 80%)' }} />
+
+          {/* Subtle ground fog layer */}
+          <div className="absolute bottom-0 inset-x-0 h-[25%]" style={{ background: 'linear-gradient(to top, rgba(16,185,129,0.04) 0%, transparent 100%)', filter: 'blur(20px)' }} />
+
+          {/* Floating dust particles */}
           {!prefersReducedMotion && (
             <>
-              <div className="absolute top-1/4 left-1/5 w-1 h-1 bg-white/10 rounded-full animate-[dust_12s_infinite]" style={{ animationDelay: '0s' }} />
-              <div className="absolute top-1/3 right-1/4 w-1.5 h-1.5 bg-green-accent/20 rounded-full animate-[dust_15s_infinite]" style={{ animationDelay: '2s' }} />
-              <div className="absolute bottom-1/4 left-1/3 w-1 h-1 bg-white/8 rounded-full animate-[dust_18s_infinite]" style={{ animationDelay: '4s' }} />
+              <div className="absolute top-1/4 left-[18%] w-[3px] h-[3px] bg-white/15 rounded-full animate-[dust_14s_infinite]" style={{ animationDelay: '0s' }} />
+              <div className="absolute top-[38%] right-[22%] w-[2px] h-[2px] bg-white/10 rounded-full animate-[dust_18s_infinite]" style={{ animationDelay: '3s' }} />
+              <div className="absolute top-[55%] left-[30%] w-[2px] h-[2px] bg-green-accent/25 rounded-full animate-[dust_16s_infinite]" style={{ animationDelay: '6s' }} />
+              <div className="absolute top-[32%] right-[35%] w-[3px] h-[3px] bg-white/12 rounded-full animate-[dust_20s_infinite]" style={{ animationDelay: '1.5s' }} />
+              <div className="absolute top-[62%] left-[15%] w-[2px] h-[2px] bg-green-accent/20 rounded-full animate-[dust_22s_infinite]" style={{ animationDelay: '9s' }} />
+              <div className="absolute top-[28%] right-[12%] w-[2px] h-[2px] bg-white/14 rounded-full animate-[dust_17s_infinite]" style={{ animationDelay: '4.5s' }} />
             </>
           )}
         </div>
@@ -1351,16 +1374,15 @@ export default function App() {
               }}
             />
 
-            {/* 3D Football Canvas - 250-300% larger */}
-            <div className="relative w-48 h-48 z-20">
+            {/* 3D Football Canvas — PBR with stadium lighting */}
+            <div className="relative w-56 h-56 z-20">
               <Canvas
-                camera={{ position: [0, 0, 3], fov: 45 }}
-                style={{ width: '100%', height: '100%' }}
+                camera={{ position: [0, 0, 2.8], fov: 40 }}
+                style={{ width: '100%', height: '100%', background: 'transparent' }}
                 dpr={[1, 2]}
+                gl={{ antialias: true, alpha: true }}
+                shadows
               >
-                <ambientLight intensity={0.4} />
-                <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
-                <pointLight position={[-5, -5, -5]} intensity={0.3} color="#10b981" />
                 <Football3D />
               </Canvas>
             </div>
@@ -2337,7 +2359,7 @@ export default function App() {
         )}
 
         {/* Legacy Predictions block disabled */}
-        {activeTab === 'predictions_old_disabled' && (
+        {(false) && (
           <div className="w-full flex flex-col">
             <div className="max-w-7xl mx-auto px-6 md:px-12 w-full py-10 md:py-16">
             <motion.div 
