@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from database.connection import get_db
@@ -19,7 +19,7 @@ def read_injuries(
     Retrieves current active injury table records.
     """
     logger.info("Executing GET /injuries query filters...")
-    query = db.query(Injury)
+    query = db.query(Injury).options(joinedload(Injury.team))
 
     if team_id:
         query = query.filter(Injury.team_id == team_id)

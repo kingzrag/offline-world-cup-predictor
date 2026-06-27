@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { motion, type PanInfo } from "motion/react";
-import { AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import type { MatchPrediction } from "../types";
 import { getFlag } from "../flagUtils";
 import { formatSmartKickoffLocal } from "../dateTimeUtils";
@@ -8,6 +8,39 @@ import { formatSmartKickoffLocal } from "../dateTimeUtils";
 const TRANSITION = { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const };
 const DRAG_THRESHOLD = 48;
 const VELOCITY_THRESHOLD = 400;
+
+// Skeleton loader for match cards
+function MatchCardSkeleton() {
+  return (
+    <div className="bg-zinc-950 border border-zinc-900 rounded-lg px-7 py-6 flex flex-col justify-between min-h-[400px] h-full">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 mb-1">
+        <div className="flex flex-col items-start gap-1.5 min-w-0 flex-1">
+          <div className="h-3 w-20 bg-zinc-900 rounded animate-pulse" />
+          <div className="h-4 w-16 bg-zinc-900 rounded animate-pulse" />
+        </div>
+        <div className="h-4 w-24 bg-zinc-900 rounded animate-pulse shrink-0" />
+      </div>
+
+      <div className="flex-1 flex flex-col justify-center my-3 min-h-0 space-y-2.5">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-zinc-900 rounded animate-pulse shrink-0" />
+          <div className="h-6 w-32 bg-zinc-900 rounded animate-pulse" />
+        </div>
+        <div className="h-4 w-12 bg-zinc-900 rounded animate-pulse ml-11" />
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-zinc-900 rounded animate-pulse shrink-0" />
+          <div className="h-6 w-32 bg-zinc-900 rounded animate-pulse" />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="h-2 w-full bg-zinc-900 rounded animate-pulse" />
+        <div className="h-2 w-3/4 bg-zinc-900 rounded animate-pulse" />
+        <div className="h-8 w-full bg-zinc-900 rounded animate-pulse mt-4" />
+      </div>
+    </div>
+  );
+}
 
 function getLoopOffset(index: number, active: number, total: number): number {
   if (total <= 0) return 0;
@@ -325,26 +358,7 @@ export function BestPredictionsCarousel({
       {isLoading ? (
         <div className="flex gap-6 justify-center pb-8">
           {Array.from({ length: 3 }).map((_, idx) => (
-            <div
-              key={idx}
-              className={`shrink-0 bg-zinc-950 border border-zinc-900 rounded-lg p-7 flex flex-col justify-between min-h-[400px] animate-pulse ${
-                idx === 1 ? "w-[36%] opacity-100" : "w-[30%] opacity-70 hidden lg:flex"
-              } ${idx === 0 ? "lg:flex" : ""}`}
-            >
-              <div className="flex justify-between items-center">
-                <div className="h-3 bg-zinc-900 rounded w-20" />
-                <div className="h-3 bg-zinc-900 rounded w-16" />
-              </div>
-              <div className="space-y-4 my-4">
-                <div className="h-6 bg-zinc-900 rounded w-3/4" />
-                <div className="h-3 bg-zinc-900 rounded w-1/4" />
-                <div className="h-6 bg-zinc-900 rounded w-2/3" />
-              </div>
-              <div className="space-y-3">
-                <div className="h-2 bg-zinc-900 rounded w-full" />
-                <div className="h-3 bg-zinc-900 rounded w-1/3" />
-              </div>
-            </div>
+            <MatchCardSkeleton key={idx} />
           ))}
         </div>
       ) : error ? (

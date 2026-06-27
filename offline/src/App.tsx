@@ -210,6 +210,11 @@ export default function App() {
   const [matchError, setMatchError] = useState<string | null>(null);
   const [showHistorical, setShowHistorical] = useState<boolean>(false);
 
+  // Infinite scrolling state
+  const [currentLimit, setCurrentLimit] = useState<number>(30);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+
   // Startup reliability / retry states
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [isRetrying, setIsRetrying] = useState<boolean>(false);
@@ -234,11 +239,12 @@ export default function App() {
         try {
           // ── Phase 1: render fixtures instantly (no ML inference) ────────────
           console.log("[App] Phase 1 → loading fixtures instantly...");
-          const fixtures = await loadFixturesInstant(undefined, showHistorical, signal);
+          const fixtures = await loadFixturesInstant(undefined, showHistorical, signal, currentLimit);
           if (signal.aborted) return;
 
           console.log(`[App] Phase 1 complete: ${fixtures.length} fixtures rendered instantly.`);
           setSourceMatches(sortSourceMatches(fixtures));
+          setHasMore(fixtures.length === currentLimit);
           
           // Load Monte Carlo tournament simulation results in the background
           loadTournamentData();
@@ -305,7 +311,54 @@ export default function App() {
     return () => {
       controller.abort();
     };
-  }, [showHistorical, retryTrigger]);
+  }, [showHistorical, retryTrigger, currentLimit]);
+
+  // Load more fixtures function
+  const loadMoreFixtures = async () => {
+    if (isLoadingMore || !hasMore) return;
+    
+    setIsLoadingMore(true);
+    const newLimit = currentLimit + 30;
+    
+    try {
+      const controller = new AbortController();
+      const signal = controller.signal;
+      const fixtures = await loadFixturesInstant(undefined, showHistorical, signal, newLimit);
+      
+      setSourceMatches(sortSourceMatches(fixtures));
+      setCurrentLimit(newLimit);
+      setHasMore(fixtures.length === newLimit);
+      
+      console.log(`[App] Loaded more fixtures: ${fixtures.length} total`);
+      
+      // Prefetch next page in background if there are more fixtures
+      if (fixtures.length === newLimit) {
+        setTimeout(() => {
+          prefetchNextPage(newLimit + 30);
+        }, 2000); // Prefetch after 2 seconds
+      }
+    } catch (err) {
+      console.error("[App] Failed to load more fixtures:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Background prefetch function
+  const prefetchNextPage = async (prefetchLimit: number) => {
+    if (!hasMore) return;
+    
+    console.log(`[App] Prefetching next page: ${prefetchLimit} fixtures`);
+    try {
+      const controller = new AbortController();
+      const signal = controller.signal;
+      const fixtures = await loadFixturesInstant(undefined, showHistorical, signal, prefetchLimit);
+      console.log(`[App] Prefetch complete: ${fixtures.length} fixtures ready`);
+      // Data is cached in the API layer, ready for instant display
+    } catch (err) {
+      console.warn("[App] Prefetch failed (will load on demand):", err);
+    }
+  };
 
   const sourceMatchesRef = useRef(sourceMatches);
   sourceMatchesRef.current = sourceMatches;
@@ -442,10 +495,20 @@ export default function App() {
   useEffect(() => {
     const handleScroll = () => {
       setScrollY(window.scrollY);
+      
+      // Infinite scroll detection
+      const scrollHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.scrollY;
+      const clientHeight = window.innerHeight;
+      
+      // Load more when user is 200px from bottom
+      if (scrollHeight - scrollTop - clientHeight < 200 && hasMore && !isLoadingMore && activeTab === 'home') {
+        loadMoreFixtures();
+      }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [hasMore, isLoadingMore, activeTab]);
 
   // Search Modal & Index State
   const [searchQuery, setSearchQuery] = useState('');
@@ -2075,7 +2138,37 @@ export default function App() {
                 ))}
               </div>
 
+              {/* Load More Button */}
+              {hasMore && (
+                <div className="flex justify-center pt-8">
+                  <button
+                    onClick={loadMoreFixtures}
+                    disabled={isLoadingMore}
+                    className="px-8 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs font-mono tracking-widest uppercase transition-all duration-300 border border-zinc-800 hover:border-zinc-700 rounded flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Loading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Load More Matches</span>
+                        <ChevronDown className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
 
+              {/* End of matches indicator */}
+              {!hasMore && sourceMatches.length > 0 && (
+                <div className="flex justify-center pt-8">
+                  <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                    All matches loaded
+                  </div>
+                </div>
+              )}
 
             </div>
 

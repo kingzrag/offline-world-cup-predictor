@@ -46,4 +46,4 @@ USER appuser
 EXPOSE 8000
 
 # Run FastAPI using production-ready uvicorn configurations, dynamically binding to the port set by Railway.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 120 --limit-concurrency 100"]

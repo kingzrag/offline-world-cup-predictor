@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/main.py"
+    }
+  ],
+  "env": {
+    "DATABASE_URL": "@database_url",
+    "PORT": "8000",
+    "VERCEL_DOMAIN": "your-frontend-domain.vercel.app",
+    "PYTHONUNBUFFERED": "1"
+  }
+}

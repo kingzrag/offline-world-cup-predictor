@@ -19,10 +19,10 @@ class Match(Base):
         index=True,
     )
     home_team_id = Column(
-        Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True
     )
     away_team_id = Column(
-        Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True
     )
     utc_date = Column(DateTime, nullable=False, index=True)
     status = Column(

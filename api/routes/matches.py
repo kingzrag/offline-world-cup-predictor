@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, date, timezone
 
@@ -22,7 +22,11 @@ def read_matches(
     Retrieves match fixtures with complete query filters.
     """
     logger.info("Executing GET /matches query filters...")
-    query = db.query(Match)
+    query = db.query(Match).options(
+        joinedload(Match.competition),
+        joinedload(Match.home_team),
+        joinedload(Match.away_team)
+    )
 
     if competition_id:
         query = query.filter(Match.competition_id == competition_id)

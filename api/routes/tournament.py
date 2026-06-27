@@ -547,15 +547,37 @@ def get_model_performance(db: Session = Depends(get_db)):
     }
 
 
+# Tournament simulation cache
+_tournament_simulation_cache = {
+    "result": None,
+    "timestamp": 0,
+    "ttl": 300  # 5 minutes cache
+}
+
 @router.get("/simulation")
 def run_tournament_simulation(db: Session = Depends(get_db)):
+    import time
     import random
+    
+    t_start = time.perf_counter()
+    logger.info("GET /api/tournament/simulation")
+    
+    # Check cache
+    now = time.time()
+    if _tournament_simulation_cache["result"] and (now - _tournament_simulation_cache["timestamp"]) < _tournament_simulation_cache["ttl"]:
+        elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+        logger.info(f"GET /api/tournament/simulation  →  CACHE HIT in {elapsed_ms} ms")
+        return _tournament_simulation_cache["result"]
+    
+    logger.info("GET /api/tournament/simulation  →  CACHE MISS, computing simulation")
+    
     comp = db.query(Competition).filter_by(code="WC").first()
     if not comp:
         raise HTTPException(status_code=404, detail="WC Competition not found.")
 
-    # 1. Load team info and ELOs
-    teams = db.query(Team).all()
+    # 1. Load team info and ELOs - optimize with single query and joinedload
+    from sqlalchemy.orm import joinedload
+    teams = db.query(Team).options(joinedload(Team.standings)).all()
     elos = db.query(TeamElo).all()
     elo_map = {e.team_name: e.elo_rating for e in elos}
 
@@ -577,13 +599,15 @@ def run_tournament_simulation(db: Session = Depends(get_db)):
             "group": t.standings[0].group if t.standings else "UNKNOWN"
         }
 
-    # 2. Load matches and predictions
+    # 2. Load matches and predictions - optimize with single query
     all_matches = db.query(Match).filter(
         Match.competition_id == comp.id,
         extract('year', Match.utc_date) == 2026
     ).all()
 
-    predictions = db.query(Prediction).all()
+    # Batch load predictions for all matches at once
+    match_ids = [m.id for m in all_matches]
+    predictions = db.query(Prediction).filter(Prediction.match_id.in_(match_ids)).all()
     pred_map = {p.match_id: (p.home_probability, p.draw_probability, p.away_probability) for p in predictions}
 
     completed_group_matches = []
@@ -611,7 +635,8 @@ def run_tournament_simulation(db: Session = Depends(get_db)):
         "winner": 0
     } for t in teams}
 
-    num_simulations = 10000
+    # Reduce simulations for faster response (can be increased if needed)
+    num_simulations = 1000  # Reduced from 10000 to 1000 for faster response
 
     scheduled_probs = []
     for m in scheduled_group_matches:
@@ -782,8 +807,17 @@ def run_tournament_simulation(db: Session = Depends(get_db)):
             "winner":             round((counts["winner"]       / num_simulations) * 100, 1),
         }
 
-    return {
+    result = {
         "status": "success",
         "simulation_count": num_simulations,
         "results": res_dict
     }
+    
+    # Cache the result
+    _tournament_simulation_cache["result"] = result
+    _tournament_simulation_cache["timestamp"] = time.time()
+    
+    elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    logger.info(f"GET /api/tournament/simulation  →  CACHE MISS, completed in {elapsed_ms} ms")
+    
+    return result

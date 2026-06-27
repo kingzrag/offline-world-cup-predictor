@@ -25,6 +25,7 @@ All metrics use safe defaults when data is missing.
 """
 
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -49,6 +50,10 @@ _SQUAD_SIZE = 23  # typical national team squad size
 _RECENT_MATCHES = 5  # number of recent matches for form calculations
 _FORM_WEIGHTS = [0.35, 0.25, 0.20, 0.12, 0.08]  # most recent = highest weight
 
+# Intelligence cache: match_id -> (intelligence_dict, expiry_timestamp)
+_intelligence_cache = {}
+_intelligence_cache_ttl = 300  # 5 minutes cache for intelligence calculations
+
 
 class IntelligenceService:
     """
@@ -68,11 +73,31 @@ class IntelligenceService:
         Calculate all 16 intelligence features for a given match.
         Returns a MatchIntelligence dataclass populated from DB data.
         """
+        t_start = time.perf_counter()
+        
+        # Check cache first
+        cache_key = match.id
+        cached_entry = _intelligence_cache.get(cache_key)
+        now = time.time()
+        
+        if cached_entry:
+            cached_intelligence, expiry = cached_entry
+            if now <= expiry:
+                elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+                logger.info(f"Intelligence cache HIT for match {match.id} in {elapsed_ms} ms")
+                return cached_intelligence
+        
         logger.info(
             f"Calculating intelligence for match {match.id}: "
             f"{getattr(match.home_team, 'name', '?')} vs "
             f"{getattr(match.away_team, 'name', '?')}"
         )
+
+        # Pre-load match statistics for recent matches to avoid N+1 queries
+        recent_matches_home = self._get_recent_matches(db, match.home_team_id, match.utc_date)
+        recent_matches_away = self._get_recent_matches(db, match.away_team_id, match.utc_date)
+        all_recent_match_ids = [m.id for m in recent_matches_home + recent_matches_away + [match]]
+        stats_cache = self._batch_get_match_stats(db, all_recent_match_ids)
 
         intelligence = MatchIntelligence(
             match_id=match.id,
@@ -85,56 +110,56 @@ class IntelligenceService:
 
         try:
             # 1. Attacking Strength
-            home_atk, away_atk = self._calc_attacking_strength(db, match)
+            home_atk, away_atk = self._calc_attacking_strength(db, match, stats_cache)
             intelligence.home_attacking_strength = home_atk
             intelligence.away_attacking_strength = away_atk
             if home_atk > 0 or away_atk > 0:
                 metrics_computed += 1
 
             # 2. Defensive Strength
-            home_def, away_def = self._calc_defensive_strength(db, match)
+            home_def, away_def = self._calc_defensive_strength(db, match, stats_cache)
             intelligence.home_defensive_strength = home_def
             intelligence.away_defensive_strength = away_def
             if home_def > 0 or away_def > 0:
                 metrics_computed += 1
 
             # 3. Midfield Control
-            home_mid, away_mid = self._calc_midfield_control(db, match)
+            home_mid, away_mid = self._calc_midfield_control(db, match, stats_cache)
             intelligence.home_midfield_control = home_mid
             intelligence.away_midfield_control = away_mid
             if home_mid > 0 or away_mid > 0:
                 metrics_computed += 1
 
             # 4. Goalkeeper Performance
-            home_gk, away_gk = self._calc_goalkeeper_performance(db, match)
+            home_gk, away_gk = self._calc_goalkeeper_performance(db, match, stats_cache)
             intelligence.home_goalkeeper_performance = home_gk
             intelligence.away_goalkeeper_performance = away_gk
             if home_gk > 0 or away_gk > 0:
                 metrics_computed += 1
 
             # 5. Passing Dominance
-            home_pass, away_pass = self._calc_passing_dominance(db, match)
+            home_pass, away_pass = self._calc_passing_dominance(db, match, stats_cache)
             intelligence.home_passing_dominance = home_pass
             intelligence.away_passing_dominance = away_pass
             if home_pass > 0 or away_pass > 0:
                 metrics_computed += 1
 
             # 6. Pressing Intensity
-            home_press, away_press = self._calc_pressing_intensity(db, match)
+            home_press, away_press = self._calc_pressing_intensity(db, match, stats_cache)
             intelligence.home_pressing_intensity = home_press
             intelligence.away_pressing_intensity = away_press
             if home_press > 0 or away_press > 0:
                 metrics_computed += 1
 
             # 7. Set-Piece Threat
-            home_sp, away_sp = self._calc_set_piece_threat(db, match)
+            home_sp, away_sp = self._calc_set_piece_threat(db, match, stats_cache)
             intelligence.home_set_piece_threat = home_sp
             intelligence.away_set_piece_threat = away_sp
             if home_sp > 0 or away_sp > 0:
                 metrics_computed += 1
 
             # 8. Discipline Score
-            home_disc, away_disc = self._calc_discipline_score(db, match)
+            home_disc, away_disc = self._calc_discipline_score(db, match, stats_cache)
             intelligence.home_discipline_score = home_disc
             intelligence.away_discipline_score = away_disc
             if home_disc > 0 or away_disc > 0:
@@ -148,7 +173,7 @@ class IntelligenceService:
                 metrics_computed += 1
 
             # 10. Substitution Impact
-            home_sub, away_sub = self._calc_substitution_impact(db, match)
+            home_sub, away_sub = self._calc_substitution_impact(db, match, stats_cache)
             intelligence.home_substitution_impact = home_sub
             intelligence.away_substitution_impact = away_sub
             if home_sub != 0 or away_sub != 0:
@@ -240,11 +265,16 @@ class IntelligenceService:
                 f"Error computing intelligence for match {match.id}: {e}", exc_info=True
             )
 
+        # Cache the result
+        _intelligence_cache[cache_key] = (intelligence, now + _intelligence_cache_ttl)
+        
+        elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
         logger.info(
             f"Intelligence computed for match {match.id}: "
             f"{metrics_computed}/{total_metrics} metrics, "
             f"completeness={intelligence.data_completeness:.0%}, "
-            f"confidence={intelligence.confidence_score:.2f}"
+            f"confidence={intelligence.confidence_score:.2f}, "
+            f"completed in {elapsed_ms} ms"
         )
         return intelligence
 
@@ -270,10 +300,25 @@ class IntelligenceService:
             .all()
         )
 
-    def _get_match_stats(self, db: Session, match_id: int) -> Optional[MatchStatistic]:
-        return (
-            db.query(MatchStatistic).filter(MatchStatistic.match_id == match_id).first()
-        )
+    def _get_match_stats(self, db: Session, match_id: int, stats_cache: Dict[int, MatchStatistic] = None) -> Optional[MatchStatistic]:
+        """Get match statistics with optional cache to avoid duplicate queries."""
+        if stats_cache is not None and match_id in stats_cache:
+            return stats_cache[match_id]
+        
+        stats = db.query(MatchStatistic).filter(MatchStatistic.match_id == match_id).first()
+        
+        if stats_cache is not None:
+            stats_cache[match_id] = stats
+        
+        return stats
+    
+    def _batch_get_match_stats(self, db: Session, match_ids: List[int]) -> Dict[int, MatchStatistic]:
+        """Batch load match statistics for multiple match IDs at once."""
+        if not match_ids:
+            return {}
+        
+        stats_list = db.query(MatchStatistic).filter(MatchStatistic.match_id.in_(match_ids)).all()
+        return {s.match_id: s for s in stats_list}
 
     def _clamp(self, value: float, lower: float = 0.0, upper: float = 1.0) -> float:
         return max(lower, min(upper, value))
@@ -950,7 +995,7 @@ class IntelligenceService:
         }
 
     def _calc_attacking_strength(
-        self, db: Session, match: Match
+        self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None
     ) -> Tuple[float, float]:
         """Avg shots + weighted xG over recent matches."""
         home_scores, away_scores = [], []
@@ -960,7 +1005,7 @@ class IntelligenceService:
         ]:
             recent = self._get_recent_matches(db, team_id, match.utc_date)
             for m in recent:
-                stats = self._get_match_stats(db, m.id)
+                stats = self._get_match_stats(db, m.id, stats_cache)
                 if stats:
                     is_home = m.home_team_id == team_id
                     shots = (
@@ -986,7 +1031,7 @@ class IntelligenceService:
         return home, away
 
     def _calc_defensive_strength(
-        self, db: Session, match: Match
+        self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None
     ) -> Tuple[float, float]:
         """Inverse of goals conceded rate + clean sheet bonus."""
 
@@ -1009,9 +1054,9 @@ class IntelligenceService:
 
         return _team_def(match.home_team_id), _team_def(match.away_team_id)
 
-    def _calc_midfield_control(self, db: Session, match: Match) -> Tuple[float, float]:
+    def _calc_midfield_control(self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None) -> Tuple[float, float]:
         """Pass accuracy + possession + passing volume control score."""
-        stats = self._get_match_stats(db, match.id)
+        stats = self._get_match_stats(db, match.id, stats_cache)
         if stats:
             home = round(
                 self._clamp((stats.home_pass_accuracy or 0.0) / 100.0) * 0.40
@@ -1037,7 +1082,7 @@ class IntelligenceService:
         return _team_mid(match.home_team_id), _team_mid(match.away_team_id)
 
     def _calc_goalkeeper_performance(
-        self, db: Session, match: Match
+        self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None
     ) -> Tuple[float, float]:
         """Average saves per match from PlayerMatchPerformance."""
 
@@ -1064,9 +1109,9 @@ class IntelligenceService:
 
         return _gk_saves(match.home_team_id), _gk_saves(match.away_team_id)
 
-    def _calc_passing_dominance(self, db: Session, match: Match) -> Tuple[float, float]:
+    def _calc_passing_dominance(self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None) -> Tuple[float, float]:
         """Total passes + accuracy weighted score."""
-        stats = self._get_match_stats(db, match.id)
+        stats = self._get_match_stats(db, match.id, stats_cache)
         if stats:
             total = (stats.home_passes or 0) + (stats.away_passes or 0)
             if total == 0:
@@ -1081,7 +1126,7 @@ class IntelligenceService:
         return 0.0, 0.0
 
     def _calc_pressing_intensity(
-        self, db: Session, match: Match
+        self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None
     ) -> Tuple[float, float]:
         """Tackles + interceptions per match (from MatchStatistic)."""
 
@@ -1089,7 +1134,7 @@ class IntelligenceService:
             recent = self._get_recent_matches(db, team_id, match.utc_date)
             vals = []
             for m in recent:
-                s = self._get_match_stats(db, m.id)
+                s = self._get_match_stats(db, m.id, stats_cache)
                 if s:
                     is_home = m.home_team_id == team_id
                     tackles = (
@@ -1110,7 +1155,7 @@ class IntelligenceService:
             )  # normalize: 30 combined actions ≈ 1.0
 
         # Also check current match stats
-        stats = self._get_match_stats(db, match.id)
+        stats = self._get_match_stats(db, match.id, stats_cache)
         if stats:
             home_pi = min(
                 ((stats.home_tackles or 0) + (stats.home_interceptions or 0)) / 30.0,
@@ -1125,14 +1170,14 @@ class IntelligenceService:
 
         return _press(match.home_team_id), _press(match.away_team_id)
 
-    def _calc_set_piece_threat(self, db: Session, match: Match) -> Tuple[float, float]:
+    def _calc_set_piece_threat(self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None) -> Tuple[float, float]:
         """Average corners per match as proxy for set-piece threat."""
 
         def _sp(team_id: int) -> float:
             recent = self._get_recent_matches(db, team_id, match.utc_date)
             corners_list = []
             for m in recent:
-                s = self._get_match_stats(db, m.id)
+                s = self._get_match_stats(db, m.id, stats_cache)
                 if s:
                     is_home = m.home_team_id == team_id
                     corners = (
@@ -1146,7 +1191,7 @@ class IntelligenceService:
 
         return _sp(match.home_team_id), _sp(match.away_team_id)
 
-    def _calc_discipline_score(self, db: Session, match: Match) -> Tuple[float, float]:
+    def _calc_discipline_score(self, db: Session, match: Match, stats_cache: Dict[int, MatchStatistic] = None) -> Tuple[float, float]:
         """Inverse of cards per match. More cards = lower score."""
 
         def _disc(team_id: int) -> float:

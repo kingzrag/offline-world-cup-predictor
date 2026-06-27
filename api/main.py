@@ -4,7 +4,11 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from api.routes import injuries, matches, players, predictions, teams, tournament
 from api.routes import predict as predict_router
@@ -29,20 +33,61 @@ except Exception as err:
         f"Critical: Database migration or schema sync failed: {err}", exc_info=True
     )
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="Football Prediction Platform",
     description="Production-grade sports predictions backend engine utilizing FastAPI and PostgreSQL.",
     version="1.0.0",
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Enable CORS for standard web environments
+# Allow production Vercel domain, all Vercel preview deployments, and localhost
+import os
+
+def get_allowed_origins():
+    """Get allowed origins from environment or use defaults for development/production."""
+    env_origins = os.getenv("ALLOWED_ORIGINS")
+    if env_origins:
+        return [origin.strip() for origin in env_origins.split(",")]
+    
+    # Default origins for development and production
+    default_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8080",
+    ]
+    
+    # Add production Vercel domain if specified
+    vercel_domain = os.getenv("VERCEL_DOMAIN")
+    if vercel_domain:
+        default_origins.append(f"https://{vercel_domain}")
+        default_origins.append(f"https://www.{vercel_domain}")
+    
+    # Allow all Vercel preview deployments
+    default_origins.append("https://*.vercel.app")
+    
+    return default_origins
+
+ALLOWED_ORIGINS = get_allowed_origins()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    expose_headers=["Content-Length", "X-Request-ID"],
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
+
+# Enable GZip compression for all responses
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # Request duration metrics + request log tracking middleware
@@ -86,7 +131,8 @@ def global_exception_handler(request: Request, exc: Exception):
 
 # Basic health-check route
 @app.get("/health")
-def health_check():
+@limiter.limit("100/minute")
+def health_check(request: Request):
     return {
         "status": "healthy",
         "system": "football_prediction_platform_backend",

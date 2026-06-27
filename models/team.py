@@ -7,9 +7,9 @@ class Team(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     api_id = Column(String(50), unique=True, index=True, nullable=True)
-    name = Column(String(100), nullable=False)
-    short_name = Column(String(50), nullable=True)
-    tla = Column(String(10), nullable=True)
+    name = Column(String(100), nullable=False, index=True)
+    short_name = Column(String(50), nullable=True, index=True)
+    tla = Column(String(10), nullable=True, index=True)
     crest_url = Column(String(255), nullable=True)
     founded = Column(Integer, nullable=True)
     venue = Column(String(100), nullable=True)

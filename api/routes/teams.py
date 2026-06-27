@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from database.connection import get_db
@@ -51,7 +51,7 @@ def read_team_details(team_id: int, db: Session = Depends(get_db)):
     """
     Detailed team profile along with full roster list.
     """
-    t = db.query(Team).filter(Team.id == team_id).first()
+    t = db.query(Team).options(joinedload(Team.players)).filter(Team.id == team_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Team not found.")
 

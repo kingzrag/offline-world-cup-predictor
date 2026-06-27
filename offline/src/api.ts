@@ -369,7 +369,19 @@ export async function getTeams(
 export async function getTeamProfile(
   teamName: string
 ): Promise<{ status: string; team: BackendTeamProfile }> {
-  return apiFetch(`/team/${encodeURIComponent(teamName)}`);
+  const cacheKey = getCacheKey(`/team/${encodeURIComponent(teamName)}`);
+  const cached = getCachedData<{ status: string; team: BackendTeamProfile }>(cacheKey);
+  if (cached) {
+    console.log(`[cache] HIT: ${cacheKey}`);
+    return cached;
+  }
+
+  const result = await withDeduplication<{ status: string; team: BackendTeamProfile }>(
+    cacheKey,
+    () => apiFetch<{ status: string; team: BackendTeamProfile }>(`/team/${encodeURIComponent(teamName)}`)
+  );
+  setCachedData(cacheKey, result, 10 * 60 * 1000); // 10 minute cache for team profiles
+  return result;
 }
 
 // ── H2H response shape ────────────────────────────────────────────────────────
@@ -403,7 +415,19 @@ export async function getH2h(
   teamA: string,
   teamB: string
 ): Promise<BackendH2h> {
-  return apiFetch(`/h2h/${encodeURIComponent(teamA)}/${encodeURIComponent(teamB)}`);
+  const cacheKey = getCacheKey(`/h2h/${encodeURIComponent(teamA)}/${encodeURIComponent(teamB)}`);
+  const cached = getCachedData<BackendH2h>(cacheKey);
+  if (cached) {
+    console.log(`[cache] HIT: ${cacheKey}`);
+    return cached;
+  }
+
+  const result = await withDeduplication<BackendH2h>(
+    cacheKey,
+    () => apiFetch<BackendH2h>(`/h2h/${encodeURIComponent(teamA)}/${encodeURIComponent(teamB)}`)
+  );
+  setCachedData(cacheKey, result, 10 * 60 * 1000); // 10 minute cache for H2H
+  return result;
 }
 
 /**
@@ -425,6 +449,13 @@ export async function getFixtures(
     show_historical?: boolean;
   } = {}
 ): Promise<{ status: string; competition: string; count: number; fixtures: BackendFixture[] }> {
+  const cacheKey = getCacheKey('/fixtures', params);
+  const cached = getCachedData<{ status: string; competition: string; count: number; fixtures: BackendFixture[] }>(cacheKey);
+  if (cached) {
+    console.log(`[cache] HIT: ${cacheKey}`);
+    return cached;
+  }
+
   const qs = new URLSearchParams();
   if (params.status)           qs.set("status",           params.status);
   if (params.stage)            qs.set("stage",            params.stage);
@@ -435,7 +466,13 @@ export async function getFixtures(
   if (params.limit != null)    qs.set("limit",            String(params.limit));
   if (params.year != null)     qs.set("year",             String(params.year));
   if (params.show_historical !== undefined) qs.set("show_historical", String(params.show_historical));
-  return apiFetch(`/fixtures?${qs.toString()}`);
+  
+  const result = await withDeduplication<{ status: string; competition: string; count: number; fixtures: BackendFixture[] }>(
+    cacheKey, 
+    () => apiFetch<{ status: string; competition: string; count: number; fixtures: BackendFixture[] }>(`/fixtures?${qs.toString()}`)
+  );
+  setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache for fixtures
+  return result;
 }
 
 /**
@@ -457,6 +494,13 @@ export async function getFixturesEnriched(
     show_historical?: boolean;
   } = {}
 ): Promise<{ status: string; competition: string; count: number; fixtures: BackendFixtureEnriched[] }> {
+  const cacheKey = getCacheKey('/fixtures-enriched', params);
+  const cached = getCachedData<{ status: string; competition: string; count: number; fixtures: BackendFixtureEnriched[] }>(cacheKey);
+  if (cached) {
+    console.log(`[cache] HIT: ${cacheKey}`);
+    return cached;
+  }
+
   const qs = new URLSearchParams();
   if (params.status)           qs.set("status",           params.status);
   if (params.stage)            qs.set("stage",            params.stage);
@@ -467,7 +511,13 @@ export async function getFixturesEnriched(
   if (params.limit != null)    qs.set("limit",            String(params.limit));
   if (params.year != null)     qs.set("year",             String(params.year));
   if (params.show_historical !== undefined) qs.set("show_historical", String(params.show_historical));
-  return apiFetch(`/fixtures-enriched?${qs.toString()}`);
+  
+  const result = await withDeduplication<{ status: string; competition: string; count: number; fixtures: BackendFixtureEnriched[] }>(
+    cacheKey,
+    () => apiFetch<{ status: string; competition: string; count: number; fixtures: BackendFixtureEnriched[] }>(`/fixtures-enriched?${qs.toString()}`)
+  );
+  setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
+  return result;
 }
 
 /**
@@ -773,6 +823,60 @@ function setCached(home: string, away: string, prediction: BackendPrediction): v
   });
 }
 
+// ── Generic API response cache ─────────────────────────────────────────────────
+
+interface GenericCacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+const _genericCache = new Map<string, GenericCacheEntry<any>>();
+const _pendingRequests = new Map<string, Promise<any>>();
+
+function getCacheKey(endpoint: string, params?: Record<string, any>): string {
+  const paramString = params ? JSON.stringify(params) : '';
+  return `${endpoint}:${paramString}`;
+}
+
+function getCachedData<T>(key: string): T | null {
+  const entry = _genericCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    _genericCache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCachedData<T>(key: string, data: T, ttlMs: number = CACHE_TTL_MS): void {
+  _genericCache.set(key, {
+    data,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+// ── Request deduplication ─────────────────────────────────────────────────────
+
+async function withDeduplication<T>(
+  key: string,
+  fetcher: () => Promise<T>
+): Promise<T> {
+  // Check if request is already in flight
+  const existing = _pendingRequests.get(key);
+  if (existing) {
+    console.log(`[cache] Request deduped: ${key}`);
+    return existing as Promise<T>;
+  }
+
+  // Create new request
+  const promise = fetcher().finally(() => {
+    _pendingRequests.delete(key);
+  });
+
+  _pendingRequests.set(key, promise);
+  return promise;
+}
+
 // ── Batch predict API call ──────────────────────────────────────────────────
 
 interface BatchMatchInput {
@@ -946,7 +1050,8 @@ export async function predictBatch(
 export async function loadFixturesInstant(
   year?: number,
   showHistorical?: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  limit: number = 30
 ): Promise<MatchPrediction[]> {
   const t0 = performance.now();
 
@@ -955,7 +1060,7 @@ export async function loadFixturesInstant(
   try {
     const fixturesResponse = await getFixturesEnriched({
       competition_code: "WC",
-      limit: 500,
+      limit,
       year,
       show_historical: showHistorical,
     });
@@ -965,7 +1070,7 @@ export async function loadFixturesInstant(
     if (signal?.aborted) throw err;
     const fixturesResponse = await getFixtures({
       competition_code: "WC",
-      limit: 500,
+      limit,
       year,
       show_historical: showHistorical,
     });
@@ -1276,11 +1381,12 @@ export async function refreshLiveScoresInto(
  */
 export async function refreshFixturesFromApi(
   existing: MatchPrediction[],
-  showHistorical?: boolean
+  showHistorical?: boolean,
+  limit: number = 30
 ): Promise<MatchPrediction[]> {
   const fixturesResponse = await getFixtures({
     competition_code: "WC",
-    limit: 500,
+    limit,
     show_historical: showHistorical,
   });
   const fresh = (fixturesResponse.fixtures || []).map(mapFixtureToPrediction);
@@ -1365,14 +1471,38 @@ export interface ModelPerformanceStats {
  * GET /fastapi/tournament/standings
  */
 export async function getStandings(): Promise<GroupStandings> {
-  return apiFetch<GroupStandings>("/tournament/standings");
+  const cacheKey = getCacheKey('/tournament/standings');
+  const cached = getCachedData<GroupStandings>(cacheKey);
+  if (cached) {
+    console.log(`[cache] HIT: ${cacheKey}`);
+    return cached;
+  }
+
+  const result = await withDeduplication<GroupStandings>(
+    cacheKey,
+    () => apiFetch<GroupStandings>("/tournament/standings")
+  );
+  setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
+  return result;
 }
 
 /**
  * GET /fastapi/tournament/bracket
  */
 export async function getBracket(): Promise<BracketData> {
-  return apiFetch<BracketData>("/tournament/bracket");
+  const cacheKey = getCacheKey('/tournament/bracket');
+  const cached = getCachedData<BracketData>(cacheKey);
+  if (cached) {
+    console.log(`[cache] HIT: ${cacheKey}`);
+    return cached;
+  }
+
+  const result = await withDeduplication<BracketData>(
+    cacheKey,
+    () => apiFetch<BracketData>("/tournament/bracket")
+  );
+  setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
+  return result;
 }
 
 
@@ -1380,7 +1510,19 @@ export async function getBracket(): Promise<BracketData> {
  * GET /fastapi/tournament/model-performance
  */
 export async function getModelPerformance(): Promise<ModelPerformanceStats> {
-  return apiFetch<ModelPerformanceStats>("/tournament/model-performance");
+  const cacheKey = getCacheKey('/tournament/model-performance');
+  const cached = getCachedData<ModelPerformanceStats>(cacheKey);
+  if (cached) {
+    console.log(`[cache] HIT: ${cacheKey}`);
+    return cached;
+  }
+
+  const result = await withDeduplication<ModelPerformanceStats>(
+    cacheKey,
+    () => apiFetch<ModelPerformanceStats>("/tournament/model-performance")
+  );
+  setCachedData(cacheKey, result, 10 * 60 * 1000); // 10 minute cache
+  return result;
 }
 
 export interface TeamSimulationResult {
@@ -1404,6 +1546,18 @@ export interface TournamentSimulationResponse {
  * GET /fastapi/tournament/simulation
  */
 export async function getTournamentSimulation(): Promise<TournamentSimulationResponse> {
-  return apiFetch<TournamentSimulationResponse>("/tournament/simulation");
+  const cacheKey = getCacheKey('/tournament/simulation');
+  const cached = getCachedData<TournamentSimulationResponse>(cacheKey);
+  if (cached) {
+    console.log(`[cache] HIT: ${cacheKey}`);
+    return cached;
+  }
+
+  const result = await withDeduplication<TournamentSimulationResponse>(
+    cacheKey,
+    () => apiFetch<TournamentSimulationResponse>("/tournament/simulation")
+  );
+  setCachedData(cacheKey, result, 5 * 60 * 1000); // 5 minute cache
+  return result;
 }
 

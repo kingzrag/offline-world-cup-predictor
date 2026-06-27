@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from database.connection import get_db
@@ -19,7 +19,7 @@ def read_players(
     Retrieves squad players with filters.
     """
     logger.info("Executing GET /players query filters...")
-    query = db.query(Player)
+    query = db.query(Player).options(joinedload(Player.team))
 
     if team_id:
         query = query.filter(Player.team_id == team_id)

@@ -7,6 +7,7 @@ These are not meant for regular users — they're for one-off operations.
 
 import os
 import csv
+import threading
 from datetime import datetime
 from typing import Optional
 
@@ -20,6 +21,18 @@ from models.team_elo import TeamElo
 from utils.logger import logger
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
+
+# Background job tracking
+_background_jobs = {
+    "elo_recomputation": {
+        "status": "idle",
+        "started_at": None,
+        "completed_at": None,
+        "result": None,
+        "error": None,
+    }
+}
+_job_lock = threading.Lock()
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CSV_PATH = os.path.join(_ROOT, "data", "international", "results.csv")
@@ -201,38 +214,89 @@ def seed_matches(
     }
 
 
-@router.post("/compute-elo", summary="Recompute ELO ratings from match history in the DB")
-def recompute_elo(db: Session = Depends(get_db)):
-    """
-    Recomputes ELO ratings from all FINISHED matches in the database.
-    This should be called after /admin/seed-matches to update the team_elo table
-    with more accurate ratings based on actual match history.
-    """
+def _run_elo_recomputation_background():
+    """Background function to compute ELO ratings."""
+    with _job_lock:
+        _background_jobs["elo_recomputation"]["status"] = "running"
+        _background_jobs["elo_recomputation"]["started_at"] = datetime.now().isoformat()
+        _background_jobs["elo_recomputation"]["error"] = None
+        _background_jobs["elo_recomputation"]["result"] = None
+    
     try:
         from ml.compute_elo_ratings import compute_all_elo_ratings, save_elo_to_db
-
-        logger.info("[admin] Starting ELO recomputation from DB matches …")
+        from database.connection import SessionLocal
+        
+        logger.info("[admin] Starting background ELO recomputation from DB matches …")
         elo_ratings = compute_all_elo_ratings()
 
         if not elo_ratings:
-            raise HTTPException(status_code=500, detail="ELO computation returned empty results.")
+            raise ValueError("ELO computation returned empty results.")
 
-        save_elo_to_db(elo_ratings)
+        # Save to DB using a new session
+        db = SessionLocal()
+        try:
+            save_elo_to_db(elo_ratings, db)
+            db.commit()
+        finally:
+            db.close()
 
         # Return top 20
         sorted_elo = sorted(elo_ratings.items(), key=lambda x: x[1], reverse=True)
         top_20 = [{"team": name, "elo": round(rating)} for name, rating in sorted_elo[:20]]
 
-        logger.info(f"[admin] ELO recomputation complete. {len(elo_ratings)} teams rated.")
-
-        return {
-            "status": "success",
-            "teams_rated": len(elo_ratings),
-            "top_20": top_20,
-        }
+        logger.info(f"[admin] Background ELO recomputation complete. {len(elo_ratings)} teams rated.")
+        
+        with _job_lock:
+            _background_jobs["elo_recomputation"]["status"] = "completed"
+            _background_jobs["elo_recomputation"]["completed_at"] = datetime.now().isoformat()
+            _background_jobs["elo_recomputation"]["result"] = {
+                "teams_rated": len(elo_ratings),
+                "top_20": top_20,
+            }
     except Exception as e:
-        logger.error(f"[admin] ELO recomputation failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"[admin] Background ELO recomputation failed: {e}", exc_info=True)
+        with _job_lock:
+            _background_jobs["elo_recomputation"]["status"] = "failed"
+            _background_jobs["elo_recomputation"]["completed_at"] = datetime.now().isoformat()
+            _background_jobs["elo_recomputation"]["error"] = str(e)
+
+
+@router.post("/compute-elo", summary="Recompute ELO ratings from match history in the DB (background job)")
+def recompute_elo(db: Session = Depends(get_db)):
+    """
+    Recomputes ELO ratings from all FINISHED matches in the database.
+    This runs in the background and returns immediately with a job ID.
+    Check /api/admin/jobs/elo_recomputation for status.
+    """
+    with _job_lock:
+        if _background_jobs["elo_recomputation"]["status"] == "running":
+            return {
+                "status": "already_running",
+                "message": "ELO recomputation is already running in the background.",
+                "job_status": _background_jobs["elo_recomputation"],
+            }
+        
+        # Start background job
+        thread = threading.Thread(target=_run_elo_recomputation_background)
+        thread.daemon = True
+        thread.start()
+    
+    return {
+        "status": "started",
+        "message": "ELO recomputation started in background.",
+        "job_id": "elo_recomputation",
+        "check_status": "/api/admin/jobs/elo_recomputation",
+    }
+
+
+@router.get("/jobs/{job_id}", summary="Get status of a background job")
+def get_job_status(job_id: str):
+    """Get the current status of a background job."""
+    if job_id not in _background_jobs:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
+    
+    with _job_lock:
+        return _background_jobs[job_id]
 
 
 @router.get("/db-stats", summary="Database statistics")

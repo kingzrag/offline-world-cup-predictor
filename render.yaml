@@ -1,0 +1,21 @@
+# Render deployment configuration for Football Prediction Platform
+# This file configures the deployment settings for Render.com
+
+services:
+  - type: web
+    name: football-prediction-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PORT
+        value: 8000
+      - key: VERCEL_DOMAIN
+        value: your-frontend-domain.vercel.app
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    healthCheckPath: /health
+    autoDeploy: false
+    plan: free

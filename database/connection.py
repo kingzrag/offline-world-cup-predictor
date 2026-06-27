@@ -9,12 +9,18 @@ import sys
 # Create engine with production-grade configurations
 # pool_pre_ping checks the connection health before executing commands
 try:
+    import os
+    pool_size = int(os.getenv("DB_POOL_SIZE", "20"))
+    max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+    pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+    
     engine = create_engine(
         settings.DATABASE_URL,
-        pool_size=20,
-        max_overflow=10,
-        pool_recycle=3600,
-        pool_pre_ping=True
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+        pool_recycle=pool_recycle,
+        pool_pre_ping=True,
+        echo=False  # Set to True for SQL query logging in development
     )
 except Exception as e:
     logger.error(f"Failed to initialize database engine. Please check your connection URL and ensure Postgres is running. Details: {e}")

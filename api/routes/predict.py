@@ -28,8 +28,12 @@ from utils.logger import logger
 router = APIRouter(prefix="/api", tags=["Predictions API"])
 
 
-def _compile_team_injuries_and_suspensions(db, team_id: int) -> tuple[list[str], list[str]]:
-    """Load injury/suspension records for a team."""
+def _compile_team_injuries_and_suspensions(db, team_id: int, team_obj=None) -> tuple[list[str], list[str]]:
+    """Load injury/suspension records for a team.
+    
+    If team_obj is provided with pre-loaded relationships, uses those instead of querying DB.
+    This avoids duplicate queries when team is already loaded with selectinload.
+    """
     from models import Injury, Suspension
 
     injuries: list[str] = []
@@ -49,13 +53,24 @@ def _compile_team_injuries_and_suspensions(db, team_id: int) -> tuple[list[str],
             seen_suspensions.add(key)
             suspensions.append(f"{player_name} ({reason})")
 
-    for inj in db.query(Injury).filter_by(team_id=team_id).all():
-        description = inj.injury_type or "Injured"
-        _add_injury(inj.player_name, description)
+    # Use pre-loaded relationships if available
+    if team_obj and hasattr(team_obj, 'injuries') and hasattr(team_obj, 'suspensions'):
+        for inj in team_obj.injuries:
+            description = inj.injury_type or "Injured"
+            _add_injury(inj.player_name, description)
+        
+        for susp in team_obj.suspensions:
+            reason = susp.suspension_reason or "Suspended"
+            _add_suspension(susp.player_name, reason)
+    else:
+        # Fallback to DB query
+        for inj in db.query(Injury).filter_by(team_id=team_id).all():
+            description = inj.injury_type or "Injured"
+            _add_injury(inj.player_name, description)
 
-    for susp in db.query(Suspension).filter_by(team_id=team_id).all():
-        reason = susp.suspension_reason or "Suspended"
-        _add_suspension(susp.player_name, reason)
+        for susp in db.query(Suspension).filter_by(team_id=team_id).all():
+            reason = susp.suspension_reason or "Suspended"
+            _add_suspension(susp.player_name, reason)
 
     return injuries, suspensions
 
@@ -96,6 +111,17 @@ PREDICTION_CACHE_TTL_SECONDS: int = 15 * 60   # 15 minutes
 _prediction_cache: Dict[str, Tuple[Any, float]] = {}
 # Key: match_id (int)   Value: (enrichment_dict, expiry_ts) — populated by /predict-batch
 _enrichment_cache_by_match_id: Dict[int, Tuple[Any, float]] = {}
+
+# Cache statistics
+_cache_stats = {
+    "hits": 0,
+    "misses": 0,
+    "total_requests": 0
+}
+
+# Team statistics cache (team_id -> (stats_dict, expiry))
+_team_stats_cache = {}
+_team_stats_cache_ttl = 600  # 10 minutes
 
 
 def _build_enrichment_from_xg(
@@ -216,6 +242,28 @@ def predict_match(
     t_start = time.perf_counter()
     logger.info(f"POST /api/predict  →  {body.home_team} vs {body.away_team} [{body.competition_code}]")
 
+    _cache_stats["total_requests"] += 1
+    
+    # Check cache first
+    cache_key = f"{body.home_team.strip()}|{body.away_team.strip()}|{body.competition_code}"
+    cached_entry = _prediction_cache.get(cache_key)
+    now = time.time()
+    
+    if cached_entry:
+        pred_dict, expiry = cached_entry
+        if now <= expiry:
+            _cache_stats["hits"] += 1
+            elapsed_ms = round((time.perf_counter() - t_start) * 1000, 1)
+            logger.info(f"POST /api/predict  →  CACHE HIT in {elapsed_ms} ms")
+            return {
+                "status":       "success",
+                "latency_ms":   elapsed_ms,
+                "cached":       True,
+                "prediction":   pred_dict,
+            }
+    
+    _cache_stats["misses"] += 1
+
     try:
         result = model_service.predict(
             db=db,
@@ -223,6 +271,10 @@ def predict_match(
             away_team_name=body.away_team,
             competition_code=body.competition_code,
         )
+        
+        # Cache the result
+        _prediction_cache[cache_key] = (result, now + PREDICTION_CACHE_TTL_SECONDS)
+        
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -230,11 +282,12 @@ def predict_match(
         raise HTTPException(status_code=500, detail=f"Prediction engine error: {str(e)}")
 
     elapsed_ms = round((time.perf_counter() - t_start) * 1000, 1)
-    logger.info(f"POST /api/predict  →  completed in {elapsed_ms} ms")
+    logger.info(f"POST /api/predict  →  CACHE MISS, completed in {elapsed_ms} ms")
 
     return {
         "status":       "success",
         "latency_ms":   elapsed_ms,
+        "cached":       False,
         "prediction":   result,
     }
 
@@ -384,6 +437,9 @@ def get_teams(
     """
     from models import Team
 
+    t_start = time.perf_counter()
+    logger.info(f"GET /api/teams  →  search={search}, limit={limit}")
+
     query = db.query(Team)
     if search:
         from sqlalchemy import or_ as sql_or
@@ -396,6 +452,9 @@ def get_teams(
         )
 
     teams = query.order_by(Team.name.asc()).limit(limit).all()
+
+    elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    logger.info(f"GET /api/teams  →  completed in {elapsed_ms} ms, returned {len(teams)} teams")
 
     return {
         "status": "success",
@@ -430,6 +489,9 @@ def get_team_profile(
     from models import Team, Match, TeamElo
     from sqlalchemy.orm import selectinload
 
+    t_start = time.perf_counter()
+    logger.info(f"GET /api/team/{team_name}")
+
     # Resolve team name aliases for United States
     aliases = {
         "USA": "United States",
@@ -456,6 +518,20 @@ def get_team_profile(
             .filter(name_filter)
             .first()
         )
+
+    # Check cache first
+    cache_key = f"team_profile_{resolved_name}"
+    cached_entry = _team_stats_cache.get(cache_key)
+    now = time.time()
+    
+    if cached_entry:
+        cached_data, expiry = cached_entry
+        if now <= expiry:
+            elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+            logger.info(f"GET /api/team/{team_name}  →  CACHE HIT in {elapsed_ms} ms")
+            return cached_data
+    
+    logger.info(f"GET /api/team/{team_name}  →  CACHE MISS, computing team profile")
 
     team = (
         _find_team(Team.name.ilike(resolved_name))
@@ -535,9 +611,9 @@ def get_team_profile(
     else:
         val_str = "N/A"
 
-    injuries_list, suspensions_list = _compile_team_injuries_and_suspensions(db, team.id)
+    injuries_list, suspensions_list = _compile_team_injuries_and_suspensions(db, team.id, team)
 
-    return {
+    result = {
         "status": "success",
         "team": {
             "id":          team.id,
@@ -559,6 +635,14 @@ def get_team_profile(
             "clean_sheet_rate": clean_sheet_rate,
         },
     }
+    
+    # Cache the result
+    _team_stats_cache[cache_key] = (result, now + _team_stats_cache_ttl)
+    
+    elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    logger.info(f"GET /api/team/{team_name}  →  CACHE MISS, completed in {elapsed_ms} ms")
+
+    return result
 
 
 @router.get("/h2h/{team_a_name}/{team_b_name}", summary="Head-to-head record between two teams")
@@ -577,6 +661,9 @@ def get_h2h(
     """
     from models import Team, Match
     from sqlalchemy import or_, and_, desc as sql_desc
+
+    t_start = time.perf_counter()
+    logger.info(f"GET /api/h2h/{team_a_name}/{team_b_name}")
 
     # Alias resolution
     aliases = {
@@ -658,6 +745,9 @@ def get_h2h(
             "result_for_a": result,
         })
 
+    elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    logger.info(f"GET /api/h2h/{team_a_name}/{team_b_name}  →  completed in {elapsed_ms} ms, {len(h2h_matches)} matches")
+
     return {
         "status": "success",
         "team_a": team_a.name,
@@ -738,6 +828,7 @@ def get_fixtures(
     from sqlalchemy.orm import joinedload, selectinload
 
     t_start = time.perf_counter()
+    logger.info(f"GET /api/fixtures  →  status={status}, stage={stage}, group={group}, limit={limit}")
 
     # ── Resolve competition ───────────────────────────────────────────────────
     comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
@@ -904,6 +995,9 @@ def debug_live_sync(db: Session = Depends(get_db)):
     from models import Match, Competition
     from services.live_sync_state import get_live_sync_state
 
+    t_start = time.perf_counter()
+    logger.info("GET /api/debug/live-sync")
+
     comp = db.query(Competition).filter_by(code="WC").first()
     live_matches = []
     if comp:
@@ -930,6 +1024,10 @@ def debug_live_sync(db: Session = Depends(get_db)):
             })
 
     sync_state = get_live_sync_state()
+    
+    elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    logger.info(f"GET /api/debug/live-sync  →  completed in {elapsed_ms} ms, {len(live_matches)} live matches")
+    
     return {
         "status": "success",
         "sync_state": sync_state,
@@ -943,12 +1041,30 @@ def api_health():
     """
     Returns load status of both ML models and system readiness.
     """
+    t_start = time.perf_counter()
+    logger.info("GET /api/health")
+    
     versions = model_service.model_versions
+    
+    elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    logger.info(f"GET /api/health  →  completed in {elapsed_ms} ms")
+    
+    # Calculate cache hit ratio
+    hit_ratio = 0.0
+    if _cache_stats["total_requests"] > 0:
+        hit_ratio = round((_cache_stats["hits"] / _cache_stats["total_requests"]) * 100, 2)
+    
     return {
         "status":      "ready" if model_service.is_ready else "loading",
         "models_loaded": model_service.is_ready,
         "model_versions": versions,
         "timestamp":   time.time(),
+        "cache_stats": {
+            "hits": _cache_stats["hits"],
+            "misses": _cache_stats["misses"],
+            "total_requests": _cache_stats["total_requests"],
+            "hit_ratio_percent": hit_ratio,
+        },
     }
 
 
