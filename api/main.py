@@ -409,6 +409,15 @@ async def run_daily_scheduler():
 
 @app.on_event("startup")
 async def startup_event():
+    # ── Log Git commit SHA for deployment verification ───────────────────────
+    try:
+        import subprocess
+        commit_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        logger.info(f"Startup: Git commit SHA: {commit_sha}")
+    except Exception as e:
+        logger.warning(f"Startup: Could not retrieve Git commit SHA: {e}")
+        logger.info("Startup: Running in production environment (Git may not be available)")
+
     # ── Load ML models once at startup ───────────────────────────────────────
     try:
         logger.info("Startup: loading ML models via ModelService...")
