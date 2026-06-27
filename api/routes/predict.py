@@ -108,6 +108,16 @@ def _build_enrichment_from_xg(
     from services.poisson_engine import evaluate_poisson_engine
 
     poisson = evaluate_poisson_engine(max(h_xg, 0.01), max(a_xg, 0.01))
+    
+    # Transform Poisson handicap structure to match frontend expectations
+    poisson_handicap = poisson["asian_handicap"]
+    asian_handicap = {
+        "label": poisson_handicap.get("favored_team_prefix", "Home") + " -0.5",
+        "lines": poisson_handicap.get("suggested_lines", {}),
+        "favored_team": poisson_handicap.get("favored_team_prefix", "Home"),
+    }
+    logger.info(f"[API_ENRICHMENT_XG] Transformed Poisson handicap: {asian_handicap}")
+    
     return {
         "goals": {
             "home_xg":  h_xg,
@@ -121,7 +131,7 @@ def _build_enrichment_from_xg(
             "most_likely_score": most_likely_score or poisson["most_likely_score"],
             "top_5_scorelines":  poisson["top_5_scorelines"],
             "team_goals":        poisson["team_goals"],
-            "asian_handicap":    poisson["asian_handicap"],
+            "asian_handicap":    asian_handicap,
         },
     }
 
