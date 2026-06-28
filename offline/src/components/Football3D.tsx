@@ -4,8 +4,18 @@ import { useGLTF, ContactShadows, Float, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
 // ── Football Mesh ────────────────────────────────────────────────────────────
-function FootballMesh({ onLoaded, scale = 6.5 }: { onLoaded: () => void, scale?: number }) {
+function FootballMesh({ 
+  onLoaded, 
+  scale = 6.5, 
+  onRotationComplete 
+}: { 
+  onLoaded: () => void, 
+  scale?: number, 
+  onRotationComplete?: () => void 
+}) {
   const groupRef = useRef<THREE.Group>(null);
+  const currentRotationRef = useRef(0);
+  const rotationCompleteRef = useRef(false);
   const { scene } = useGLTF('/models/football.glb');
 
   // Clone the scene to avoid modifying the original
@@ -32,8 +42,19 @@ function FootballMesh({ onLoaded, scale = 6.5 }: { onLoaded: () => void, scale?:
 
   useFrame(() => {
     if (!groupRef.current) return;
+    
     // Slow rotation (about 8-10 seconds per revolution)
-    groupRef.current.rotation.y += 0.0115;
+    const deltaRotation = 0.0115;
+    groupRef.current.rotation.y += deltaRotation;
+    currentRotationRef.current += deltaRotation;
+
+    // Check if we've completed one full rotation (2π radians ≈ 6.283)
+    if (!rotationCompleteRef.current && currentRotationRef.current >= 2 * Math.PI) {
+      rotationCompleteRef.current = true;
+      if (onRotationComplete) {
+        onRotationComplete();
+      }
+    }
   });
 
   return (
@@ -44,7 +65,15 @@ function FootballMesh({ onLoaded, scale = 6.5 }: { onLoaded: () => void, scale?:
 }
 
 // ── Exported Component ───────────────────────────────────────────────────────
-export function Football3D({ onLoaded, scale = 6.5 }: { onLoaded: () => void, scale?: number }) {
+export function Football3D({ 
+  onLoaded, 
+  scale = 6.5, 
+  onRotationComplete 
+}: { 
+  onLoaded: () => void, 
+  scale?: number, 
+  onRotationComplete?: () => void 
+}) {
   return (
     <>
       {/* HDR-style environment using drei's preset for realistic PBR */}
@@ -79,7 +108,11 @@ export function Football3D({ onLoaded, scale = 6.5 }: { onLoaded: () => void, sc
         floatIntensity={0.4}
         floatingRange={[-0.08, 0.08]}
       >
-        <FootballMesh onLoaded={onLoaded} scale={scale} />
+        <FootballMesh 
+          onLoaded={onLoaded} 
+          scale={scale} 
+          onRotationComplete={onRotationComplete} 
+        />
       </Float>
 
       {/* Enhanced realistic contact shadow on ground plane */}

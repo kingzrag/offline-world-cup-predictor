@@ -1179,6 +1179,8 @@ export default function App() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [showTransitionSuccess, setShowTransitionSuccess] = useState(false);
+  const [isFourSecondsPassed, setIsFourSecondsPassed] = useState(false);
+  const [isFootballRotationComplete, setIsFootballRotationComplete] = useState(false);
   const isMobile = useMediaQuery('(max-width: 640px)');
 
   const startupStages = [
@@ -1231,16 +1233,25 @@ export default function App() {
     return () => clearInterval(interval);
   }, [prefersReducedMotion]);
 
-  // Handle transition when backend connects
+  // 4-second minimum timer
   useEffect(() => {
-    if (isBackendConnected && !showTransitionSuccess) {
+    const timer = setTimeout(() => {
+      setIsFourSecondsPassed(true);
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Handle transition when ALL conditions are met
+  useEffect(() => {
+    if (isBackendConnected && isFourSecondsPassed && isFootballRotationComplete && !showTransitionSuccess) {
       setShowTransitionSuccess(true);
-      // Wait 500ms then fade out
+      // Wait 600ms for smooth fade out (between 500-700ms as requested)
       setTimeout(() => {
         setIsInitializing(false);
-      }, 500);
+      }, 600);
     }
-  }, [isBackendConnected, showTransitionSuccess]);
+  }, [isBackendConnected, isFourSecondsPassed, isFootballRotationComplete, showTransitionSuccess]);
 
   if (isInitializing) {
     // Helper to render realistic repeating soccer ball panels dynamically
@@ -1406,7 +1417,11 @@ export default function App() {
                     gl={{ antialias: true, alpha: true }}
                     shadows
                   >
-                    <Football3D onLoaded={() => setFootballLoaded(true)} scale={isMobile ? 4.8 : 6.5} />
+                    <Football3D 
+                      onLoaded={() => setFootballLoaded(true)} 
+                      scale={isMobile ? 4.8 : 6.5}
+                      onRotationComplete={() => setIsFootballRotationComplete(true)}
+                    />
                   </Canvas>
                 </div>
 
