@@ -1181,7 +1181,8 @@ export default function App() {
   const [showTransitionSuccess, setShowTransitionSuccess] = useState(false);
   const [isFourSecondsPassed, setIsFourSecondsPassed] = useState(false);
   const [isFootballRotationComplete, setIsFootballRotationComplete] = useState(false);
-  const [showBackendTimeoutWarning, setShowBackendTimeoutWarning] = useState(false);
+  const [isAllConditionsMet, setIsAllConditionsMet] = useState(false);
+  const [isExtraDelayComplete, setIsExtraDelayComplete] = useState(false);
   const isMobile = useMediaQuery('(max-width: 640px)');
 
   const startupStages = [
@@ -1243,38 +1244,39 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 10-second timeout fallback
+  // Check when ALL initial conditions are met
   useEffect(() => {
-    const tenSecondTimer = setTimeout(() => {
-      if (!isBackendConnected) {
-        setShowTransitionSuccess(true);
-        setShowBackendTimeoutWarning(true);
-        setTimeout(() => {
-          setIsInitializing(false);
-        }, 600);
-      }
-    }, 10000);
-
-    return () => clearTimeout(tenSecondTimer);
-  }, [isBackendConnected]);
-
-  // Hide the warning if backend becomes available later
-  useEffect(() => {
-    if (isBackendConnected && showBackendTimeoutWarning) {
-      setShowBackendTimeoutWarning(false);
+    const allConditionsMet = 
+      isBackendConnected && 
+      isFourSecondsPassed && 
+      isFootballRotationComplete;
+      
+    if (allConditionsMet && !isAllConditionsMet) {
+      setIsAllConditionsMet(true);
     }
-  }, [isBackendConnected, showBackendTimeoutWarning]);
+  }, [isBackendConnected, isFourSecondsPassed, isFootballRotationComplete, isAllConditionsMet]);
 
-  // Handle transition when ALL conditions are met
+  // Handle the EXTRA 3-second delay after all conditions are met
   useEffect(() => {
-    if (isBackendConnected && isFourSecondsPassed && isFootballRotationComplete && !showTransitionSuccess) {
+    if (isAllConditionsMet && !isExtraDelayComplete) {
+      const extraDelayTimer = setTimeout(() => {
+        setIsExtraDelayComplete(true);
+      }, 3000);
+      
+      return () => clearTimeout(extraDelayTimer);
+    }
+  }, [isAllConditionsMet, isExtraDelayComplete]);
+
+  // Handle the final fade transition
+  useEffect(() => {
+    if (isExtraDelayComplete && !showTransitionSuccess) {
       setShowTransitionSuccess(true);
-      // Wait 600ms for smooth fade out (between 500-700ms as requested)
+      // Fade out over 600ms
       setTimeout(() => {
         setIsInitializing(false);
       }, 600);
     }
-  }, [isBackendConnected, isFourSecondsPassed, isFootballRotationComplete, showTransitionSuccess]);
+  }, [isExtraDelayComplete, showTransitionSuccess]);
 
   if (isInitializing) {
     // Helper to render realistic repeating soccer ball panels dynamically
@@ -1566,34 +1568,11 @@ export default function App() {
   return (
     <motion.div
       id="app-root"
-      className="min-h-screen bg-black text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased relative"
+      className="min-h-screen bg-black text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5, delay: 0.1 }}
     >
-      {/* Backend Timeout Warning Toast */}
-      {showBackendTimeoutWarning && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-900/90 border border-amber-700/50 rounded-lg px-4 py-3 flex items-center gap-3 max-w-[90vw] md:max-w-md backdrop-blur-sm"
-        >
-          <AlertCircle className="w-5 h-5 text-amber-300 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-xs font-mono text-amber-100">
-              Prediction server is taking longer than expected. Some live data may still be loading.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowBackendTimeoutWarning(false)}
-            className="text-amber-200 hover:text-amber-100 transition-colors flex-shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </motion.div>
-      )}
-      
       {/* Top Premium Editorial Header */}
       <header id="app-header" className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full">
         
