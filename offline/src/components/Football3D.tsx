@@ -1,10 +1,10 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, ContactShadows, Float, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
 // ── Football Mesh ────────────────────────────────────────────────────────────
-function FootballMesh() {
+function FootballMesh({ onLoaded }: { onLoaded: () => void }) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF('/models/football.glb');
 
@@ -23,6 +23,13 @@ function FootballMesh() {
     return cloned;
   }, [scene]);
 
+  // Notify parent when model is ready
+  useEffect(() => {
+    if (footballMesh) {
+      onLoaded();
+    }
+  }, [footballMesh, onLoaded]);
+
   useFrame(() => {
     if (!groupRef.current) return;
     // Slow rotation (about 8-10 seconds per revolution)
@@ -37,7 +44,7 @@ function FootballMesh() {
 }
 
 // ── Exported Component ───────────────────────────────────────────────────────
-export function Football3D() {
+export function Football3D({ onLoaded }: { onLoaded: () => void }) {
   return (
     <>
       {/* HDR-style environment using drei's preset for realistic PBR */}
@@ -72,7 +79,7 @@ export function Football3D() {
         floatIntensity={0.4}
         floatingRange={[-0.08, 0.08]}
       >
-        <FootballMesh />
+        <FootballMesh onLoaded={onLoaded} />
       </Float>
 
       {/* Enhanced realistic contact shadow on ground plane */}

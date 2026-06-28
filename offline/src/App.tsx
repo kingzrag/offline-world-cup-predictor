@@ -604,6 +604,7 @@ export default function App() {
 
   const [perfLoading, setPerfLoading] = useState(false);
   const [healthData, setHealthData] = useState<any>(null);
+  const [footballLoaded, setFootballLoaded] = useState(false);
 
   // Fetch model performance statistics from backend API on mount or tab select
   const fetchPerformanceData = async () => {
@@ -1332,8 +1333,13 @@ export default function App() {
             {/* 3D Floating Football Scene - Premium Cinematic */}
             <div className="relative w-full flex items-center justify-center">
               
-              {/* Center Circle of Football Pitch - Enhanced */}
-              <div className="absolute bottom-[-24px] left-1/2 -translate-x-1/2 w-[16rem] h-28 pointer-events-none z-0 overflow-hidden">
+              {/* Center Circle of Football Pitch - Enhanced - Only show after football loads */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: footballLoaded ? 1 : 0 }}
+                transition={{ duration: 0.4 }}
+                className="absolute bottom-[-24px] left-1/2 -translate-x-1/2 w-[16rem] h-28 pointer-events-none z-0 overflow-hidden"
+              >
                 <div 
                   className="w-full h-full border border-white/10 rounded-full relative flex items-center justify-center"
                   style={{
@@ -1348,13 +1354,21 @@ export default function App() {
                   {/* Center Line */}
                   <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/12 -translate-y-1/2" />
                 </div>
-              </div>
+              </motion.div>
 
-              {/* Enhanced green glow beneath the football */}
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[10rem] h-10 bg-green-accent/25 rounded-full blur-xl pointer-events-none z-0" />
+              {/* Enhanced green glow beneath the football - Only show after football loads */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: footballLoaded ? 1 : 0 }}
+                transition={{ duration: 0.4 }}
+                className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[10rem] h-10 bg-green-accent/25 rounded-full blur-xl pointer-events-none z-0" 
+              />
               
-              {/* Soft realistic shadow beneath the football */}
-              <div 
+              {/* Soft realistic shadow beneath the football - Only show after football loads */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: footballLoaded ? 1 : 0 }}
+                transition={{ duration: 0.4 }}
                 className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[8rem] h-6 bg-black/85 rounded-full blur-[4px] z-10 origin-center"
                 style={{
                   animation: !prefersReducedMotion ? 'shadowScale 4s ease-in-out infinite' : 'none'
@@ -1370,19 +1384,24 @@ export default function App() {
                   gl={{ antialias: true, alpha: true }}
                   shadows
                 >
-                  <Football3D />
+                  <Football3D onLoaded={() => setFootballLoaded(true)} />
                 </Canvas>
               </div>
 
-              {/* Enhanced dust/particles floating around the ball */}
+              {/* Enhanced dust/particles floating around the ball - Only show after football loads */}
               {!prefersReducedMotion && (
-                <div className="absolute inset-0 pointer-events-none overflow-hidden z-25">
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: footballLoaded ? 1 : 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="absolute inset-0 pointer-events-none overflow-hidden z-25"
+                >
                   <div className="absolute top-1/4 left-1/4 w-1.5 h-1.5 bg-green-accent/40 rounded-full animate-[dust_6s_infinite]" style={{ animationDelay: '0s' }} />
                   <div className="absolute top-1/3 right-1/4 w-2 h-2 bg-white/20 rounded-full animate-[dust_8s_infinite]" style={{ animationDelay: '1.5s' }} />
                   <div className="absolute bottom-1/3 left-1/3 w-2 h-2 bg-green-accent/30 rounded-full animate-[dust_10s_infinite]" style={{ animationDelay: '3s' }} />
                   <div className="absolute top-1/2 right-1/5 w-1.5 h-1.5 bg-white/15 rounded-full animate-[dust_7s_infinite]" style={{ animationDelay: '4.5s' }} />
                   <div className="absolute top-2/5 left-1/5 w-1 h-1 bg-green-accent/35 rounded-full animate-[dust_9s_infinite]" style={{ animationDelay: '2s' }} />
-                </div>
+                </motion.div>
               )}
             </div>
 
