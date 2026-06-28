@@ -1317,135 +1317,137 @@ export default function App() {
           )}
         </div>
 
-        <div className="w-full h-full flex flex-col items-center relative z-10">
-          {/* Logo with breathing animation - 8% from top */}
-          <div className={`flex flex-col items-center space-y-3 mt-[8vh] ${!prefersReducedMotion ? 'animate-[breathe_6s_ease-in-out_infinite]' : ''}`}>
-            <span className="text-5xl font-serif text-white tracking-[0.45em] font-light pl-[0.45em] uppercase">
-              OFFLINE
-            </span>
-            <span className="text-sm font-mono tracking-[0.6em] text-zinc-500 uppercase pl-[0.6em]">
-              FOOTBALL INTELLIGENCE
-            </span>
-          </div>
-
-          {/* 3D Floating Football Scene - Premium Cinematic */}
-          <div className="relative w-full flex items-center justify-center" style={{ marginTop: '40px' }}>
-            
-            {/* Center Circle of Football Pitch - Enhanced */}
-            <div className="absolute bottom-[-30px] left-1/2 -translate-x-1/2 w-[20rem] h-32 pointer-events-none z-0 overflow-hidden">
-              <div 
-                className="w-full h-full border border-white/10 rounded-full relative flex items-center justify-center"
-                style={{
-                  transform: 'rotateX(72deg)',
-                  background: 'radial-gradient(circle, rgba(16,185,129,0.25) 0%, rgba(9,9,11,0.92) 70%)',
-                  boxShadow: 'inset 0 0 45px rgba(16,185,129,0.1)',
-                  backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.004) 0px, rgba(255,255,255,0.004) 2px, transparent 2px, transparent 10px)'
-                }}
-              >
-                {/* Center Spot */}
-                <div className="w-2 h-2 rounded-full bg-white/35" />
-                {/* Center Line */}
-                <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/12 -translate-y-1/2" />
-              </div>
+        <div className="min-h-screen w-full flex flex-col items-center justify-center relative z-10" style={{ paddingTop: 'clamp(40px, 7vh, 90px)', paddingBottom: 'clamp(40px, 7vh, 90px)' }}>
+          <div className="flex flex-col items-center gap-10">
+            {/* Logo with breathing animation - Reduced by ~10% */}
+            <div className={`flex flex-col items-center space-y-3 ${!prefersReducedMotion ? 'animate-[breathe_6s_ease-in-out_infinite]' : ''}`}>
+              <span className="text-4xl font-serif text-white tracking-[0.45em] font-light pl-[0.45em] uppercase">
+                OFFLINE
+              </span>
+              <span className="text-xs font-mono tracking-[0.6em] text-zinc-500 uppercase pl-[0.6em]">
+                FOOTBALL INTELLIGENCE
+              </span>
             </div>
 
-            {/* Enhanced green glow beneath the football */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[12rem] h-12 bg-green-accent/25 rounded-full blur-xl pointer-events-none z-0" />
-            
-            {/* Soft realistic shadow beneath the football */}
-            <div 
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[10rem] h-8 bg-black/85 rounded-full blur-[4px] z-10 origin-center"
-              style={{
-                animation: !prefersReducedMotion ? 'shadowScale 4s ease-in-out infinite' : 'none'
-              }}
-            />
-
-            {/* 3D Football Canvas — PBR with stadium lighting - Reduced size by ~28% */}
-            <div className="relative w-72 h-72 z-20">
-              <Canvas
-                camera={{ position: [0, 0, 3.2], fov: 40 }}
-                style={{ width: '100%', height: '100%', background: 'transparent' }}
-                dpr={[1, 2]}
-                gl={{ antialias: true, alpha: true }}
-                shadows
-              >
-                <Football3D />
-              </Canvas>
-            </div>
-
-            {/* Enhanced dust/particles floating around the ball */}
-            {!prefersReducedMotion && (
-              <div className="absolute inset-0 pointer-events-none overflow-hidden z-25">
-                <div className="absolute top-1/4 left-1/4 w-1.5 h-1.5 bg-green-accent/40 rounded-full animate-[dust_6s_infinite]" style={{ animationDelay: '0s' }} />
-                <div className="absolute top-1/3 right-1/4 w-2 h-2 bg-white/20 rounded-full animate-[dust_8s_infinite]" style={{ animationDelay: '1.5s' }} />
-                <div className="absolute bottom-1/3 left-1/3 w-2 h-2 bg-green-accent/30 rounded-full animate-[dust_10s_infinite]" style={{ animationDelay: '3s' }} />
-                <div className="absolute top-1/2 right-1/5 w-1.5 h-1.5 bg-white/15 rounded-full animate-[dust_7s_infinite]" style={{ animationDelay: '4.5s' }} />
-                <div className="absolute top-2/5 left-1/5 w-1 h-1 bg-green-accent/35 rounded-full animate-[dust_9s_infinite]" style={{ animationDelay: '2s' }} />
-              </div>
-            )}
-          </div>
-
-          {/* Animated status pipeline */}
-          <div className="flex flex-col items-center" style={{ marginTop: '50px' }}>
-            <motion.div
-              key={showTransitionSuccess ? 'success' : loadingStageIndex}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="space-y-3 text-center"
-            >
-              <h2 className="text-white font-serif text-3xl tracking-wide uppercase">
-                {showTransitionSuccess ? "✓ Prediction Engine Online" : startupStages[loadingStageIndex]}
-              </h2>
-              <p className="text-zinc-400 font-sans text-sm tracking-wider">
-                {showTransitionSuccess ? "Ready to deliver live predictions" : (loadingStageIndex < startupStages.length - 1 ? "Initializing prediction systems..." : "Waiting for backend response...")}
-              </p>
-            </motion.div>
-
-            {/* Progress timeline */}
-            <div className="flex items-center justify-center gap-2" style={{ marginTop: '14px' }}>
-              {startupStages.map((_, index) => (
-                <div
-                  key={index}
-                  className={`h-1.5 rounded-full transition-all duration-500 ${
-                    index <= loadingStageIndex ? 'bg-green-accent' : 'bg-zinc-800'
-                  }`}
+            {/* 3D Floating Football Scene - Premium Cinematic */}
+            <div className="relative w-full flex items-center justify-center">
+              
+              {/* Center Circle of Football Pitch - Enhanced */}
+              <div className="absolute bottom-[-24px] left-1/2 -translate-x-1/2 w-[16rem] h-28 pointer-events-none z-0 overflow-hidden">
+                <div 
+                  className="w-full h-full border border-white/10 rounded-full relative flex items-center justify-center"
                   style={{
-                    width: index === loadingStageIndex ? '40px' : '14px',
-                    opacity: index <= loadingStageIndex ? 1 : 0.3
+                    transform: 'rotateX(72deg)',
+                    background: 'radial-gradient(circle, rgba(16,185,129,0.25) 0%, rgba(9,9,11,0.92) 70%)',
+                    boxShadow: 'inset 0 0 45px rgba(16,185,129,0.1)',
+                    backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.004) 0px, rgba(255,255,255,0.004) 2px, transparent 2px, transparent 10px)'
                   }}
-                />
-              ))}
-            </div>
-
-            {/* System checklist */}
-            <div className="space-y-2.5" style={{ marginTop: '30px' }}>
-              {systemChecklist.map((item) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: item.id * 0.1 }}
-                  className="flex items-center justify-center gap-3 text-xs font-mono tracking-wider"
                 >
-                  {item.completed ? (
-                    <span className="text-green-accent">✓</span>
-                  ) : item.animated ? (
-                    <span className={`text-green-accent ${!prefersReducedMotion ? 'animate-spin' : ''}`}>⟳</span>
-                  ) : (
-                    <span className="text-zinc-600">○</span>
-                  )}
-                  <span className={item.completed ? 'text-zinc-400' : item.animated ? 'text-zinc-300' : 'text-zinc-600'}>
-                    {item.text}
-                  </span>
-                </motion.div>
-              ))}
-            </div>
-          </div>
+                  {/* Center Spot */}
+                  <div className="w-2 h-2 rounded-full bg-white/35" />
+                  {/* Center Line */}
+                  <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/12 -translate-y-1/2" />
+                </div>
+              </div>
 
-          {/* Copyright at bottom */}
-          <div className="text-center text-zinc-600 text-xs font-mono tracking-wider" style={{ marginTop: 'auto', paddingTop: '30px', paddingBottom: '30px' }}>
-            © 2025 OFFLINE Football Intelligence. All rights reserved.
+              {/* Enhanced green glow beneath the football */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[10rem] h-10 bg-green-accent/25 rounded-full blur-xl pointer-events-none z-0" />
+              
+              {/* Soft realistic shadow beneath the football */}
+              <div 
+                className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[8rem] h-6 bg-black/85 rounded-full blur-[4px] z-10 origin-center"
+                style={{
+                  animation: !prefersReducedMotion ? 'shadowScale 4s ease-in-out infinite' : 'none'
+                }}
+              />
+
+              {/* 3D Football Canvas — PBR with stadium lighting - Reduced by another 15% */}
+              <div className="relative w-60 h-60 z-20">
+                <Canvas
+                  camera={{ position: [0, 0, 3.8], fov: 40 }}
+                  style={{ width: '100%', height: '100%', background: 'transparent' }}
+                  dpr={[1, 2]}
+                  gl={{ antialias: true, alpha: true }}
+                  shadows
+                >
+                  <Football3D />
+                </Canvas>
+              </div>
+
+              {/* Enhanced dust/particles floating around the ball */}
+              {!prefersReducedMotion && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden z-25">
+                  <div className="absolute top-1/4 left-1/4 w-1.5 h-1.5 bg-green-accent/40 rounded-full animate-[dust_6s_infinite]" style={{ animationDelay: '0s' }} />
+                  <div className="absolute top-1/3 right-1/4 w-2 h-2 bg-white/20 rounded-full animate-[dust_8s_infinite]" style={{ animationDelay: '1.5s' }} />
+                  <div className="absolute bottom-1/3 left-1/3 w-2 h-2 bg-green-accent/30 rounded-full animate-[dust_10s_infinite]" style={{ animationDelay: '3s' }} />
+                  <div className="absolute top-1/2 right-1/5 w-1.5 h-1.5 bg-white/15 rounded-full animate-[dust_7s_infinite]" style={{ animationDelay: '4.5s' }} />
+                  <div className="absolute top-2/5 left-1/5 w-1 h-1 bg-green-accent/35 rounded-full animate-[dust_9s_infinite]" style={{ animationDelay: '2s' }} />
+                </div>
+              )}
+            </div>
+
+            {/* Animated status pipeline */}
+            <div className="flex flex-col items-center gap-7">
+              <motion.div
+                key={showTransitionSuccess ? 'success' : loadingStageIndex}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="space-y-3 text-center"
+              >
+                <h2 className="text-white font-serif text-2xl tracking-wide uppercase">
+                  {showTransitionSuccess ? "✓ Prediction Engine Online" : startupStages[loadingStageIndex]}
+                </h2>
+                <p className="text-zinc-400 font-sans text-xs tracking-wider">
+                  {showTransitionSuccess ? "Ready to deliver live predictions" : (loadingStageIndex < startupStages.length - 1 ? "Initializing prediction systems..." : "Waiting for backend response...")}
+                </p>
+              </motion.div>
+
+              {/* Progress timeline */}
+              <div className="flex items-center justify-center gap-2">
+                {startupStages.map((_, index) => (
+                  <div
+                    key={index}
+                    className={`h-1.5 rounded-full transition-all duration-500 ${
+                      index <= loadingStageIndex ? 'bg-green-accent' : 'bg-zinc-800'
+                    }`}
+                    style={{
+                      width: index === loadingStageIndex ? '40px' : '14px',
+                      opacity: index <= loadingStageIndex ? 1 : 0.3
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* System checklist */}
+              <div className="space-y-2">
+                {systemChecklist.map((item) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: item.id * 0.1 }}
+                    className="flex items-center justify-center gap-3 text-[11px] font-mono tracking-wider"
+                  >
+                    {item.completed ? (
+                      <span className="text-green-accent">✓</span>
+                    ) : item.animated ? (
+                      <span className={`text-green-accent ${!prefersReducedMotion ? 'animate-spin' : ''}`}>⟳</span>
+                    ) : (
+                      <span className="text-zinc-600">○</span>
+                    )}
+                    <span className={item.completed ? 'text-zinc-400' : item.animated ? 'text-zinc-300' : 'text-zinc-600'}>
+                      {item.text}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Copyright at bottom */}
+            <div className="text-center text-zinc-600 text-xs font-mono tracking-wider">
+              © 2025 OFFLINE Football Intelligence. All rights reserved.
+            </div>
           </div>
         </div>
 
