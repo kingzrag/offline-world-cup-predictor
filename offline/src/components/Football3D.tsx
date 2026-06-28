@@ -4,7 +4,7 @@ import { useGLTF, ContactShadows, Float, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
 // ── Football Mesh ────────────────────────────────────────────────────────────
-function FootballMesh({ onLoaded }: { onLoaded: () => void }) {
+function FootballMesh({ onLoaded, scale = 6.5 }: { onLoaded: () => void, scale?: number }) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF('/models/football.glb');
 
@@ -19,9 +19,9 @@ function FootballMesh({ onLoaded }: { onLoaded: () => void }) {
       }
     });
     // Scale the model appropriately
-    cloned.scale.set(6.5, 6.5, 6.5);
+    cloned.scale.set(scale, scale, scale);
     return cloned;
-  }, [scene]);
+  }, [scene, scale]);
 
   // Notify parent when model is ready
   useEffect(() => {
@@ -44,7 +44,7 @@ function FootballMesh({ onLoaded }: { onLoaded: () => void }) {
 }
 
 // ── Exported Component ───────────────────────────────────────────────────────
-export function Football3D({ onLoaded }: { onLoaded: () => void }) {
+export function Football3D({ onLoaded, scale = 6.5 }: { onLoaded: () => void, scale?: number }) {
   return (
     <>
       {/* HDR-style environment using drei's preset for realistic PBR */}
@@ -79,7 +79,7 @@ export function Football3D({ onLoaded }: { onLoaded: () => void }) {
         floatIntensity={0.4}
         floatingRange={[-0.08, 0.08]}
       >
-        <FootballMesh onLoaded={onLoaded} />
+        <FootballMesh onLoaded={onLoaded} scale={scale} />
       </Float>
 
       {/* Enhanced realistic contact shadow on ground plane */}
