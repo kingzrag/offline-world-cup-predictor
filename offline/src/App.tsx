@@ -1465,7 +1465,7 @@ export default function App() {
 
             {/* Copyright at bottom */}
             <div className="text-center text-zinc-600 text-xs font-mono tracking-wider">
-              © 2025 OFFLINE Football Intelligence. All rights reserved.
+              © 2026 OFFLINE Football Intelligence. All rights reserved.
             </div>
           </div>
         </div>
