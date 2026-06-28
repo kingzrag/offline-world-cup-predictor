@@ -1181,6 +1181,7 @@ export default function App() {
   const [showTransitionSuccess, setShowTransitionSuccess] = useState(false);
   const [isFourSecondsPassed, setIsFourSecondsPassed] = useState(false);
   const [isFootballRotationComplete, setIsFootballRotationComplete] = useState(false);
+  const [showBackendTimeoutWarning, setShowBackendTimeoutWarning] = useState(false);
   const isMobile = useMediaQuery('(max-width: 640px)');
 
   const startupStages = [
@@ -1241,6 +1242,28 @@ export default function App() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // 10-second timeout fallback
+  useEffect(() => {
+    const tenSecondTimer = setTimeout(() => {
+      if (!isBackendConnected) {
+        setShowTransitionSuccess(true);
+        setShowBackendTimeoutWarning(true);
+        setTimeout(() => {
+          setIsInitializing(false);
+        }, 600);
+      }
+    }, 10000);
+
+    return () => clearTimeout(tenSecondTimer);
+  }, [isBackendConnected]);
+
+  // Hide the warning if backend becomes available later
+  useEffect(() => {
+    if (isBackendConnected && showBackendTimeoutWarning) {
+      setShowBackendTimeoutWarning(false);
+    }
+  }, [isBackendConnected, showBackendTimeoutWarning]);
 
   // Handle transition when ALL conditions are met
   useEffect(() => {
@@ -1354,11 +1377,11 @@ export default function App() {
           <div className="w-full flex flex-col items-center justify-center max-sm:pt-safe max-sm:pb-safe max-sm:px-safe">
             <div className="flex flex-col items-center gap-10 max-sm:gap-6">
               {/* Logo with breathing animation */}
-              <div className={`flex flex-col items-center space-y-3 max-sm:space-y-2 ${!prefersReducedMotion ? 'animate-[breathe_6s_ease-in-out_infinite]' : ''}`}>
-                <span className="text-4xl max-sm:text-3xl font-serif text-white tracking-[0.45em] font-light pl-[0.45em] uppercase">
+              <div className={`flex flex-col items-center space-y-3 max-sm:space-y-2 w-full max-w-full ${!prefersReducedMotion ? 'animate-[breathe_6s_ease-in-out_infinite]' : ''}`}>
+                <span className="font-serif text-white tracking-[0.45em] font-light pl-[0.45em] uppercase text-center max-w-full" style={{ fontSize: 'clamp(1.5rem, 4vw, 2.25rem)' }}>
                   OFFLINE
                 </span>
-                <span className="text-xs max-sm:text-[10px] font-mono tracking-[0.6em] text-zinc-500 uppercase pl-[0.6em]">
+                <span className="font-mono tracking-[0.6em] text-zinc-500 uppercase pl-[0.6em] text-center max-w-full" style={{ fontSize: 'clamp(0.625rem, 1.5vw, 0.75rem)' }}>
                   FOOTBALL INTELLIGENCE
                 </span>
               </div>
@@ -1543,11 +1566,33 @@ export default function App() {
   return (
     <motion.div
       id="app-root"
-      className="min-h-screen bg-black text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased"
+      className="min-h-screen bg-black text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased relative"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5, delay: 0.1 }}
     >
+      {/* Backend Timeout Warning Toast */}
+      {showBackendTimeoutWarning && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-900/90 border border-amber-700/50 rounded-lg px-4 py-3 flex items-center gap-3 max-w-[90vw] md:max-w-md backdrop-blur-sm"
+        >
+          <AlertCircle className="w-5 h-5 text-amber-300 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs font-mono text-amber-100">
+              Prediction server is taking longer than expected. Some live data may still be loading.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowBackendTimeoutWarning(false)}
+            className="text-amber-200 hover:text-amber-100 transition-colors flex-shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </motion.div>
+      )}
       
       {/* Top Premium Editorial Header */}
       <header id="app-header" className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full">
