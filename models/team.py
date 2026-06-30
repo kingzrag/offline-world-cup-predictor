@@ -17,7 +17,6 @@ class Team(Base):
     fifa_ranking = Column(Integer, nullable=True)
     market_value = Column(Float, nullable=True)
     squad_market_value = Column(Float, nullable=True)  # Sum of national team players market value
-    gender = Column(String(10), nullable=False, default="MEN", server_default="MEN")
     
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

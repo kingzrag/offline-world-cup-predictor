@@ -82,7 +82,7 @@ def compute_all_elo_ratings():
         competitions = {c.id: c.name for c in db.query(Competition).all()}
 
         # Build a lookup: team_id -> team_name
-        teams = {t.id: t.name for t in db.query(Team).filter(Team.gender == 'MEN').all()}
+        teams = {t.id: t.name for t in db.query(Team).all()}
 
         # Load all finished matches ordered by date
         matches = (
@@ -216,10 +216,10 @@ def save_elo_ranks_to_teams(elo_ratings: dict):
         updated = 0
         for rank, (team_name, _) in enumerate(sorted_teams, start=1):
             # Match by exact name first, then ilike fallback
-            team = db.query(Team).filter(Team.name == team_name, Team.gender == "MEN").first()
+            team = db.query(Team).filter(Team.name == team_name).first()
             if not team:
                 clean = team_name.lower().replace("fc", "").strip()
-                team = db.query(Team).filter(Team.name.ilike(f"%{clean}%"), Team.gender == "MEN").first()
+                team = db.query(Team).filter(Team.name.ilike(f"%{clean}%")).first()
             if team:
                 team.fifa_ranking = rank
                 updated += 1
@@ -229,7 +229,7 @@ def save_elo_ranks_to_teams(elo_ratings: dict):
 
         # Verify sample
         for name in ["Spain", "France", "Argentina", "Brazil", "England"]:
-            t = db.query(Team).filter(Team.name == name, Team.gender == "MEN").first()
+            t = db.query(Team).filter(Team.name == name).first()
             if t:
                 logger.info(f"  {name}: fifa_ranking={t.fifa_ranking}")
     except Exception as e:

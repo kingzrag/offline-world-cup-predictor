@@ -38,7 +38,7 @@ def upsert_fifa_rankings(db: Session, rankings: dict) -> None:
     """Update Team.fifa_ranking for each team that can be matched.
     If a direct match fails, a simple fallback removes "fc" and "cf".
     """
-    for team in db.query(Team).filter(Team.gender == "MEN").all():
+    for team in db.query(Team).all():
         key = team.name.lower()
         rank = rankings.get(key)
         if rank is None:

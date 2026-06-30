@@ -339,16 +339,16 @@ class ModelService:
         if a_clean in aliases:
             away_team_name = aliases[a_clean]
 
-        home = db.query(Team).filter(Team.name.ilike(home_team_name), Team.gender == "MEN").first()
+        home = db.query(Team).filter(Team.name.ilike(home_team_name)).first()
         if not home:
             # fuzzy fallback
-            home = db.query(Team).filter(Team.name.ilike(f"%{home_team_name}%"), Team.gender == "MEN").first()
+            home = db.query(Team).filter(Team.name.ilike(f"%{home_team_name}%")).first()
         if not home:
             raise ValueError(f"Team not found: '{home_team_name}'")
 
-        away = db.query(Team).filter(Team.name.ilike(away_team_name), Team.gender == "MEN").first()
+        away = db.query(Team).filter(Team.name.ilike(away_team_name)).first()
         if not away:
-            away = db.query(Team).filter(Team.name.ilike(f"%{away_team_name}%"), Team.gender == "MEN").first()
+            away = db.query(Team).filter(Team.name.ilike(f"%{away_team_name}%")).first()
         if not away:
             raise ValueError(f"Team not found: '{away_team_name}'")
 

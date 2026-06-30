@@ -441,7 +441,7 @@ def get_teams(
     t_start = time.perf_counter()
     logger.info(f"GET /api/teams  →  search={search}, limit={limit}")
 
-    query = db.query(Team).filter(Team.gender == "MEN")
+    query = db.query(Team)
     if search:
         from sqlalchemy import or_ as sql_or
         query = query.filter(
@@ -502,6 +502,10 @@ def get_team_profile(
     clean_search = team_name.strip().upper()
     resolved_name = aliases.get(clean_search, team_name)
 
+    if resolved_name and any(s in resolved_name.lower() for s in ["women", "women's", "woman"]):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Team '{team_name}' not found.")
+
     # Exact match first, then TLA/short_name/fuzzy fallback
     from sqlalchemy import or_ as sql_or
     _team_load_options = (
@@ -516,7 +520,7 @@ def get_team_profile(
         return (
             db.query(Team)
             .options(*_team_load_options)
-            .filter(name_filter, Team.gender == "MEN")
+            .filter(name_filter)
             .first()
         )
 
@@ -674,13 +678,15 @@ def get_h2h(
     }
 
     def resolve_team(name: str):
+        if name and any(s in name.lower() for s in ["women", "women's", "woman"]):
+            return None
         clean = name.strip().upper()
         resolved = aliases.get(clean, name)
         team = (
-            db.query(Team).filter(Team.name.ilike(resolved), Team.gender == "MEN").first()
-            or db.query(Team).filter(Team.tla.ilike(resolved), Team.gender == "MEN").first()
-            or db.query(Team).filter(Team.short_name.ilike(resolved), Team.gender == "MEN").first()
-            or db.query(Team).filter(Team.name.ilike(f"%{resolved}%"), Team.gender == "MEN").first()
+            db.query(Team).filter(Team.name.ilike(resolved)).first()
+            or db.query(Team).filter(Team.tla.ilike(resolved)).first()
+            or db.query(Team).filter(Team.short_name.ilike(resolved)).first()
+            or db.query(Team).filter(Team.name.ilike(f"%{resolved}%")).first()
         )
         return team
 
