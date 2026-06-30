@@ -843,6 +843,7 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     predictionObj.top5Scorelines = enrichment.markets.top_5_scorelines;
     predictionObj.cleanSheetMarket = enrichment.markets.clean_sheet;
     predictionObj.teamGoals = enrichment.markets.team_goals;
+    predictionObj.asianHandicap = enrichment.markets.asian_handicap;
   }
 
   return predictionObj;

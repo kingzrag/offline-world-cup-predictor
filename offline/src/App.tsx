@@ -42,7 +42,7 @@ import { motion } from 'motion/react';
 import { Canvas } from '@react-three/fiber';
 import { Football3D } from './components/Football3D';
 // @ts-ignore
-import stadiumBg from './assets/images/stadium.jpg';
+import stadiumBg from './assets/images/football2.png';
 import { BestPredictionsCarousel } from './components/BestPredictionsCarousel';
 import { checkHealth } from './api';
 import {
