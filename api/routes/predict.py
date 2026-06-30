@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from services.model_service import model_service
+from services.live_prediction_service import get_live_prediction
 from utils.logger import logger
 
 router = APIRouter(tags=["Predictions API"])
@@ -440,7 +441,7 @@ def get_teams(
     t_start = time.perf_counter()
     logger.info(f"GET /api/teams  →  search={search}, limit={limit}")
 
-    query = db.query(Team)
+    query = db.query(Team).filter(Team.gender == "MEN")
     if search:
         from sqlalchemy import or_ as sql_or
         query = query.filter(
@@ -515,7 +516,7 @@ def get_team_profile(
         return (
             db.query(Team)
             .options(*_team_load_options)
-            .filter(name_filter)
+            .filter(name_filter, Team.gender == "MEN")
             .first()
         )
 
@@ -676,10 +677,10 @@ def get_h2h(
         clean = name.strip().upper()
         resolved = aliases.get(clean, name)
         team = (
-            db.query(Team).filter(Team.name.ilike(resolved)).first()
-            or db.query(Team).filter(Team.tla.ilike(resolved)).first()
-            or db.query(Team).filter(Team.short_name.ilike(resolved)).first()
-            or db.query(Team).filter(Team.name.ilike(f"%{resolved}%")).first()
+            db.query(Team).filter(Team.name.ilike(resolved), Team.gender == "MEN").first()
+            or db.query(Team).filter(Team.tla.ilike(resolved), Team.gender == "MEN").first()
+            or db.query(Team).filter(Team.short_name.ilike(resolved), Team.gender == "MEN").first()
+            or db.query(Team).filter(Team.name.ilike(f"%{resolved}%"), Team.gender == "MEN").first()
         )
         return team
 
@@ -1167,7 +1168,7 @@ def get_fixtures_enriched(
 
     fixtures_out = []
     errors = 0
-    enrichment_source_counts = {"finished_score": 0, "stored_prediction": 0, "cache": 0, "missing": 0}
+    enrichment_source_counts = {"finished_score": 0, "stored_prediction": 0, "live_prediction": 0, "cache": 0, "missing": 0}
 
     for m in matches:
         # ── Base fixture fields ───────────────────────────────────────────────
@@ -1215,20 +1216,75 @@ def get_fixtures_enriched(
                     and stored_pred.expected_home_goals is not None
                     and stored_pred.expected_away_goals is not None
                 ):
-                    h_xg = float(stored_pred.expected_home_goals)
-                    a_xg = float(stored_pred.expected_away_goals)
-                    enrichment = _build_enrichment_from_xg(
-                        h_xg,
-                        a_xg,
-                    )
-                    enrichment_source_counts["stored_prediction"] += 1
-                    ah = enrichment.get("markets", {}).get("asian_handicap")
-                    logger.info(
-                        f"[fixtures-enriched] match_id={m.id} source=stored_prediction "
-                        f"{home_t.name} vs {away_t.name} "
-                        f"xg=({h_xg:.4f}, {a_xg:.4f}) "
-                        f"asian_handicap={ah}"
-                    )
+                    # Check if match is LIVE - use live prediction
+                    if m.status in ("IN_PLAY", "PAUSED"):
+                        try:
+                            # Calculate strength difference from FIFA rankings
+                            strength_diff = 0.0
+                            if home_t.fifa_ranking and away_t.fifa_ranking:
+                                strength_diff = away_t.fifa_ranking - home_t.fifa_ranking  # Lower FIFA = stronger
+                            
+                            # Get live prediction
+                            live_pred = get_live_prediction(
+                                current_minute=m.current_minute or 0,
+                                current_home_score=m.current_home_score or 0,
+                                current_away_score=m.current_away_score or 0,
+                                home_red_cards=m.home_red_cards or 0,
+                                away_red_cards=m.away_red_cards or 0,
+                                original_home_xg=float(stored_pred.expected_home_goals),
+                                original_away_xg=float(stored_pred.expected_away_goals),
+                                strength_diff=strength_diff,
+                            )
+                            
+                            # Build enrichment from live prediction
+                            enrichment = {
+                                "goals": {
+                                    "home_xg": live_pred["expected_goals"]["home"],
+                                    "away_xg": live_pred["expected_goals"]["away"],
+                                    "total_xg": live_pred["expected_goals"]["total"],
+                                },
+                                "markets": {
+                                    "btts": live_pred["markets"]["btts"],
+                                    "over_under": live_pred["markets"]["over_under"],
+                                    "clean_sheet": live_pred["markets"]["clean_sheet"],
+                                    "most_likely_score": live_pred["markets"]["correct_score"]["most_likely"],
+                                    "top_5_scorelines": live_pred["markets"]["correct_score"]["top_5"],
+                                    "team_goals": live_pred["markets"]["team_goals"],
+                                    "asian_handicap": live_pred["markets"]["asian_handicap"],
+                                },
+                                "live_metadata": live_pred["metadata"],
+                            }
+                            enrichment_source_counts["live_prediction"] += 1
+                            logger.info(
+                                f"[fixtures-enriched] match_id={m.id} source=live_prediction "
+                                f"{home_t.name} vs {away_t.name} "
+                                f"live_score=({m.current_home_score}-{m.current_away_score}) "
+                                f"minute={m.current_minute} "
+                                f"xg=({live_pred['expected_goals']['home']:.4f}, {live_pred['expected_goals']['away']:.4f})"
+                            )
+                        except Exception as live_exc:
+                            logger.warning(f"[fixtures-enriched] Live prediction failed for match {m.id}: {live_exc}, falling back to stored prediction")
+                            # Fall back to stored prediction
+                            h_xg = float(stored_pred.expected_home_goals)
+                            a_xg = float(stored_pred.expected_away_goals)
+                            enrichment = _build_enrichment_from_xg(h_xg, a_xg)
+                            enrichment_source_counts["stored_prediction"] += 1
+                    else:
+                        # Not live - use stored prediction
+                        h_xg = float(stored_pred.expected_home_goals)
+                        a_xg = float(stored_pred.expected_away_goals)
+                        enrichment = _build_enrichment_from_xg(
+                            h_xg,
+                            a_xg,
+                        )
+                        enrichment_source_counts["stored_prediction"] += 1
+                        ah = enrichment.get("markets", {}).get("asian_handicap")
+                        logger.info(
+                            f"[fixtures-enriched] match_id={m.id} source=stored_prediction "
+                            f"{home_t.name} vs {away_t.name} "
+                            f"xg=({h_xg:.4f}, {a_xg:.4f}) "
+                            f"asian_handicap={ah}"
+                        )
                 else:
                     enrichment = _lookup_cached_enrichment(
                         m.id,
@@ -1285,6 +1341,7 @@ def get_fixtures_enriched(
         "[fixtures-enriched] source summary: "
         f"finished_score={enrichment_source_counts['finished_score']} "
         f"stored_prediction={enrichment_source_counts['stored_prediction']} "
+        f"live_prediction={enrichment_source_counts['live_prediction']} "
         f"cache={enrichment_source_counts['cache']} "
         f"missing={enrichment_source_counts['missing']}"
     )

@@ -35,6 +35,53 @@ def calculate_probability_matrix(expected_home_goals: float, expected_away_goals
             matrix[f"{h}-{a}"] = p_h * p_a
     return matrix
 
+def calculate_conditional_probability_matrix(
+    current_home_score: int,
+    current_away_score: int,
+    remaining_home_xg: float,
+    remaining_away_xg: float,
+    max_goals: int = 10
+) -> Dict[str, float]:
+    """
+    Generate joint final score probabilities given a current score and remaining xG.
+    
+    Final Score = Current Score + Remaining Goals
+    
+    Args:
+        current_home_score: Current home goals
+        current_away_score: Current away goals
+        remaining_home_xg: Expected remaining home goals
+        remaining_away_xg: Expected remaining away goals
+        max_goals: Maximum additional goals to consider
+        
+    Returns:
+        Dictionary mapping final score strings to probabilities
+    """
+    # Ensure non-negative lambdas
+    lam_h = max(0.0001, remaining_home_xg)
+    lam_a = max(0.0001, remaining_away_xg)
+    
+    matrix = {}
+    total_prob = 0.0
+    
+    # Calculate probabilities for all possible remaining goals
+    for delta_h in range(max_goals + 1):
+        p_h = get_poisson_probability(lam_h, delta_h)
+        for delta_a in range(max_goals + 1):
+            p_a = get_poisson_probability(lam_a, delta_a)
+            final_h = current_home_score + delta_h
+            final_a = current_away_score + delta_a
+            score_str = f"{final_h}-{final_a}"
+            matrix[score_str] = p_h * p_a
+            total_prob += p_h * p_a
+    
+    # Re-normalize to ensure probabilities sum to 1
+    if total_prob > 0:
+        for score_str in matrix:
+            matrix[score_str] /= total_prob
+    
+    return matrix
+
 def get_correct_scores(matrix: Dict[str, float]) -> Dict[str, Any]:
     """
     Returns the most likely score and the top 5 scorelines.
@@ -55,18 +102,55 @@ def get_correct_scores(matrix: Dict[str, float]) -> Dict[str, Any]:
         "top_5_scorelines": top_5
     }
 
+# Backwards compatible functions for existing callers
 def get_btts_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, float]:
     """
-    Calculates BTTS Yes and No probabilities.
+    Calculates BTTS Yes and No probabilities (backwards compatible).
     """
-    lam_h = max(0.0001, expected_home_goals)
-    lam_a = max(0.0001, expected_away_goals)
+    matrix = calculate_probability_matrix(expected_home_goals, expected_away_goals)
+    return get_btts_probabilities_from_matrix(matrix, 0, 0)
+
+def get_over_under_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, Dict[str, float]]:
+    """
+    Calculates Over/Under probabilities (backwards compatible).
+    """
+    matrix = calculate_probability_matrix(expected_home_goals, expected_away_goals)
+    return get_over_under_probabilities_from_matrix(matrix)
+
+def get_asian_handicap_probabilities(expected_home_goals: float, expected_away_goals: float, matrix: Dict[str, float]) -> Dict[str, Any]:
+    """
+    Calculates the suggested Asian Handicap lines and probability of covering each line (backwards compatible).
+    """
+    return get_asian_handicap_probabilities_from_matrix(matrix)
+
+def get_team_goals_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, Dict[str, float]]:
+    """
+    Calculates Over probabilities for Team Goals (backwards compatible).
+    """
+    matrix = calculate_probability_matrix(expected_home_goals, expected_away_goals)
+    return get_team_goals_probabilities_from_matrix(matrix, 0, 0)
+
+def get_clean_sheet_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, float]:
+    """
+    Calculates Clean Sheet probabilities (backwards compatible).
+    """
+    matrix = calculate_probability_matrix(expected_home_goals, expected_away_goals)
+    return get_clean_sheet_probabilities_from_matrix(matrix, 0, 0)
+
+def get_btts_probabilities_from_matrix(matrix: Dict[str, float], current_home_score: int, current_away_score: int) -> Dict[str, float]:
+    """
+    Calculates BTTS Yes and No probabilities from a final score matrix.
+    """
+    btts_yes = 0.0
+    for score_str, prob in matrix.items():
+        h, a = map(int, score_str.split('-'))
+        if h > 0 and a > 0:
+            btts_yes += prob
     
-    # P(H > 0) = 1 - P(H = 0)
-    p_h_gt_0 = 1.0 - get_poisson_probability(lam_h, 0)
-    p_a_gt_0 = 1.0 - get_poisson_probability(lam_a, 0)
+    # Also check if both teams have already scored
+    if current_home_score > 0 and current_away_score > 0:
+        btts_yes = 1.0
     
-    btts_yes = p_h_gt_0 * p_a_gt_0
     btts_no = 1.0 - btts_yes
     
     return {
@@ -74,29 +158,36 @@ def get_btts_probabilities(expected_home_goals: float, expected_away_goals: floa
         "btts_no": round(btts_no, 4)
     }
 
-def get_over_under_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, Dict[str, float]]:
+def get_over_under_probabilities_from_matrix(matrix: Dict[str, float]) -> Dict[str, Dict[str, float]]:
     """
-    Calculates Over/Under probabilities for 0.5, 1.5, 2.5, 3.5, and 4.5 lines.
-    Uses total expected goals as lambda (sum of independent Poissons is Poisson).
+    Calculates Over/Under probabilities for 0.5, 1.5, 2.5, 3.5, and 4.5 lines from a final score matrix.
     """
-    total_lambda = max(0.0001, expected_home_goals + expected_away_goals)
-
     results = {}
     for line in (0.5, 1.5, 2.5, 3.5, 4.5):
-        # Under line: H+A <= floor(line)  (since line is .5, floor == int part)
-        k = int(line)  # 0, 1, 2, 3, 4
-        under = sum(get_poisson_probability(total_lambda, i) for i in range(k + 1))
-        over  = 1.0 - under
+        under = 0.0
+        for score_str, prob in matrix.items():
+            h, a = map(int, score_str.split('-'))
+            total = h + a
+            if total <= int(line):
+                under += prob
+        over = 1.0 - under
         results[str(line)] = {"over": round(over, 4), "under": round(under, 4)}
 
     return results
 
-def get_asian_handicap_probabilities(expected_home_goals: float, expected_away_goals: float, matrix: Dict[str, float]) -> Dict[str, Any]:
+def get_asian_handicap_probabilities_from_matrix(matrix: Dict[str, float]) -> Dict[str, Any]:
     """
-    Calculates the suggested Asian Handicap lines and probability of covering each line.
-    Suggested lines are based on expected goal difference.
+    Calculates the suggested Asian Handicap lines and probability of covering each line from a final score matrix.
     """
-    diff = expected_home_goals - expected_away_goals
+    # Calculate expected goal difference from matrix
+    exp_home = 0.0
+    exp_away = 0.0
+    for score_str, prob in matrix.items():
+        h, a = map(int, score_str.split('-'))
+        exp_home += h * prob
+        exp_away += a * prob
+    
+    diff = exp_home - exp_away
     is_home_fav = diff >= 0
     prefix = "Home" if is_home_fav else "Away"
     
@@ -108,22 +199,6 @@ def get_asian_handicap_probabilities(expected_home_goals: float, expected_away_g
     # P(cover) calculations:
     for line in lines:
         cover_prob = 0.0
-        # Line is negative (e.g. -0.25)
-        # For a given score (h, a), the net difference for favorite team is:
-        # If Home is favorite: net = h - a + line
-        # If Away is favorite: net = a - h + line
-        # Covers fully if net > 0. Covers half if net == 0.25 (which does not happen for -0.25, -0.5, -0.75, -1.0)
-        # Wait, let's look at the payoffs:
-        # -0.25: net = Diff - 0.25. If Diff >= 1, wins fully. If Diff == 0 (draw), half stake lost (refund half, lose half).
-        #        Let's define cover probability as P(Diff >= 1) + 0.5 * P(Diff == 0) if we want expected payoff,
-        #        or just P(Diff >= 1) for winning cover. Let's use P(Diff >= 1) as the strict cover, or expected payoff.
-        #        Actually, the standard definition of cover probability is P(win the bet fully or half-win).
-        #        Let's code it explicitly:
-        #        For -0.25: Win if Diff >= 1.
-        #        For -0.5: Win if Diff >= 1.
-        #        For -0.75: Win if Diff >= 2. Half-win if Diff == 1. cover_prob = P(Diff >= 2) + 0.5 * P(Diff == 1).
-        #        For -1.0: Win if Diff >= 2. Push if Diff == 1. cover_prob = P(Diff >= 2).
-        
         for score_str, prob in matrix.items():
             h, a = map(int, score_str.split('-'))
             fav_score = h if is_home_fav else a
@@ -133,7 +208,6 @@ def get_asian_handicap_probabilities(expected_home_goals: float, expected_away_g
             # Evaluate covering based on line
             if line == -0.25:
                 # Win if goal_diff >= 1. Half-loss (refund 0.5) if goal_diff == 0.
-                # Let's count full win.
                 if goal_diff >= 1:
                     cover_prob += prob
             elif line == -0.5:
@@ -147,7 +221,7 @@ def get_asian_handicap_probabilities(expected_home_goals: float, expected_away_g
                 elif goal_diff == 1:
                     cover_prob += prob * 0.5
             elif line == -1.0:
-                # Full win if goal_diff >= 2. Push if goal_diff == 1 (refunded, so in terms of covering without losing, we could count it, but winning probability is goal_diff >= 2).
+                # Full win if goal_diff >= 2. Push if goal_diff == 1 (refunded).
                 if goal_diff >= 2:
                     cover_prob += prob
                     
@@ -158,22 +232,31 @@ def get_asian_handicap_probabilities(expected_home_goals: float, expected_away_g
         "suggested_lines": results
     }
 
-def get_team_goals_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, Dict[str, float]]:
+def get_team_goals_probabilities_from_matrix(matrix: Dict[str, float], current_home_score: int, current_away_score: int) -> Dict[str, Dict[str, float]]:
     """
-    Calculates Over probabilities for Team Goals (0.5, 1.5, 2.5).
+    Calculates Over probabilities for Team Goals (0.5, 1.5, 2.5) from a final score matrix.
     """
-    lam_h = max(0.0001, expected_home_goals)
-    lam_a = max(0.0001, expected_away_goals)
+    home_over_0_5 = 0.0
+    home_over_1_5 = 0.0
+    home_over_2_5 = 0.0
+    away_over_0_5 = 0.0
+    away_over_1_5 = 0.0
+    away_over_2_5 = 0.0
     
-    # Home Team Over
-    home_over_0_5 = 1.0 - sum(get_poisson_probability(lam_h, i) for i in range(1))
-    home_over_1_5 = 1.0 - sum(get_poisson_probability(lam_h, i) for i in range(2))
-    home_over_2_5 = 1.0 - sum(get_poisson_probability(lam_h, i) for i in range(3))
-    
-    # Away Team Over
-    away_over_0_5 = 1.0 - sum(get_poisson_probability(lam_a, i) for i in range(1))
-    away_over_1_5 = 1.0 - sum(get_poisson_probability(lam_a, i) for i in range(2))
-    away_over_2_5 = 1.0 - sum(get_poisson_probability(lam_a, i) for i in range(3))
+    for score_str, prob in matrix.items():
+        h, a = map(int, score_str.split('-'))
+        if h > 0:
+            home_over_0_5 += prob
+        if h > 1:
+            home_over_1_5 += prob
+        if h > 2:
+            home_over_2_5 += prob
+        if a > 0:
+            away_over_0_5 += prob
+        if a > 1:
+            away_over_1_5 += prob
+        if a > 2:
+            away_over_2_5 += prob
     
     return {
         "home": {
@@ -188,21 +271,30 @@ def get_team_goals_probabilities(expected_home_goals: float, expected_away_goals
         }
     }
 
-def get_clean_sheet_probabilities(expected_home_goals: float, expected_away_goals: float) -> Dict[str, float]:
+def get_clean_sheet_probabilities_from_matrix(matrix: Dict[str, float], current_home_score: int, current_away_score: int) -> Dict[str, float]:
     """
-    Clean sheet probability = P(opponent scores 0 goals) = e^(-lambda).
-    home_clean_sheet: probability the HOME team keeps a clean sheet (away scores 0).
-    away_clean_sheet: probability the AWAY team keeps a clean sheet (home scores 0).
+    Calculates Clean Sheet probabilities from a final score matrix.
     """
-    lam_h = max(0.0001, expected_home_goals)
-    lam_a = max(0.0001, expected_away_goals)
-    home_cs = get_poisson_probability(lam_a, 0)   # away scores 0
-    away_cs = get_poisson_probability(lam_h, 0)   # home scores 0
+    home_cs = 0.0
+    away_cs = 0.0
+    
+    for score_str, prob in matrix.items():
+        h, a = map(int, score_str.split('-'))
+        if a == 0:
+            home_cs += prob
+        if h == 0:
+            away_cs += prob
+    
+    # If a team has already conceded, clean sheet is impossible
+    if current_away_score > 0:
+        home_cs = 0.0
+    if current_home_score > 0:
+        away_cs = 0.0
+    
     return {
         "home_clean_sheet": round(home_cs, 4),
         "away_clean_sheet": round(away_cs, 4),
     }
-
 
 def get_1x2_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
     """
@@ -235,24 +327,53 @@ def get_1x2_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
     }
 
 
-def evaluate_poisson_engine(expected_home_goals: float, expected_away_goals: float) -> Dict[str, Any]:
+def evaluate_poisson_engine(
+    expected_home_goals: float,
+    expected_away_goals: float,
+    current_home_score: int = 0,
+    current_away_score: int = 0
+) -> Dict[str, Any]:
     """
-    Main entry point to calculate all markets from expected goals.
-    Returns BTTS, O/U (0.5–4.5), scorelines, clean sheet, team goals, asian handicap.
+    Main entry point to calculate all markets from expected goals and current score.
+    
+    Args:
+        expected_home_goals: Expected remaining home goals
+        expected_away_goals: Expected remaining away goals
+        current_home_score: Current home score (default: 0 for pre-match)
+        current_away_score: Current away score (default: 0 for pre-match)
+        
+    Returns:
+        All betting markets based on final score distribution
     """
-    matrix = calculate_probability_matrix(expected_home_goals, expected_away_goals)
+    if current_home_score == 0 and current_away_score == 0:
+        # Pre-match or 0-0 with no goals - use original method for backward compatibility
+        matrix = calculate_probability_matrix(expected_home_goals, expected_away_goals)
+    else:
+        # Live match with goals - use conditional probability matrix
+        matrix = calculate_conditional_probability_matrix(
+            current_home_score,
+            current_away_score,
+            expected_home_goals,
+            expected_away_goals
+        )
 
-    requested_scores = [
-        "0-0", "1-0", "1-1", "2-0", "2-1", "2-2", "3-0", "3-1", "3-2", "3-3", "4-0", "4-1", "4-2", "4-3", "4-4"
-    ]
+    requested_scores = []
+    # Generate requested scores based on current score
+    max_current = max(current_home_score, current_away_score)
+    for dh in range(0, 5):
+        for da in range(0, 5):
+            fh = current_home_score + dh
+            fa = current_away_score + da
+            requested_scores.append(f"{fh}-{fa}")
+    
     prob_matrix_subset = {score: round(matrix.get(score, 0.0), 4) for score in requested_scores}
 
     correct_scores  = get_correct_scores(matrix)
-    btts            = get_btts_probabilities(expected_home_goals, expected_away_goals)
-    over_under      = get_over_under_probabilities(expected_home_goals, expected_away_goals)
-    asian_handicap  = get_asian_handicap_probabilities(expected_home_goals, expected_away_goals, matrix)
-    team_goals      = get_team_goals_probabilities(expected_home_goals, expected_away_goals)
-    clean_sheet     = get_clean_sheet_probabilities(expected_home_goals, expected_away_goals)
+    btts            = get_btts_probabilities_from_matrix(matrix, current_home_score, current_away_score)
+    over_under      = get_over_under_probabilities_from_matrix(matrix)
+    asian_handicap  = get_asian_handicap_probabilities_from_matrix(matrix)
+    team_goals      = get_team_goals_probabilities_from_matrix(matrix, current_home_score, current_away_score)
+    clean_sheet     = get_clean_sheet_probabilities_from_matrix(matrix, current_home_score, current_away_score)
     outcome_probs   = get_1x2_probabilities(matrix)
 
     return {

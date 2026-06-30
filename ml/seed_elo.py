@@ -69,7 +69,7 @@ def _seed_team_metadata(db: Session) -> None:
     skipped = 0
 
     for team_name, (fifa_rank, squad_mv) in TEAM_DATA.items():
-        team = db.query(Team).filter(Team.name.ilike(team_name)).first()
+        team = db.query(Team).filter(Team.name.ilike(team_name), Team.gender == "MEN").first()
         if not team:
             skipped += 1
             continue

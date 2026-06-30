@@ -13,3 +13,17 @@ __pycache__/
 # Temporary debug output
 features_before.json
 features_after.json
+# Cache directories
+.cache/
+# Audit and debug scripts
+audit*.py
+debug*.py
+test*.py
+calibrate*.py
+production_validation.py
+final_production_validation.py
+# Audit and debug outputs
+*.json
+*.md
+!README.md
+!requirements.txt

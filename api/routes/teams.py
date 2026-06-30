@@ -15,7 +15,7 @@ def read_teams(
     db: Session = Depends(get_db)
 ):
     """
-    Retrieves football teams including details of home venues and founding dates.
+    Retrieves MEN'S football teams including details of home venues and founding dates.
     """
     logger.info("Executing GET /teams query filters...")
     
@@ -23,9 +23,9 @@ def read_teams(
         # Search via standings table for teams playing in this competition
         standings = db.query(Standing).filter(Standing.competition_id == competition_id).all()
         team_ids = [s.team_id for s in standings]
-        query = db.query(Team).filter(Team.id.in_(team_ids))
+        query = db.query(Team).filter(Team.id.in_(team_ids), Team.gender == "MEN")
     else:
-        query = db.query(Team)
+        query = db.query(Team).filter(Team.gender == "MEN")
 
     if search:
         query = query.filter(Team.name.ilike(f"%{search}%") | Team.short_name.ilike(f"%{search}%"))
@@ -51,7 +51,7 @@ def read_team_details(team_id: int, db: Session = Depends(get_db)):
     """
     Detailed team profile along with full roster list.
     """
-    t = db.query(Team).options(joinedload(Team.players)).filter(Team.id == team_id).first()
+    t = db.query(Team).options(joinedload(Team.players)).filter(Team.id == team_id, Team.gender == "MEN").first()
     if not t:
         raise HTTPException(status_code=404, detail="Team not found.")
 

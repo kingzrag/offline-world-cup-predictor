@@ -305,8 +305,8 @@ def predict_match(home_team: str, away_team: str, db=None) -> dict:
         db = SessionLocal()
 
     try:
-        home = db.query(Team).filter(Team.name == home_team).first()
-        away = db.query(Team).filter(Team.name == away_team).first()
+        home = db.query(Team).filter(Team.name == home_team, Team.gender == "MEN").first()
+        away = db.query(Team).filter(Team.name == away_team, Team.gender == "MEN").first()
 
         if not home:
             raise ValueError(f"Team not found: '{home_team}'")

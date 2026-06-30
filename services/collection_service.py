@@ -90,7 +90,7 @@ class CollectionService:
         to merge historical and API records instead of creating duplicates.
         """
         # 1. Exact lookup by api_id
-        team = db.query(Team).filter_by(api_id=api_id).first()
+        team = db.query(Team).filter_by(api_id=api_id, gender="MEN").first()
         if team:
             # Sync metadata fields if they were missing
             updated = False
@@ -127,7 +127,7 @@ class CollectionService:
         target_clean = clean_name(name)
 
         # Retrieve all teams to perform flexible name mapping
-        all_teams = db.query(Team).all()
+        all_teams = db.query(Team).filter(Team.gender == "MEN").all()
         for t in all_teams:
             if clean_name(t.name) == target_clean:
                 logger.info(
@@ -510,10 +510,10 @@ class CollectionService:
                 away_team_name = parsed["away_team"].get("name")
 
                 home_team = (
-                    db.query(Team).filter(Team.name.ilike(home_team_name)).first()
+                    db.query(Team).filter(Team.name.ilike(home_team_name), Team.gender == "MEN").first()
                 )
                 away_team = (
-                    db.query(Team).filter(Team.name.ilike(away_team_name)).first()
+                    db.query(Team).filter(Team.name.ilike(away_team_name), Team.gender == "MEN").first()
                 )
                 if not home_team or not away_team:
                     continue
@@ -863,10 +863,10 @@ class CollectionService:
 
                     # Find the match in our database
                     home_team = (
-                        db.query(Team).filter(Team.name.ilike(home_team_name)).first()
+                        db.query(Team).filter(Team.name.ilike(home_team_name), Team.gender == "MEN").first()
                     )
                     away_team = (
-                        db.query(Team).filter(Team.name.ilike(away_team_name)).first()
+                        db.query(Team).filter(Team.name.ilike(away_team_name), Team.gender == "MEN").first()
                     )
 
                     if not home_team or not away_team:
@@ -1624,8 +1624,8 @@ class CollectionService:
         away_clean = _normalize(away_name)
 
         # Try exact team name match first
-        home_team = db.query(Team).filter(Team.name.ilike(f"%{home_name}%")).first()
-        away_team = db.query(Team).filter(Team.name.ilike(f"%{away_name}%")).first()
+        home_team = db.query(Team).filter(Team.name.ilike(f"%{home_name}%"), Team.gender == "MEN").first()
+        away_team = db.query(Team).filter(Team.name.ilike(f"%{away_name}%"), Team.gender == "MEN").first()
 
         if not home_team or not away_team:
             return None
@@ -1646,13 +1646,13 @@ class CollectionService:
         return query.order_by(Match.utc_date.desc()).first()
 
     def _get_or_create_team_by_name(self, db: Session, name: str) -> Team:
-        team = db.query(Team).filter(Team.name.ilike(name)).first()
+        team = db.query(Team).filter(Team.name.ilike(name), Team.gender == "MEN").first()
         if team:
             return team
-        team = db.query(Team).filter(Team.name.ilike(f"%{name}%")).first()
+        team = db.query(Team).filter(Team.name.ilike(f"%{name}%"), Team.gender == "MEN").first()
         if team:
             return team
-        team = Team(name=name)
+        team = Team(name=name, gender="MEN")
         db.add(team)
         db.flush()
         return team

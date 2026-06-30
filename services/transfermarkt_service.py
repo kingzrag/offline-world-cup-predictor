@@ -37,7 +37,6 @@ INTERNATIONAL_COMPETITION_CODES = {
     "WCQA",
     "WCQC",
     "WCQE",
-    "WWC",
 }
 
 

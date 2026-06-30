@@ -25,7 +25,13 @@ def get_team_elo(db, team_name: str) -> int:
         # Flexible match (e.g. "Arsenal FC" matching "Arsenal")
         clean_name = team_name.lower().replace("fc", "").strip()
         elo = (
-            db.query(TeamElo).filter(TeamElo.team_name.ilike(f"%{clean_name}%")).first()
+            db.query(TeamElo)
+            .filter(
+                TeamElo.team_name.ilike(f"%{clean_name}%"),
+                ~TeamElo.team_name.ilike("%women%"),
+                ~TeamElo.team_name.ilike("%woman%"),
+            )
+            .first()
         )
     if elo:
         logger.debug(f"Found Elo for team '{team_name}': {elo.elo_rating}")

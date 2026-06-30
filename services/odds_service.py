@@ -75,21 +75,21 @@ class OddsService:
     def find_team_by_name(self, db: Session, name: str) -> Optional[Team]:
         """Looks up a team in the database using exact, case-insensitive, or partial matches."""
         # 1. Exact match
-        team = db.query(Team).filter(Team.name == name).first()
+        team = db.query(Team).filter(Team.name == name, Team.gender == "MEN").first()
         if team:
             return team
         # 2. Case-insensitive exact match
-        team = db.query(Team).filter(func.lower(Team.name) == name.lower()).first()
+        team = db.query(Team).filter(func.lower(Team.name) == name.lower(), Team.gender == "MEN").first()
         if team:
             return team
         # 3. Simple ILIKE partial match
-        team = db.query(Team).filter(Team.name.ilike(f"%{name}%")).first()
+        team = db.query(Team).filter(Team.name.ilike(f"%{name}%"), Team.gender == "MEN").first()
         if team:
             return team
         # 4. Suffix stripping search
         parts = [p for p in name.split() if p.lower() not in ["fc", "cf", "ud", "rc", "afc", "sc", "sv"]]
         if parts:
-            query = db.query(Team)
+            query = db.query(Team).filter(Team.gender == "MEN")
             for part in parts:
                 query = query.filter(Team.name.ilike(f"%{part}%"))
             team = query.first()

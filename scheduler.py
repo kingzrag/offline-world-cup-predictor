@@ -16,7 +16,6 @@ SCHEDULED_INTERNATIONAL_COMPETITIONS = [
     "EC",
     "CA",
     "UNL",
-    "WWC",
     "OLY",
     "WCQ",
 ]
@@ -153,8 +152,8 @@ def run_scheduler():
     # Additional checks for upcoming matches every hour
     schedule.every().hour.do(refresh_upcoming_match_teams)
 
-    # SofaScore live ingestion every 5 minutes
-    schedule.every(5).minutes.do(ingest_sofascore_live_data)
+    # SofaScore live ingestion every 2 minutes
+    schedule.every(2).minutes.do(ingest_sofascore_live_data)
 
     logger.info("Scheduler started")
     while True:

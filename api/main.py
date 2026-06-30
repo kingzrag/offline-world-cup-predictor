@@ -244,7 +244,6 @@ SCHEDULED_INTERNATIONAL_COMPETITIONS = [
     "EC",
     "CA",
     "UNL",
-    "WWC",
     "OLY",
     "WCQ",
 ]
