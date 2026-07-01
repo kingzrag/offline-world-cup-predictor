@@ -363,6 +363,34 @@ class ModelService:
 
         now = datetime.now(timezone.utc)
 
+        # ── Fixture identity guard ─────────────────────────────────────────────
+        # The query above finds the *most recent* historical match for this team
+        # pair + competition.  Without a guard, a match played years ago (e.g.
+        # France vs Sweden Friendly 2014) would suppress the ML prediction for
+        # any future fixture between the same teams.
+        #
+        # Resolution priority (most precise → fallback):
+        #   1. Upcoming / live: status is TIMED, SCHEDULED, IN_PLAY or PAUSED
+        #      → keep match_record as model context but DO NOT treat as a result.
+        #   2. Recently completed: status == FINISHED AND kickoff within 7 days
+        #      → treat as the actual result and apply override.
+        #   3. Old completed: status == FINISHED AND kickoff older than 7 days
+        #      → null out match_record; run full ML + Poisson prediction.
+        if match_record and match_record.status == "FINISHED":
+            match_date_utc = match_record.utc_date
+            if match_date_utc.tzinfo is None:
+                match_date_utc = match_date_utc.replace(tzinfo=timezone.utc)
+            age = now - match_date_utc
+            if age.days > 7:
+                # Too old to be the fixture being predicted — discard it so the
+                # ML pipeline runs on fresh Poisson predictions.
+                logger.info(
+                    f"[predict] Discarding stale match_record id={match_record.id} "
+                    f"({home.name} vs {away.name}, date={match_record.utc_date.date()}, "
+                    f"age={age.days}d) — running ML prediction instead."
+                )
+                match_record = None
+
         if match_record and match_record.status == "FINISHED":
             # Override with real results
             home_score = match_record.home_score if match_record.home_score is not None else 0
