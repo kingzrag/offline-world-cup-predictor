@@ -15,13 +15,32 @@ app.use(express.json());
 // This avoids all CORS issues; the browser only ever talks to port 3000.
 const FASTAPI_URL = process.env.FASTAPI_URL || "http://127.0.0.1:8000";
 console.log(`[proxy] FastAPI target → ${FASTAPI_URL}`);
+console.log(`[proxy] Proxying /fastapi/* → ${FASTAPI_URL}/api/*`);
+
+// First, a debug middleware to log incoming /fastapi requests BEFORE proxying
+app.use("/fastapi", (req, res, next) => {
+  console.log("\n==== [Express Proxy Debug Log] ====");
+  console.log("[Incoming Request]");
+  console.log(`  URL: ${req.url}`);
+  console.log(`  Original URL: ${req.originalUrl}`);
+  console.log(`  Method: ${req.method}`);
+  console.log(`  Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  next();
+});
 
 app.use(
   "/fastapi",
   createProxyMiddleware({
     target: FASTAPI_URL,
     changeOrigin: true,
-    pathRewrite: { "^\/fastapi": "/api" },
+    pathRewrite: (path: string, req: any) => {
+      const rewrittenPath = path.replace(/^\/fastapi/, "/api");
+      console.log("\n[Path Rewrite]");
+      console.log(`  Original Path: ${path}`);
+      console.log(`  Rewritten Path: ${rewrittenPath}`);
+      console.log(`  Full Target URL: ${FASTAPI_URL}${rewrittenPath}`);
+      return rewrittenPath;
+    },
     on: {
       error: (err, req, res) => {
         console.error("[FastAPI proxy] Error:", err.message);

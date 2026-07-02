@@ -750,10 +750,10 @@ def extract_ml_features(
     # ------------------------------------------------------------
     home_avg_rating = 0.0
     away_avg_rating = 0.0
-    home_possession = None
-    away_possession = None
-    home_xg = None
-    away_xg = None
+    home_possession = 0.0
+    away_possession = 0.0
+    home_xg = 0.0
+    away_xg = 0.0
     possession_diff = 0.0
     xg_diff = 0.0
 
@@ -797,14 +797,16 @@ def extract_ml_features(
             db.query(MatchStatistic).filter(MatchStatistic.match_id == match.id).first()
         )
         if match_statistics:
-            home_possession = match_statistics.home_possession
-            away_possession = match_statistics.away_possession
-            home_xg = match_statistics.home_expected_goals
-            away_xg = match_statistics.away_expected_goals
-            if home_possession and away_possession:
-                possession_diff = home_possession - away_possession
-            if home_xg and away_xg:
-                xg_diff = home_xg - away_xg
+            if match_statistics.home_possession is not None:
+                home_possession = match_statistics.home_possession
+            if match_statistics.away_possession is not None:
+                away_possession = match_statistics.away_possession
+            if match_statistics.home_expected_goals is not None:
+                home_xg = match_statistics.home_expected_goals
+            if match_statistics.away_expected_goals is not None:
+                away_xg = match_statistics.away_expected_goals
+            possession_diff = home_possession - away_possession
+            xg_diff = home_xg - away_xg
 
         logger.debug(
             f"SofaScore features: home_avg_rating={home_avg_rating:.2f}, "

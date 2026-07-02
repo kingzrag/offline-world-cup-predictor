@@ -12,12 +12,15 @@ Never reloads per-request; safe for async FastAPI lifecycle.
 import os
 import pickle
 import logging
+import math
 import numpy as np
 import xgboost as xgb
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
+
+from services.poisson_engine import evaluate_poisson_engine, POISSON_ENGINE_VERSION
 
 # ── Resolved paths ────────────────────────────────────────────────────────────
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -91,6 +94,100 @@ class ModelService:
         self._initialized = True
         logger.info("ModelService: both models ready.")
 
+    # ── Confidence calculation methods ────────────────────────────────────────
+    @staticmethod
+    def normalize_1x2_probs(home_p: float, draw_p: float, away_p: float) -> tuple[float, float, float]:
+        """
+        Normalize 1X2 probabilities to sum exactly to 1.0, rounding to 4 decimal places.
+        
+        This ensures frontend receives consistent probabilities that always sum to 1.0,
+        preventing floating-point arithmetic errors that could cause 0.9999 or 1.0001 sums.
+        
+        Strategy:
+        1. Round each probability to 4 decimal places for readability
+        2. If sum is exactly 1.0, return as-is
+        3. Otherwise, adjust the largest probability to absorb the rounding error
+           (this minimizes visual impact on the most likely outcome)
+        
+        Args:
+            home_p: Home win probability (0-1)
+            draw_p: Draw probability (0-1)
+            away_p: Away win probability (0-1)
+        
+        Returns:
+            (normalized_home, normalized_draw, normalized_away) - probabilities summing to 1.0
+        """
+        # Step 1: Round each to 4 decimal places for consistent display
+        h = round(home_p, 4)
+        d = round(draw_p, 4)
+        a = round(away_p, 4)
+        
+        # Step 2: Check if rounding already produced perfect sum
+        total = h + d + a
+        if total == 1.0:
+            return h, d, a
+        
+        # Step 3: Adjust the largest probability to absorb rounding error
+        # This minimizes visual impact on the most likely outcome
+        diff = 1.0 - total
+        if h >= d and h >= a:
+            return h + diff, d, a
+        elif d >= h and d >= a:
+            return h, d + diff, a
+        else:
+            return h, d, a + diff
+
+    # NOTE: calculate_probability_entropy removed - unused method
+
+    @staticmethod
+    def calculate_confidence(home_p: float, draw_p: float, away_p: float) -> tuple[float, str]:
+        """
+        Calculate confidence score and confidence level from 1X2 probabilities.
+        
+        Confidence is measured as the margin between the top two probabilities.
+        A larger margin indicates higher confidence in the predicted outcome.
+        
+        Strategy:
+        1. Sort probabilities to find top two
+        2. Calculate margin (top1 - top2) as confidence metric
+        3. Classify confidence level based on margin thresholds
+        
+        Args:
+            home_p: Home win probability (0-1)
+            draw_p: Draw probability (0-1)
+            away_p: Away win probability (0-1)
+        
+        Returns:
+            (confidence_score, confidence_level)
+            confidence_score: Margin between top two probabilities [0,1], rounded to 4 decimals
+            confidence_level: "Low", "Medium", "High", or "Very High"
+        """
+        probs = [home_p, draw_p, away_p]
+        
+        # Sort probabilities to find top two
+        sorted_probs = sorted(probs, reverse=True)
+        top1_prob = sorted_probs[0]
+        top2_prob = sorted_probs[1]
+        
+        # Calculate margin (top1 - top2) as our primary confidence metric
+        margin = top1_prob - top2_prob
+        
+        # Margin is already normalized to [0,1] since max possible margin is ~1
+        confidence_score = margin
+        
+        # Determine confidence level based on margin thresholds
+        # These thresholds are empirically chosen for sensible categorization
+        if confidence_score >= 0.5:
+            confidence_level = "Very High"
+        elif confidence_score >= 0.2:
+            confidence_level = "High"
+        elif confidence_score >= 0.05:
+            confidence_level = "Medium"
+        else:
+            confidence_level = "Low"
+        
+        return round(confidence_score, 4), confidence_level
+
     # ── Health status ─────────────────────────────────────────────────────────
     @property
     def is_ready(self) -> bool:
@@ -127,13 +224,32 @@ class ModelService:
                     match_date=None, competition_code: str = "WC", match=None) -> Dict[str, Any]:
         """
         Returns Home Win / Draw / Away Win probabilities using world_cup_predictor.pkl.
+        
+        Process:
+        1. Extract ML features from database
+        2. Run XGBoost classifier to get raw probabilities
+        3. Normalize probabilities to ensure they sum exactly to 1.0
+        4. Determine predicted outcome (highest probability)
+        5. Return structured response with probabilities and metadata
+        
+        Args:
+            db: Database session
+            home_team_id: ID of home team
+            away_team_id: ID of away team
+            match_date: Match date (defaults to now)
+            competition_code: Competition code (defaults to WC)
+            match: Optional match record for feature extraction
+        
+        Returns:
+            Dictionary with home_win_probability, draw_probability, away_win_probability,
+            predicted_outcome, confidence, and model_version
         """
         if not self._initialized:
             raise RuntimeError("ModelService not initialised – call load_models() first.")
 
         match_date = match_date or datetime.now(timezone.utc)
 
-        # ── Resolve team names for logging ───────────────────────────────────
+        # Resolve team names for logging
         from models import Team as _Team
         _home = db.query(_Team).filter_by(id=home_team_id).first()
         _away = db.query(_Team).filter_by(id=away_team_id).first()
@@ -141,32 +257,39 @@ class ModelService:
         _away_name = _away.name if _away else str(away_team_id)
         logger.info(f"[predict_1x2] {_home_name} vs {_away_name} [{competition_code}]")
 
+        # Extract ML features from database
         features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
 
+        # Load model and feature names from bundle
         wc_features: list = self._wc_bundle.get("features", [])
         model: xgb.XGBClassifier = self._wc_bundle["model"]
 
+        # Build feature vector in the order expected by the model
         feature_vec = [features.get(f, 0.0) for f in wc_features]
 
-        # ── Log full feature dict and final vector ────────────────────────────
+        # Log full feature dict and final vector for debugging
         logger.info(f"[predict_1x2] Extracted features for {_home_name} vs {_away_name}:")
         for k, v in features.items():
             logger.info(f"  {k:<40} = {v}")
         logger.info(f"[predict_1x2] Feature vector ({len(feature_vec)} values): {[round(v, 4) for v in feature_vec]}")
 
+        # Run model prediction
         df_input    = __import__("pandas").DataFrame([feature_vec], columns=wc_features)
-
         probs = model.predict_proba(df_input)[0]
+        
         # Training label mapping: 0 = Away Win, 1 = Draw, 2 = Home Win
         prob_away, prob_draw, prob_home = float(probs[0]), float(probs[1]), float(probs[2])
         logger.info(
             f"[predict_1x2] Raw model probs for {_home_name} vs {_away_name}: "
             f"home={prob_home:.4f}  draw={prob_draw:.4f}  away={prob_away:.4f}"
         )
-        prob_home = round(prob_home, 4)
-        prob_away = round(prob_away, 4)
-        prob_draw = round(prob_draw, 4)
+        
+        # Normalize probabilities to sum exactly to 1.0 for consistency
+        prob_home, prob_draw, prob_away = ModelService.normalize_1x2_probs(
+            prob_home, prob_draw, prob_away
+        )
 
+        # Determine predicted outcome (highest probability)
         max_p = max(prob_home, prob_away, prob_draw)
         if max_p == prob_home:
             outcome = "HOME_WIN"
@@ -192,13 +315,33 @@ class ModelService:
                       match_date=None, competition_code: str = "WC", match=None) -> Dict[str, Any]:
         """
         Returns expected goals + full betting market suite via Poisson engine.
+        
+        Process:
+        1. Extract ML features from database
+        2. Run XGBoost regressors to predict expected home/away goals
+        3. Clip negative predictions to 0 (goals cannot be negative)
+        4. Run Poisson engine to generate all betting markets from xG
+        5. Return structured response with goals, markets, and metadata
+        
+        Args:
+            db: Database session
+            home_team_id: ID of home team
+            away_team_id: ID of away team
+            match_date: Match date (defaults to now)
+            competition_code: Competition code (defaults to WC)
+            match: Optional match record for feature extraction
+        
+        Returns:
+            Dictionary with expected_home_goals, expected_away_goals, total_expected_goals,
+            over_under markets, btts, most_likely_score, top_5_scorelines, asian_handicap,
+            team_goals, clean_sheet, probability_matrix, outcome_probabilities, and model_version
         """
         if not self._initialized:
             raise RuntimeError("ModelService not initialised – call load_models() first.")
 
         match_date = match_date or datetime.now(timezone.utc)
 
-        # ── Resolve team names for logging ───────────────────────────────────
+        # Resolve team names for logging
         from models import Team as _Team
         _home = db.query(_Team).filter_by(id=home_team_id).first()
         _away = db.query(_Team).filter_by(id=away_team_id).first()
@@ -206,21 +349,24 @@ class ModelService:
         _away_name = _away.name if _away else str(away_team_id)
         logger.info(f"[predict_goals] {_home_name} vs {_away_name} [{competition_code}]")
 
+        # Extract ML features from database
         features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
 
+        # Load goal prediction models and feature names
         goal_features: list = self._goal_bundle.get("features", [])
         home_model: xgb.XGBRegressor = self._goal_bundle["home_model"]
         away_model: xgb.XGBRegressor = self._goal_bundle["away_model"]
 
+        # Build feature vector in the order expected by the models
         feature_vals = [features.get(f, 0.0) for f in goal_features]
 
-        # ── Log full feature dict and final vector ────────────────────────────
+        # Log full feature dict and final vector for debugging
         logger.info(f"[predict_goals] Extracted features for {_home_name} vs {_away_name}:")
         for k, v in features.items():
             logger.info(f"  {k:<40} = {v}")
         logger.info(f"[predict_goals] Feature vector ({len(feature_vals)} values) for goal models: {[round(v, 4) if isinstance(v, (int, float)) else v for v in feature_vals]}")
 
-        # Check for NaN or zero-only vectors
+        # Validate feature vector (check for NaN or zero-only vectors)
         import math
         has_nan = any(isinstance(v, float) and math.isnan(v) for v in feature_vals)
         all_zeros = all(v == 0.0 for v in feature_vals)
@@ -229,8 +375,8 @@ class ModelService:
         if all_zeros:
             logger.warning(f"[predict_goals] Zero-only feature vector detected for {_home_name} vs {_away_name}!")
 
+        # Run goal prediction models
         feature_vec = np.array([feature_vals])
-
         raw_home = float(home_model.predict(feature_vec)[0])
         raw_away = float(away_model.predict(feature_vec)[0])
         logger.info(
@@ -239,6 +385,7 @@ class ModelService:
             f"{_away_name}={raw_away:.4f}"
         )
 
+        # Clip negative predictions to 0 (goals cannot be negative)
         expected_home = max(0.0, raw_home)
         expected_away = max(0.0, raw_away)
         clipped_home = raw_home != expected_home
@@ -265,13 +412,14 @@ class ModelService:
 
         logger.info(f"[predict_goals] Expected Goals predicted: {_home_name}={expected_home:.4f}, {_away_name}={expected_away:.4f}, Total={total_goals:.4f}")
 
-        # ── Poisson markets ───────────────────────────────────────────────────
+        # Generate all betting markets using Poisson engine
         from services.poisson_engine import evaluate_poisson_engine
         poisson = evaluate_poisson_engine(expected_home, expected_away)
 
         ou   = poisson["over_under"]
         btts = poisson["btts"]
 
+        # Calculate Asian handicap label based on xG difference
         diff = expected_home - expected_away
         if diff > 1.5:
             asian_handicap_label = "Home -1.5"
@@ -288,28 +436,30 @@ class ModelService:
             "expected_home_goals":  round(expected_home, 4),
             "expected_away_goals":  round(expected_away, 4),
             "total_expected_goals": round(total_goals, 4),
-            # Over / Under (0.5 – 4.5)
+            # Over / Under markets (0.5 – 4.5)
             "over_under": poisson["over_under"],
-            # BTTS
+            # BTTS (Both Teams To Score)
             "btts": {
                 "yes": btts["btts_yes"],
                 "no":  btts["btts_no"],
             },
-            # Correct score
+            # Correct score predictions
             "most_likely_score":  poisson["most_likely_score"],
             "top_5_scorelines":   poisson["top_5_scorelines"],
-            # Asian handicap
+            # Asian handicap markets
             "asian_handicap": {
                 "label":        asian_handicap_label,
                 "lines":        poisson["asian_handicap"]["suggested_lines"],
                 "favored_team": poisson["asian_handicap"]["favored_team_prefix"],
             },
-            # Team goals
+            # Team goals markets (over 0.5, 1.5, 2.5)
             "team_goals":          poisson["team_goals"],
-            # Clean sheet (Poisson P(0) = e^(-lambda))
+            # Clean sheet probabilities (P(0) = e^(-lambda))
             "clean_sheet":         poisson["clean_sheet"],
-            # Full probability matrix
+            # Full probability matrix for all scorelines
             "probability_matrix":  poisson["probability_matrix"],
+            # Outcome probabilities (from Poisson matrix for consistency with 1X2)
+            "outcome_probabilities": poisson["outcome_probabilities"],
             "model_version":       self._goal_bundle.get("version", "v1.0"),
         }
         logger.info(f"[PREDICT_GOALS] Asian handicap from Poisson: label={asian_handicap_label}, lines={poisson['asian_handicap']['suggested_lines']}, favored={poisson['asian_handicap']['favored_team_prefix']}")
@@ -473,82 +623,135 @@ class ModelService:
             ]
             prob_matrix = {score: (1.0 if score == most_likely_score else 0.0) for score in requested_scores}
 
+            # Normalize probabilities to sum exactly to 1
+            norm_home, norm_draw, norm_away = ModelService.normalize_1x2_probs(
+                prob_home, prob_draw, prob_away
+            )
             return {
-                "home_team":  home.name,
-                "away_team":  away.name,
+                "home_team": home.name,
+                "away_team": away.name,
                 "generated_at": now.isoformat(),
                 "is_actual_result": True,
-                # 1X2
+                # 1X2 predictions
                 "outcome": {
-                    "home_win_probability": prob_home,
-                    "draw_probability":     prob_draw,
-                    "away_win_probability": prob_away,
-                    "predicted_result":     predicted_result,
-                    "confidence":           1.0,
+                    "home_win_probability": norm_home,
+                    "draw_probability": norm_draw,
+                    "away_win_probability": norm_away,
+                    "predicted_result": predicted_result,
+                    "confidence": 1.0,
+                    "confidence_level": "Very High",
                 },
                 # Goals (actual score used as xG for completed matches)
                 "goals": {
-                    "expected_home_goals":  float(home_score),
-                    "expected_away_goals":  float(away_score),
+                    "expected_home_goals": float(home_score),
+                    "expected_away_goals": float(away_score),
                     "total_expected_goals": float(total_goals),
                 },
-                # Markets
+                # Betting markets
                 "markets": {
-                    "over_under":          over_under,
-                    "btts":                btts,
-                    "most_likely_score":   most_likely_score,
-                    "top_5_scorelines":    top_5_scorelines,
-                    "asian_handicap":      asian_handicap,
-                    "team_goals":          team_goals,
-                    "probability_matrix":  prob_matrix,
-                    # Clean sheet — binary for completed matches
+                    "over_under": over_under,
+                    "btts": btts,
+                    "most_likely_score": most_likely_score,
+                    "top_5_scorelines": top_5_scorelines,
+                    "asian_handicap": asian_handicap,
+                    "team_goals": team_goals,
+                    "probability_matrix": prob_matrix,
                     "clean_sheet": {
                         "home_clean_sheet": 1.0 if away_score == 0 else 0.0,
                         "away_clean_sheet": 1.0 if home_score == 0 else 0.0,
                     },
                 },
+                # Backwards compatible model versions (kept at top level)
                 "model_versions": {
-                    "wc_model":   "actual_result_override",
+                    "wc_model": "actual_result_override",
                     "goal_model": "actual_result_override",
                 },
+                # New detailed engine metadata (grouped)
+                "prediction_engine": "Actual Result Override",
+                "winner_engine": "Actual Result Override",
+                "goal_engine": "Actual Result Override",
+                "market_engine": "Actual Result Override",
+                # Betting market predictions (if models loaded, otherwise Poisson fallback)
+                "betting_markets": self._predict_betting_markets(
+                    db, home.id, away.id, now, competition_code, match_record, {
+                        "asian_handicap": asian_handicap,
+                        "over_under": over_under,
+                        "btts": btts,
+                        "clean_sheet": {
+                            "home_clean_sheet": 1.0 if away_score == 0 else 0.0,
+                            "away_clean_sheet": 1.0 if home_score == 0 else 0.0,
+                        },
+                        "most_likely_score": most_likely_score,
+                    }
+                ),
             }
 
-        result_1x2   = self.predict_1x2(db, home.id, away.id, now, competition_code, match_record)
         result_goals = self.predict_goals(db, home.id, away.id, now, competition_code, match_record)
-
+        
+        # Get outcome from Poisson probabilities for full consistency!
+        outcome_probs = result_goals["outcome_probabilities"]
+        home_win_p_raw = outcome_probs["home_win_probability"]
+        draw_p_raw = outcome_probs["draw_probability"]
+        away_win_p_raw = outcome_probs["away_win_probability"]
+        
+        # Normalize probabilities to sum exactly to 1
+        home_win_p, draw_p, away_win_p = ModelService.normalize_1x2_probs(
+            home_win_p_raw, draw_p_raw, away_win_p_raw
+        )
+        
+        max_p = max(home_win_p, draw_p, away_win_p)
+        if max_p == home_win_p:
+            predicted_result = "HOME_WIN"
+        elif max_p == away_win_p:
+            predicted_result = "AWAY_WIN"
+        else:
+            predicted_result = "DRAW"
+        
+        # Calculate new confidence
+        confidence, confidence_level = ModelService.calculate_confidence(
+            home_win_p, draw_p, away_win_p
+        )
+        
         return {
-            "home_team":  home.name,
-            "away_team":  away.name,
+            "home_team": home.name,
+            "away_team": away.name,
             "generated_at": now.isoformat(),
-            # 1X2
+            # 1X2 predictions
             "outcome": {
-                "home_win_probability": result_1x2["home_win_probability"],
-                "draw_probability":     result_1x2["draw_probability"],
-                "away_win_probability": result_1x2["away_win_probability"],
-                "predicted_result":     result_1x2["predicted_outcome"],
-                "confidence":           result_1x2["confidence"],
+                "home_win_probability": home_win_p,
+                "draw_probability": draw_p,
+                "away_win_probability": away_win_p,
+                "predicted_result": predicted_result,
+                "confidence": confidence,
+                "confidence_level": confidence_level,
             },
             # Goals
             "goals": {
-                "expected_home_goals":  result_goals["expected_home_goals"],
-                "expected_away_goals":  result_goals["expected_away_goals"],
+                "expected_home_goals": result_goals["expected_home_goals"],
+                "expected_away_goals": result_goals["expected_away_goals"],
                 "total_expected_goals": result_goals["total_expected_goals"],
             },
             # Markets (now includes clean_sheet and O/U 0.5–4.5)
             "markets": {
-                "over_under":          result_goals["over_under"],
-                "btts":                result_goals["btts"],
-                "most_likely_score":   result_goals["most_likely_score"],
-                "top_5_scorelines":    result_goals["top_5_scorelines"],
-                "asian_handicap":      result_goals["asian_handicap"],
-                "team_goals":          result_goals["team_goals"],
-                "probability_matrix":  result_goals["probability_matrix"],
-                "clean_sheet":         result_goals["clean_sheet"],
+                "over_under": result_goals["over_under"],
+                "btts": result_goals["btts"],
+                "most_likely_score": result_goals["most_likely_score"],
+                "top_5_scorelines": result_goals["top_5_scorelines"],
+                "asian_handicap": result_goals["asian_handicap"],
+                "team_goals": result_goals["team_goals"],
+                "probability_matrix": result_goals["probability_matrix"],
+                "clean_sheet": result_goals["clean_sheet"],
             },
+            # Backwards compatible model versions (kept at top level)
             "model_versions": {
-                "wc_model":   result_1x2["model_version"],
+                "wc_model": result_goals["model_version"],
                 "goal_model": result_goals["model_version"],
             },
+            # New detailed engine metadata
+            "prediction_engine": "Hybrid Prediction Engine",
+            "winner_engine": POISSON_ENGINE_VERSION,
+            "goal_engine": result_goals["model_version"],
+            "market_engine": "Hybrid Market Engine",
             # Betting market predictions (if models loaded, otherwise Poisson fallback)
             "betting_markets": self._predict_betting_markets(
                 db, home.id, away.id, now, competition_code, match_record, result_goals
@@ -564,6 +767,7 @@ class ModelService:
         Predict betting markets using dedicated models if available,
         otherwise fall back to Poisson-based predictions from goal model.
         """
+        goal_result = goal_result or {}
         features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
         
         result = {
@@ -582,7 +786,7 @@ class ModelService:
                     model = bundle["model"]
                     feature_names = bundle["features"]
                     
-                    feature_vec = [features.get(f, 0.0) for f in feature_names]
+                    feature_vec = [float(features.get(f, 0.0)) for f in feature_names]
                     df_input = __import__("pandas").DataFrame([feature_vec], columns=feature_names)
                     
                     probs = model.predict_proba(df_input)[0]

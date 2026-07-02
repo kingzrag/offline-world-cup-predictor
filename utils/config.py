@@ -1,7 +1,7 @@
 import os
 import getpass
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, ConfigDict
 
 def is_running_in_docker() -> bool:
     return os.path.exists('/.dockerenv')
@@ -23,19 +23,19 @@ def _default_db_password() -> str:
 
 class Settings(BaseSettings):
     # --- API Keys ---
-    FOOTBALL_DATA_API_KEY: str = Field(default="mock_football_data_key", env="FOOTBALL_DATA_API_KEY")
-    ODDS_API_KEY: str = Field(default="", env="ODDS_API_KEY")
-    API_FOOTBALL_KEY: str = Field(default="", env="API_FOOTBALL_KEY")
+    FOOTBALL_DATA_API_KEY: str = Field(default="mock_football_data_key")
+    ODDS_API_KEY: str = Field(default="")
+    API_FOOTBALL_KEY: str = Field(default="")
 
     # --- Database ---
-    DATABASE_HOST: str = Field(default_factory=lambda: "db" if is_running_in_docker() else "localhost", env="DATABASE_HOST")
-    DATABASE_PORT: str = Field(default="5432", env="DATABASE_PORT")
-    DATABASE_USER: str = Field(default_factory=_default_db_user, env="DATABASE_USER")
-    DATABASE_PASSWORD: str = Field(default_factory=_default_db_password, env="DATABASE_PASSWORD")
-    DATABASE_NAME: str = Field(default="prediction_db", env="DATABASE_NAME")
+    DATABASE_HOST: str = Field(default_factory=lambda: "db" if is_running_in_docker() else "localhost")
+    DATABASE_PORT: str = Field(default="5432")
+    DATABASE_USER: str = Field(default_factory=_default_db_user)
+    DATABASE_PASSWORD: str = Field(default_factory=_default_db_password)
+    DATABASE_NAME: str = Field(default="prediction_db")
 
     # --- Runtime ---
-    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
+    ENVIRONMENT: str = Field(default="development")
 
     @property
     def DATABASE_URL(self) -> str:
@@ -50,9 +50,10 @@ class Settings(BaseSettings):
         # macOS local trust auth — no password segment
         return f"postgresql://{self.DATABASE_USER}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
 settings = Settings()

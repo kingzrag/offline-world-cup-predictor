@@ -5,6 +5,8 @@ Calculates Correct Score, BTTS, Over/Under, Asian Handicap, and Team Goals
 probabilities using independent Poisson distributions on expected home/away goals.
 """
 
+POISSON_ENGINE_VERSION = "Poisson Probability Engine v2"
+
 import math
 import scipy.stats
 from typing import Dict, Any, List, Tuple
@@ -161,6 +163,10 @@ def get_btts_probabilities_from_matrix(matrix: Dict[str, float], current_home_sc
 def get_over_under_probabilities_from_matrix(matrix: Dict[str, float]) -> Dict[str, Dict[str, float]]:
     """
     Calculates Over/Under probabilities for 0.5, 1.5, 2.5, 3.5, and 4.5 lines from a final score matrix.
+    
+    For a line like 1.5:
+    - Under: total goals < 1.5 (i.e., 0 or 1 goals)
+    - Over: total goals >= 1.5 (i.e., 2 or more goals)
     """
     results = {}
     for line in (0.5, 1.5, 2.5, 3.5, 4.5):
@@ -168,7 +174,8 @@ def get_over_under_probabilities_from_matrix(matrix: Dict[str, float]) -> Dict[s
         for score_str, prob in matrix.items():
             h, a = map(int, score_str.split('-'))
             total = h + a
-            if total <= int(line):
+            # Use proper floating-point comparison for half-point lines
+            if total < line:
                 under += prob
         over = 1.0 - under
         results[str(line)] = {"over": round(over, 4), "under": round(under, 4)}
@@ -210,6 +217,8 @@ def get_asian_handicap_probabilities_from_matrix(matrix: Dict[str, float]) -> Di
                 # Win if goal_diff >= 1. Half-loss (refund 0.5) if goal_diff == 0.
                 if goal_diff >= 1:
                     cover_prob += prob
+                elif goal_diff == 0:
+                    cover_prob += prob * 0.5
             elif line == -0.5:
                 # Win if goal_diff >= 1.
                 if goal_diff >= 1:
@@ -221,8 +230,10 @@ def get_asian_handicap_probabilities_from_matrix(matrix: Dict[str, float]) -> Di
                 elif goal_diff == 1:
                     cover_prob += prob * 0.5
             elif line == -1.0:
-                # Full win if goal_diff >= 2. Push if goal_diff == 1 (refunded).
+                # Full win if goal_diff >= 2. Push if goal_diff == 1 (refunded/covered).
                 if goal_diff >= 2:
+                    cover_prob += prob
+                elif goal_diff == 1:
                     cover_prob += prob
                     
         results[f"{prefix} {line}"] = round(cover_prob, 4)
@@ -299,6 +310,8 @@ def get_clean_sheet_probabilities_from_matrix(matrix: Dict[str, float], current_
 def get_1x2_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
     """
     Computes 1X2 probabilities (home win, draw, away win) by summing the joint distribution matrix.
+    
+    The matrix already sums to 1.0, so no additional normalization is needed.
     """
     home_win = 0.0
     draw = 0.0
@@ -314,12 +327,8 @@ def get_1x2_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
         else:
             draw += p
     
-    total = home_win + draw + away_win
-    if total > 0:
-        home_win /= total
-        draw /= total
-        away_win /= total
-        
+    # Matrix already sums to 1.0, so no normalization needed
+    # Just round for consistent output
     return {
         "home_win_probability": round(home_win, 4),
         "draw_probability":     round(draw, 4),
@@ -366,7 +375,7 @@ def evaluate_poisson_engine(
             fa = current_away_score + da
             requested_scores.append(f"{fh}-{fa}")
     
-    prob_matrix_subset = {score: round(matrix.get(score, 0.0), 4) for score in requested_scores}
+    rounded_matrix = {score: round(prob, 4) for score, prob in matrix.items()}
 
     correct_scores  = get_correct_scores(matrix)
     btts            = get_btts_probabilities_from_matrix(matrix, current_home_score, current_away_score)
@@ -377,7 +386,7 @@ def evaluate_poisson_engine(
     outcome_probs   = get_1x2_probabilities(matrix)
 
     return {
-        "probability_matrix": prob_matrix_subset,
+        "probability_matrix": rounded_matrix,
         "most_likely_score":  correct_scores["most_likely_score"],
         "top_5_scorelines":   correct_scores["top_5_scorelines"],
         "btts":               btts,
