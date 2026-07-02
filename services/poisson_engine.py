@@ -155,7 +155,10 @@ def get_btts_probabilities_from_matrix(matrix: Dict[str, float], current_home_sc
     
     btts_no = 1.0 - btts_yes
     
+    # Return both formats for backward compatibility
     return {
+        "yes": round(btts_yes, 4),
+        "no": round(btts_no, 4),
         "btts_yes": round(btts_yes, 4),
         "btts_no": round(btts_no, 4)
     }

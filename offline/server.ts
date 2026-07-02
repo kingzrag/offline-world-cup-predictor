@@ -34,7 +34,7 @@ app.use(
     target: FASTAPI_URL,
     changeOrigin: true,
     pathRewrite: (path: string, req: any) => {
-      const rewrittenPath = path.replace(/^\/fastapi/, "/api");
+      const rewrittenPath = "/api" + path;
       console.log("\n[Path Rewrite]");
       console.log(`  Original Path: ${path}`);
       console.log(`  Rewritten Path: ${rewrittenPath}`);

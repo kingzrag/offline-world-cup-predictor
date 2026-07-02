@@ -125,6 +125,15 @@ _team_stats_cache = {}
 _team_stats_cache_ttl = 600  # 10 minutes
 
 
+def _transform_asian_handicap(poisson_handicap: Dict[str, Any]) -> Dict[str, Any]:
+    """Transform Poisson engine's asian handicap structure to match frontend expectations."""
+    return {
+        "label": poisson_handicap.get("favored_team_prefix", "Home") + " -0.5",
+        "lines": poisson_handicap.get("suggested_lines", {}),
+        "favored_team": poisson_handicap.get("favored_team_prefix", "Home"),
+    }
+
+
 def _build_enrichment_from_xg(
     h_xg: float,
     a_xg: float,
@@ -137,12 +146,7 @@ def _build_enrichment_from_xg(
     poisson = evaluate_poisson_engine(max(h_xg, 0.01), max(a_xg, 0.01))
     
     # Transform Poisson handicap structure to match frontend expectations
-    poisson_handicap = poisson["asian_handicap"]
-    asian_handicap = {
-        "label": poisson_handicap.get("favored_team_prefix", "Home") + " -0.5",
-        "lines": poisson_handicap.get("suggested_lines", {}),
-        "favored_team": poisson_handicap.get("favored_team_prefix", "Home"),
-    }
+    asian_handicap = _transform_asian_handicap(poisson["asian_handicap"])
     logger.info(f"[API_ENRICHMENT_XG] Transformed Poisson handicap: {asian_handicap}")
     
     return {
@@ -169,6 +173,8 @@ def _build_enrichment_from_prediction(pred_dict: Dict[str, Any]) -> Dict[str, An
     markets = pred_dict["markets"]
     asian_handicap = markets.get("asian_handicap")
     logger.info(f"[API_ENRICHMENT] Asian handicap from prediction: {asian_handicap}")
+    if asian_handicap and isinstance(asian_handicap, dict) and "favored_team_prefix" in asian_handicap:
+        asian_handicap = _transform_asian_handicap(asian_handicap)
     if asian_handicap and isinstance(asian_handicap, dict):
         logger.info(f"[API_ENRICHMENT] Asian handicap lines: {asian_handicap.get('lines', {})}")
     return {
@@ -1243,6 +1249,9 @@ def get_fixtures_enriched(
                             )
                             
                             # Build enrichment from live prediction
+                            # Transform Asian handicap to match frontend expectations
+                            live_ah = live_pred["markets"]["asian_handicap"]
+                            transformed_ah = _transform_asian_handicap(live_ah)
                             enrichment = {
                                 "goals": {
                                     "home_xg": live_pred["expected_goals"]["home"],
@@ -1256,7 +1265,7 @@ def get_fixtures_enriched(
                                     "most_likely_score": live_pred["markets"]["correct_score"]["most_likely"],
                                     "top_5_scorelines": live_pred["markets"]["correct_score"]["top_5"],
                                     "team_goals": live_pred["markets"]["team_goals"],
-                                    "asian_handicap": live_pred["markets"]["asian_handicap"],
+                                    "asian_handicap": transformed_ah,
                                 },
                                 "live_metadata": live_pred["metadata"],
                             }
