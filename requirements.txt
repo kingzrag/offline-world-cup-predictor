@@ -64,3 +64,4 @@ python-jose==3.5.0
 # External APIs
 pysofascore==0.3.0
 understat==0.1.14
+kaggle==1.6.17

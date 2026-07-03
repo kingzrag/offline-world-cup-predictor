@@ -140,21 +140,23 @@ def build_dataset():
                     away_team = db.query(Team).filter_by(id=m.away_team_id).first()
 
                     # --- SIMULATE INJURIES FOR TRAINING ---
-                    # Clear any existing injuries/suspensions for this iteration
-                    db.query(Injury).filter_by(team_id=m.home_team_id).delete()
-                    db.query(Injury).filter_by(team_id=m.away_team_id).delete()
-                    db.query(Suspension).filter_by(team_id=m.home_team_id).delete()
-                    db.query(Suspension).filter_by(team_id=m.away_team_id).delete()
-
-                    # Add simulated injuries
-                    add_simulated_injuries(db, m.home_team_id)
-                    add_simulated_injuries(db, m.away_team_id)
+                    # REMOVED: Clearing injuries/suspensions was causing constant features
+                    # Using real injury/suspension data from database instead
+                    # If no injuries exist, add simulated ones for training variety
+                    home_inj_count = db.query(Injury).filter_by(team_id=m.home_team_id).count()
+                    away_inj_count = db.query(Injury).filter_by(team_id=m.away_team_id).count()
+                    
+                    if home_inj_count == 0:
+                        add_simulated_injuries(db, m.home_team_id)
+                    if away_inj_count == 0:
+                        add_simulated_injuries(db, m.away_team_id)
                     db.flush()  # So queries see the new injuries
                     # --- END SIMULATE ---
 
                     features = extract_ml_features(
                         db, m.home_team_id, m.away_team_id, m.utc_date, comp_code,
-                        match_stage=m.stage
+                        match_stage=m.stage,
+                        match=m
                     )
 
                     row = features.copy()

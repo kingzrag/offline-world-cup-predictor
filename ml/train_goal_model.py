@@ -43,7 +43,7 @@ GOAL_FEATURES = [
     "gs_diff",
     "gc_diff",
     "inj_diff",
-    "susp_diff",
+    # susp_diff removed in Phase 3 - constant, always zero, no importance
     "available_squad_diff",
     "availability_pct_diff",
     "starting_xi_value_diff",
@@ -96,6 +96,26 @@ GOAL_FEATURES = [
     "home_red_cards",
     "away_red_cards",
     "red_card_diff",
+    # ---- NEW: KAGGLE-DERIVED FEATURES ----
+    "home_kaggle_attack_rating",
+    "away_kaggle_attack_rating",
+    "kaggle_attack_rating_diff",
+    "home_kaggle_defense_rating",
+    "away_kaggle_defense_rating",
+    "kaggle_defense_rating_diff",
+    "home_kaggle_discipline_score",
+    "away_kaggle_discipline_score",
+    "kaggle_discipline_score_diff",
+    "home_kaggle_suspension_risk",
+    "away_kaggle_suspension_risk",
+    "kaggle_suspension_risk_diff",
+    "home_kaggle_starting_xi_strength",
+    "away_kaggle_starting_xi_strength",
+    "kaggle_starting_xi_strength_diff",
+    "home_kaggle_bench_strength",
+    "away_kaggle_bench_strength",
+    "kaggle_bench_strength_diff",
+    "referee_strictness",
 ]
 
 HOME_TARGET = "home_score"

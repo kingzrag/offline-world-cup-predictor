@@ -29,7 +29,7 @@ def train_pipeline(dataset_path: str = "ml/dataset_world_cup.csv"):
     logger.info(f"Loading dataset from {dataset_path} …")
     df = pd.read_csv(dataset_path)
 
-    X = df.drop(columns=["target"])
+    X = df.drop(columns=["target", "home_team", "away_team"])
     y = df["target"]
 
     logger.info(f"Dataset shape: {df.shape}")

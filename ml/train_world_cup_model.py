@@ -50,7 +50,7 @@ FEATURES = [
     "gs_diff",
     "gc_diff",
     "inj_diff",
-    "susp_diff",
+    # susp_diff removed in Phase 3 - constant, always zero, no importance
     "home_adv",
     "h2h_factor",
     # Phase 2 player intelligence
@@ -106,6 +106,26 @@ FEATURES = [
     "home_red_cards",
     "away_red_cards",
     "red_card_diff",
+    # ---- NEW: KAGGLE-DERIVED FEATURES ----
+    "home_kaggle_attack_rating",
+    "away_kaggle_attack_rating",
+    "kaggle_attack_rating_diff",
+    "home_kaggle_defense_rating",
+    "away_kaggle_defense_rating",
+    "kaggle_defense_rating_diff",
+    "home_kaggle_discipline_score",
+    "away_kaggle_discipline_score",
+    "kaggle_discipline_score_diff",
+    "home_kaggle_suspension_risk",
+    "away_kaggle_suspension_risk",
+    "kaggle_suspension_risk_diff",
+    "home_kaggle_starting_xi_strength",
+    "away_kaggle_starting_xi_strength",
+    "kaggle_starting_xi_strength_diff",
+    "home_kaggle_bench_strength",
+    "away_kaggle_bench_strength",
+    "kaggle_bench_strength_diff",
+    "referee_strictness",
 ]
 TARGET = "target"
 
@@ -122,28 +142,37 @@ def load_data():
     for i, f in enumerate(FEATURES, 1):
         print(f"    {i:2d}. {f}")
     df = pd.read_csv(DATASET_PATH)
-    # Drop rows where any feature column is missing
+    
+    # Filter to only use features that actually exist in the dataset
+    available_features = [f for f in FEATURES if f in df.columns]
+    missing_features = [f for f in FEATURES if f not in df.columns]
+    
+    if missing_features:
+        print(f"  ⚠ Missing features (will be skipped): {missing_features}")
+        print(f"  ℹ Using {len(available_features)} available features")
+    
+    # Drop rows where any available feature column is missing
     before = len(df)
-    df = df.dropna(subset=FEATURES)
+    df = df.dropna(subset=available_features)
     after = len(df)
     if before != after:
         print(f"  ⚠ Dropped {before - after} rows with missing feature values")
     print(f"\n{'='*60}")
-    print(f"  Dataset: {after} rows | {len(FEATURES)} features")
+    print(f"  Dataset: {after} rows | {len(available_features)} features")
     print(f"{'='*60}")
     print(f"  Target distribution:")
     vc = df[TARGET].value_counts().sort_index()
     for k, v in vc.items():
         print(f"    {LABEL_MAP[k]:10s}: {v:5d} ({100*v/len(df):.1f}%)")
-    X = df[FEATURES].values
+    X = df[available_features].values
     y = df[TARGET].values
-    return X, y
+    return X, y, available_features
 
 
 # ---------------------------------------------------------------------------
 # Train
 # ---------------------------------------------------------------------------
-def train(X, y):
+def train(X, y, available_features):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
@@ -237,12 +266,12 @@ def evaluate(model, X_train, X_test, y_train, y_test, X_all, y_all):
 # ---------------------------------------------------------------------------
 # Feature importance
 # ---------------------------------------------------------------------------
-def print_feature_importance(model):
+def print_feature_importance(model, available_features):
     print(f"\n{'='*60}")
     print("  FEATURE IMPORTANCE (gain)")
     print(f"{'='*60}")
     importances = model.feature_importances_
-    ranked = sorted(zip(FEATURES, importances), key=lambda x: x[1], reverse=True)
+    ranked = sorted(zip(available_features, importances), key=lambda x: x[1], reverse=True)
     for i, (feat, imp) in enumerate(ranked, 1):
         bar = "█" * int(imp * 200)
         print(f"  {i}. {feat:15s} {imp:.4f}  {bar}")
@@ -251,11 +280,11 @@ def print_feature_importance(model):
 # ---------------------------------------------------------------------------
 # Save model bundle
 # ---------------------------------------------------------------------------
-def save_model(model, acc, ll, f1):
+def save_model(model, acc, ll, f1, available_features):
     os.makedirs(MODEL_DIR, exist_ok=True)
     bundle = {
         "model": model,
-        "features": FEATURES,
+        "features": available_features,
         "label_map": LABEL_MAP,
         "label_encoder": None,  # not needed — targets are already 0/1/2
         "metrics": {"accuracy": acc, "log_loss": ll, "f1_macro": f1},
@@ -383,11 +412,11 @@ def print_sample_predictions():
 # ---------------------------------------------------------------------------
 def main():
     print("\n  World Cup Predictor — Training")
-    X, y = load_data()
-    model, X_train, X_test, y_train, y_test = train(X, y)
+    X, y, available_features = load_data()
+    model, X_train, X_test, y_train, y_test = train(X, y, available_features)
     acc, ll, f1 = evaluate(model, X_train, X_test, y_train, y_test, X, y)
-    print_feature_importance(model)
-    save_model(model, acc, ll, f1)
+    print_feature_importance(model, available_features)
+    save_model(model, acc, ll, f1, available_features)
     print_sample_predictions()
     print(f"\n{'='*60}")
     print("  Training complete.")

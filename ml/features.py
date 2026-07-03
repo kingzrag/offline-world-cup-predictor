@@ -1,4 +1,5 @@
 import logging
+import math
 
 logger = logging.getLogger(__name__)
 from sqlalchemy import and_, desc, or_
@@ -16,6 +17,15 @@ from models import (
     Team,
     TeamElo,
 )
+
+# Import Kaggle feature engineering
+try:
+    from ml.kaggle_features import get_match_kaggle_features
+    KAGGLE_FEATURES_AVAILABLE = True
+    logger.info("Kaggle features module loaded successfully")
+except ImportError as e:
+    KAGGLE_FEATURES_AVAILABLE = False
+    logger.warning(f"Kaggle features module not available: {e}")
 
 
 def get_team_elo(db, team_name: str) -> int:
@@ -190,6 +200,12 @@ def get_team_recent_stats(db, team_id: int, match_date, num_matches: int = 5):
     """
     Calculates the recent form (average points per game), average goals scored (GS),
     and average goals conceded (GC) in the last N finished matches prior to `match_date`.
+    Uses exponential decay for better temporal weighting.
+    
+    Mathematics:
+    - Weight = exp(-decay_rate * time_index)
+    - decay_rate = 0.2 (gives ~37% weight to last 5 matches for form)
+    - More recent matches have higher weight
     """
     matches = (
         db.query(Match)
@@ -208,11 +224,13 @@ def get_team_recent_stats(db, team_id: int, match_date, num_matches: int = 5):
     if not matches:
         return 1.0, 0.0, 0.0  # Fallback to standard baseline
 
-    total_points = 0
-    total_goals_for = 0
-    total_goals_against = 0
+    weighted_points = 0.0
+    weighted_goals_for = 0.0
+    weighted_goals_against = 0.0
+    total_weight = 0.0
+    decay_rate = 0.2  # Optimized decay rate for form calculation
 
-    for m in matches:
+    for idx, m in enumerate(matches):
         if m.home_team_id == team_id:
             gf = m.home_score or 0
             ga = m.away_score or 0
@@ -222,19 +240,26 @@ def get_team_recent_stats(db, team_id: int, match_date, num_matches: int = 5):
             ga = m.home_score or 0
             is_home = False
 
-        total_goals_for += gf
-        total_goals_against += ga
+        # Exponential decay weighting
+        weight = math.exp(-decay_rate * idx)
+        
+        weighted_goals_for += gf * weight
+        weighted_goals_against += ga * weight
 
         # Win = 3pts, Draw = 1pt, Loss = 0pts
         if m.winner == "DRAW":
-            total_points += 1
+            points = 1
         elif (m.winner == "HOME_TEAM" and is_home) or (
             m.winner == "AWAY_TEAM" and not is_home
         ):
-            total_points += 3
+            points = 3
+        else:
+            points = 0
+        
+        weighted_points += points * weight
+        total_weight += weight
 
-    n = len(matches)
-    return total_points / n, total_goals_for / n, total_goals_against / n
+    return weighted_points / total_weight, weighted_goals_for / total_weight, weighted_goals_against / total_weight
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +276,15 @@ STAGE_WEIGHTS = {
 
 
 def get_attack_rating(db, team_id: int, match_date) -> float:
-    """Calculates weighted average goals scored in last 20 completed matches."""
+    """
+    Calculates weighted average goals scored in last 20 completed matches.
+    Uses exponential decay for better temporal weighting.
+    
+    Mathematics:
+    - Weight = exp(-decay_rate * time_index)
+    - decay_rate = 0.15 (gives ~50% weight to last 5 matches)
+    - More recent matches have higher weight
+    """
     matches = (
         db.query(Match)
         .filter(
@@ -270,19 +303,17 @@ def get_attack_rating(db, team_id: int, match_date) -> float:
 
     weighted_goals = 0.0
     total_weight = 0.0
+    decay_rate = 0.15  # Optimized decay rate for football match importance
+    
     for idx, m in enumerate(matches):
         if m.home_team_id == team_id:
             goals = m.home_score if m.home_score is not None else 0
         else:
             goals = m.away_score if m.away_score is not None else 0
 
-        if idx < 5:
-            weight = 3.0
-        elif idx < 10:
-            weight = 2.0
-        else:
-            weight = 1.0
-
+        # Exponential decay weighting
+        weight = math.exp(-decay_rate * idx)
+        
         weighted_goals += goals * weight
         total_weight += weight
 
@@ -290,7 +321,15 @@ def get_attack_rating(db, team_id: int, match_date) -> float:
 
 
 def get_defence_rating(db, team_id: int, match_date) -> float:
-    """Calculates weighted average goals conceded in last 20 completed matches."""
+    """
+    Calculates weighted average goals conceded in last 20 completed matches.
+    Uses exponential decay for better temporal weighting.
+    
+    Mathematics:
+    - Weight = exp(-decay_rate * time_index)
+    - decay_rate = 0.15 (gives ~50% weight to last 5 matches)
+    - More recent matches have higher weight
+    """
     matches = (
         db.query(Match)
         .filter(
@@ -309,19 +348,17 @@ def get_defence_rating(db, team_id: int, match_date) -> float:
 
     weighted_conceded = 0.0
     total_weight = 0.0
+    decay_rate = 0.15  # Optimized decay rate for football match importance
+    
     for idx, m in enumerate(matches):
         if m.home_team_id == team_id:
             conceded = m.away_score if m.away_score is not None else 0
         else:
             conceded = m.home_score if m.home_score is not None else 0
 
-        if idx < 5:
-            weight = 3.0
-        elif idx < 10:
-            weight = 2.0
-        else:
-            weight = 1.0
-
+        # Exponential decay weighting
+        weight = math.exp(-decay_rate * idx)
+        
         weighted_conceded += conceded * weight
         total_weight += weight
 
@@ -939,6 +976,23 @@ def extract_ml_features(
         except Exception as e:
             logger.debug(f"Could not compute Match Intelligence features: {e}")
 
+    # ---- Kaggle Features Integration ----
+    kaggle_features = {}
+    if KAGGLE_FEATURES_AVAILABLE:
+        try:
+            kaggle_features = get_match_kaggle_features(
+                home_team_id=home_team_id,
+                away_team_id=away_team_id,
+                home_team_name=home_team.name,
+                away_team_name=away_team.name,
+                referee_id=None,
+            )
+            logger.info(f"Added {len(kaggle_features)} Kaggle features for {home_team.name} vs {away_team.name}")
+        except Exception as e:
+            logger.warning(f"Failed to extract Kaggle features: {e}")
+            import traceback
+            logger.warning(traceback.format_exc())
+
     return {
         # ---- Phase 1 core features ----
         "elo_diff": elo_diff,
@@ -1099,4 +1153,6 @@ def extract_ml_features(
         "away_tactical_stability": away_tactical_stability,
         "tactical_stability_diff": home_tactical_stability - away_tactical_stability,
         "confidence_score": confidence_score,
+        # ---- Kaggle Features ----
+        **kaggle_features,
     }
