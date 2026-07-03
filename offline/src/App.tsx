@@ -1853,81 +1853,112 @@ export default function App() {
               </div>
 
               {/* Bottom Panel: Statistics Strip & Scroll indicator (Contained inside viewport boundaries) */}
-              <div className="relative z-10 w-full border-t border-zinc-900 bg-black/45 backdrop-blur-sm py-4">
-                <div className="max-w-7xl mx-auto px-6 md:px-12 flex flex-col items-center">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="relative z-10 w-full"
+                style={{
+                  opacity: Math.max(0, 1 - scrollY / 200),
+                  transition: 'opacity 0.4s ease-out'
+                }}
+              >
+                <div className="max-w-5xl mx-auto px-6 md:px-12 py-6">
                   
-                  {/* 4 Equal columns sits on standard horizontal line */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 w-full border-b border-zinc-900/50 pb-3">
-                    {/* Column 1 */}
-                    <div className="flex items-center space-x-3.5 py-0.5 pl-2">
-                      <div className="w-8 h-8 rounded bg-green-accent/10 border border-green-accent/20 flex items-center justify-center text-green-accent shrink-0">
-                        <Trophy className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-[9px] uppercase font-mono tracking-widest text-zinc-500 block leading-none">Tournament</span>
-                        <span className="text-xs font-bold text-white uppercase font-sans mt-1 block leading-none">48 Nations</span>
-                      </div>
-                    </div>
+                  {/* Glass effect information strip */}
+                  <div className="bg-white/5 backdrop-blur-xl border border-white/8 rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-white/8">
+                      
+                      {/* Tournament Block */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1, duration: 0.5 }}
+                        className="relative group px-6 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300"
+                        whileHover={{ scale: 1.02 }}
+                      >
+                        <Trophy className="w-6 h-6 text-[#F8F8F8] mb-3 group-hover:scale-110 transition-transform duration-300" strokeWidth={1.75} />
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-1">Tournament</span>
+                        <span className="text-sm font-bold text-[#F8F8F8] group-hover:text-white transition-colors duration-300">48 Nations</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center" />
+                      </motion.div>
 
-                    {/* Column 2 */}
-                    <div className="flex items-center space-x-3.5 py-0.5 pl-2 md:border-l border-zinc-900">
-                      <div className="w-8 h-8 rounded bg-green-accent/10 border border-green-accent/20 flex items-center justify-center text-green-accent shrink-0">
-                        <Activity className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-[9px] uppercase font-mono tracking-widest text-zinc-500 block leading-none">Matches</span>
-                        <span className="text-xs font-bold text-white uppercase font-sans mt-1 block leading-none">104 Fixtures</span>
-                      </div>
-                    </div>
+                      {/* Matches Block */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.18, duration: 0.5 }}
+                        className="relative group px-6 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300"
+                        whileHover={{ scale: 1.02 }}
+                      >
+                        <Activity className="w-6 h-6 text-[#F8F8F8] mb-3 group-hover:scale-110 transition-transform duration-300" strokeWidth={1.75} />
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-1">Matches</span>
+                        <span className="text-sm font-bold text-[#F8F8F8] group-hover:text-white transition-colors duration-300">104 Fixtures</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center" />
+                      </motion.div>
 
-                    {/* Column 3 */}
-                    <div className="flex items-center space-x-3.5 py-0.5 pl-2 md:border-l border-zinc-900">
-                      <div className="w-8 h-8 rounded bg-green-accent/10 border border-green-accent/20 flex items-center justify-center text-green-accent shrink-0">
-                        <Globe className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-[9px] uppercase font-mono tracking-widest text-zinc-500 block leading-none">Hosts</span>
-                        <span className="text-xs font-bold text-white uppercase font-sans mt-1 block leading-none">USA • CAN • MEX</span>
-                      </div>
-                    </div>
+                      {/* Hosts Block */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.26, duration: 0.5 }}
+                        className="relative group px-6 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300"
+                        whileHover={{ scale: 1.02 }}
+                      >
+                        <Globe className="w-6 h-6 text-[#F8F8F8] mb-3 group-hover:scale-110 transition-transform duration-300" strokeWidth={1.75} />
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-1">Hosts</span>
+                        <span className="text-sm font-bold text-[#F8F8F8] group-hover:text-white transition-colors duration-300">USA • CAN • MEX</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center" />
+                      </motion.div>
 
-                    {/* Column 4 */}
-                    <div className="flex items-center space-x-3.5 py-0.5 pl-2 md:border-l border-zinc-900">
-                      <div className="w-8 h-8 rounded bg-green-accent/10 border border-green-accent/20 flex items-center justify-center text-green-accent shrink-0">
-                        <Calendar className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-[9px] uppercase font-mono tracking-widest text-zinc-500 block leading-none">Kick-Off</span>
-                        <span className="text-xs font-bold text-green-accent font-serif italic mt-1 block leading-none">June 11, 2026</span>
-                      </div>
+                      {/* Kick-off Block */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.34, duration: 0.5 }}
+                        className="relative group px-6 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300"
+                        whileHover={{ scale: 1.02 }}
+                      >
+                        <Calendar className="w-6 h-6 text-[#F8F8F8] mb-3 group-hover:scale-110 transition-transform duration-300" strokeWidth={1.75} />
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-1">Kick-off</span>
+                        <span className="text-sm font-bold text-[#F8F8F8] group-hover:text-white transition-colors duration-300">June 11, 2026</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center" />
+                      </motion.div>
+
                     </div>
                   </div>
 
                   {/* SCROLL TO EXPLORE Indicator with animated chevron */}
-                  <div 
-                    className="flex flex-col items-center space-y-1 cursor-pointer mt-3 group"
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.5, duration: 0.5 }}
+                    className="flex flex-col items-center mt-6 cursor-pointer group"
                     onClick={() => {
                       const el = document.getElementById('todays-best-predictions');
                       if (el) el.scrollIntoView({ behavior: 'smooth' });
                     }}
                     style={{
-                      opacity: Math.max(0, 1 - scrollY / 150),
-                      pointerEvents: scrollY > 150 ? 'none' : 'auto',
-                      transition: 'opacity 0.2s ease-out'
+                      opacity: Math.max(0, 1 - scrollY / 100),
+                      pointerEvents: scrollY > 100 ? 'none' : 'auto',
+                      transition: 'opacity 0.3s ease-out'
                     }}
                   >
-                    <span className="text-[9px] uppercase font-mono tracking-[0.25em] text-zinc-400 group-hover:text-green-accent transition-colors duration-300">Scroll to Explore</span>
+                    <span className="text-[10px] uppercase tracking-[0.25em] text-white/70 group-hover:text-white/90 transition-colors duration-300 font-mono">Scroll to Explore</span>
                     <motion.div 
-                      animate={{ y: [0, 4, 0] }}
-                      transition={{ y: { repeat: Infinity, duration: 1.5, ease: "easeInOut" } }}
-                      className="text-green-accent mt-0.5"
+                      animate={{ y: [0, 6, 0], opacity: [0.5, 1, 0.5] }}
+                      transition={{ 
+                        y: { repeat: Infinity, duration: 2, ease: "easeInOut" },
+                        opacity: { repeat: Infinity, duration: 2, ease: "easeInOut" }
+                      }}
+                      className="text-white/70 group-hover:text-white/90 transition-colors duration-300 mt-2"
                     >
-                      <ChevronDown className="w-4 h-4" />
+                      <ChevronDown className="w-4 h-4" strokeWidth={1.5} />
                     </motion.div>
-                  </div>
+                  </motion.div>
 
                 </div>
-              </div>
+              </motion.div>
             </div>
           </>
         )}
