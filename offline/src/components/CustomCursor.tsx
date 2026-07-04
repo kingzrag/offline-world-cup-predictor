@@ -1,15 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-
-interface CursorPosition {
-  x: number;
-  y: number;
-}
-
-interface TrailPoint {
-  x: number;
-  y: number;
-  timestamp: number;
-}
+import React, { useEffect, useRef, useCallback } from 'react';
 
 type CursorTheme = 'upcoming' | 'live' | 'finished';
 
@@ -36,11 +25,6 @@ const THEME_COLORS = {
   },
 };
 
-// Lerp function for smooth interpolation
-const lerp = (start: number, end: number, factor: number): number => {
-  return start + (end - start) * factor;
-};
-
 // Check if device is touch-enabled
 const isTouchDevice = (): boolean => {
   return (
@@ -58,80 +42,83 @@ const prefersReducedMotion = (): boolean => {
 
 export const CustomCursor: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }) => {
   const cursorRef = useRef<HTMLDivElement>(null);
-  const trailRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
+  const auraRef = useRef<HTMLDivElement>(null);
+  const pulseRef = useRef<HTMLDivElement>(null);
+  const clickGlowRef = useRef<HTMLDivElement>(null);
   const rippleRef = useRef<HTMLDivElement>(null);
   
-  const [mousePosition, setMousePosition] = useState<CursorPosition>({ x: 0, y: 0 });
-  const [cursorPosition, setCursorPosition] = useState<CursorPosition>({ x: 0, y: 0 });
-  const [isHovering, setIsHovering] = useState(false);
-  const [isClicking, setIsClicking] = useState(false);
-  const [isHidden, setIsHidden] = useState(true);
-  const [trailPoints, setTrailPoints] = useState<TrailPoint[]>([]);
+  const mouseXRef = useRef(0);
+  const mouseYRef = useRef(0);
+  const cursorXRef = useRef(0);
+  const cursorYRef = useRef(0);
+  const isHoveringRef = useRef(false);
+  const isClickingRef = useRef(false);
+  const isTabActiveRef = useRef(true);
   
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const lastTimestampRef = useRef<number>(0);
-  const isTabActiveRef = useRef<boolean>(true);
   
   // Get current theme colors
   const currentColors = THEME_COLORS[theme];
 
-  // Smooth cursor movement with lerp
-  const updateCursorPosition = useCallback(() => {
-    setCursorPosition((prev) => ({
-      x: lerp(prev.x, mousePosition.x, 0.15),
-      y: lerp(prev.y, mousePosition.y, 0.15),
-    }));
-  }, [mousePosition]);
-
-  // Update trail points
-  const updateTrail = useCallback(() => {
-    const now = Date.now();
-    const maxTrailAge = 350; // 350ms
+  // Direct cursor update with minimal smoothing
+  const updateCursor = useCallback(() => {
+    if (!cursorRef.current) return;
     
-    // Add new trail point
-    setTrailPoints((prev) => {
-      const newPoints = [...prev, { x: cursorPosition.x, y: cursorPosition.y, timestamp: now }];
-      // Remove old points
-      return newPoints.filter((point) => now - point.timestamp < maxTrailAge);
-    });
-  }, [cursorPosition]);
+    // Very slight smoothing for premium feel, but nearly imperceptible lag
+    const smoothing = 0.3;
+    cursorXRef.current += (mouseXRef.current - cursorXRef.current) * smoothing;
+    cursorYRef.current += (mouseYRef.current - cursorYRef.current) * smoothing;
+    
+    const x = cursorXRef.current;
+    const y = cursorYRef.current;
+    
+    cursorRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    
+    // Update glow elements
+    if (glowRef.current) {
+      glowRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${isHoveringRef.current ? 1.2 : 1})`;
+      glowRef.current.style.opacity = isHoveringRef.current ? '0.6' : '0.4';
+    }
+    
+    if (auraRef.current) {
+      auraRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${isHoveringRef.current ? 1.5 : 1.3})`;
+    }
+    
+    if (pulseRef.current) {
+      pulseRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      pulseRef.current.style.display = isHoveringRef.current ? 'block' : 'none';
+    }
+    
+    if (clickGlowRef.current) {
+      clickGlowRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      clickGlowRef.current.style.opacity = isClickingRef.current ? '0.8' : '0';
+    }
+  }, []);
 
   // Main animation loop
-  const animate = useCallback((_timestamp: number) => {
+  const animate = useCallback(() => {
     if (!isTabActiveRef.current) {
       animationFrameRef.current = requestAnimationFrame(animate);
       return;
     }
 
-    // Limit to ~60 FPS
-    const now = Date.now();
-    const elapsed = now - lastTimestampRef.current;
-    if (elapsed < 16.67) {
-      animationFrameRef.current = requestAnimationFrame(animate);
-      return;
-    }
-    lastTimestampRef.current = now;
-
-    updateCursorPosition();
-    updateTrail();
-
+    updateCursor();
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [updateCursorPosition, updateTrail]);
+  }, [updateCursor]);
 
   // Mouse move handler
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    setMousePosition({ x: e.clientX, y: e.clientY });
-    setIsHidden(false);
+    mouseXRef.current = e.clientX;
+    mouseYRef.current = e.clientY;
   }, []);
-
-  // Mouse enter/leave handlers
-  const handleMouseEnter = useCallback(() => setIsHidden(false), []);
-  const handleMouseLeave = useCallback(() => setIsHidden(true), []);
 
   // Click handler
   const handleClick = useCallback(() => {
-    setIsClicking(true);
-    setTimeout(() => setIsClicking(false), 120);
+    isClickingRef.current = true;
+    setTimeout(() => {
+      isClickingRef.current = false;
+    }, 120);
   }, []);
 
   // Hover state detection
@@ -140,7 +127,7 @@ export const CustomCursor: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }
     const interactiveElements = target.closest(
       'button, a, [role="button"], .cursor-pointer, .group, .match-card, .nav-item'
     );
-    setIsHovering(!!interactiveElements);
+    isHoveringRef.current = !!interactiveElements;
   }, []);
 
   // Tab visibility change handler
@@ -156,8 +143,6 @@ export const CustomCursor: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }
     }
 
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseenter', handleMouseEnter);
-    document.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('click', handleClick);
     document.addEventListener('mouseover', handleMouseOver);
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -167,80 +152,51 @@ export const CustomCursor: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseenter', handleMouseEnter);
-      document.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('click', handleClick);
       document.removeEventListener('mouseover', handleMouseOver);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       
-      if (animationFrameRef.current) {
+      if (animationFrameRef.current !== undefined) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [handleMouseMove, handleMouseEnter, handleMouseLeave, handleClick, handleMouseOver, handleVisibilityChange, animate]);
-
-  // Update cursor DOM position
-  useEffect(() => {
-    if (cursorRef.current) {
-      cursorRef.current.style.transform = `translate3d(${cursorPosition.x}px, ${cursorPosition.y}px, 0)`;
-    }
-  }, [cursorPosition]);
-
-  // Update trail DOM
-  useEffect(() => {
-    if (!trailRef.current || trailPoints.length === 0) return;
-
-    // Clear previous trail
-    trailRef.current.innerHTML = '';
-
-    // Create trail points
-    trailPoints.forEach((point, index) => {
-      const now = performance.now();
-      const age = now - point.timestamp;
-      const maxAge = 350;
-      const opacity = 1 - age / maxAge;
-      const scale = 0.5 + (opacity * 0.5);
-
-      const trailDot = document.createElement('div');
-      trailDot.style.cssText = `
-        position: absolute;
-        left: ${point.x}px;
-        top: ${point.y}px;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: ${currentColors.glow};
-        opacity: ${opacity * 0.4};
-        transform: translate(-50%, -50%) scale(${scale});
-        pointer-events: none;
-        mix-blend-mode: screen;
-        filter: blur(2px);
-      `;
-      trailRef.current.appendChild(trailDot);
-    });
-  }, [trailPoints, currentColors.glow]);
+  }, [handleMouseMove, handleClick, handleMouseOver, handleVisibilityChange, animate]);
 
   // Handle click ripple animation
   useEffect(() => {
-    if (!rippleRef.current || !isClicking) return;
-
-    const ripple = rippleRef.current;
-    ripple.style.transform = `translate3d(${cursorPosition.x}px, ${cursorPosition.y}px, 0) scale(0)`;
-    ripple.style.opacity = '1';
-
-    const animation = ripple.animate(
-      [
-        { transform: `translate3d(${cursorPosition.x}px, ${cursorPosition.y}px, 0) scale(0)`, opacity: 1 },
-        { transform: `translate3d(${cursorPosition.x}px, ${cursorPosition.y}px, 0) scale(2)`, opacity: 0 },
-      ],
-      {
-        duration: 400,
-        easing: 'ease-out',
-      }
-    );
-
-    return () => animation.cancel();
-  }, [isClicking, cursorPosition, currentColors.ripple]);
+    const handleRipple = () => {
+      if (!rippleRef.current) return;
+      
+      const x = cursorXRef.current;
+      const y = cursorYRef.current;
+      
+      rippleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(0)`;
+      rippleRef.current.style.opacity = '1';
+      
+      const animation = rippleRef.current.animate(
+        [
+          { transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(0)`, opacity: 1 },
+          { transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(2)`, opacity: 0 },
+        ],
+        {
+          duration: 400,
+          easing: 'ease-out',
+        }
+      );
+      
+      animation.onfinish = () => {
+        if (rippleRef.current) {
+          rippleRef.current.style.opacity = '0';
+        }
+      };
+    };
+    
+    document.addEventListener('click', handleRipple);
+    
+    return () => {
+      document.removeEventListener('click', handleRipple);
+    };
+  }, []);
 
   // Skip rendering on touch devices or if reduced motion is preferred
   if (isTouchDevice() || prefersReducedMotion()) {
@@ -252,11 +208,11 @@ export const CustomCursor: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }
       {/* Custom Cursor */}
       <div
         ref={cursorRef}
-        className="fixed top-0 left-0 pointer-events-none z-[9999] hidden md:block"
+        className="fixed top-0 left-0 pointer-events-none z-[999999] hidden md:block"
         style={{
           width: '24px',
           height: '24px',
-          transition: 'transform 0.1s ease-out',
+          willChange: 'transform',
         }}
       >
         {/* White arrow body */}
@@ -272,83 +228,85 @@ export const CustomCursor: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }
           <path
             d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87a.5.5 0 0 0 .35-.85L6.35 2.86a.5.5 0 0 0-.85.35Z"
             fill="#FFFFFF"
-            style={{
-              transition: 'fill 0.3s ease',
-            }}
           />
         </svg>
-
-        {/* Neon blue outer glow */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `radial-gradient(circle, ${currentColors.glow} 0%, transparent 70%)`,
-            opacity: isHovering ? 0.6 : 0.4,
-            transform: `scale(${isHovering ? 1.2 : 1})`,
-            transition: 'opacity 0.2s ease, transform 0.2s ease, background 0.3s ease',
-            filter: 'blur(4px)',
-            mixBlendMode: 'screen',
-          }}
-        />
-
-        {/* Soft blurred blue aura */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: currentColors.aura,
-            transform: `scale(${isHovering ? 1.5 : 1.3})`,
-            transition: 'transform 0.2s ease, background 0.3s ease',
-            filter: 'blur(8px)',
-            mixBlendMode: 'screen',
-          }}
-        />
-
-        {/* Electric pulse on hover */}
-        {isHovering && (
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: currentColors.glow,
-              animation: 'pulse 0.6s ease-in-out infinite',
-              filter: 'blur(2px)',
-              mixBlendMode: 'screen',
-            }}
-          />
-        )}
-
-        {/* Click brightness increase */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: currentColors.glow,
-            opacity: isClicking ? 0.8 : 0,
-            transition: 'opacity 0.1s ease',
-            filter: 'blur(3px)',
-            mixBlendMode: 'screen',
-          }}
-        />
       </div>
 
-      {/* Motion Trail Container */}
+      {/* Neon blue outer glow */}
       <div
-        ref={trailRef}
-        className="fixed top-0 left-0 pointer-events-none z-[9998] hidden md:block"
-        style={{ mixBlendMode: 'screen' }}
+        ref={glowRef}
+        className="fixed top-0 left-0 pointer-events-none z-[999998] hidden md:block rounded-full"
+        style={{
+          width: '24px',
+          height: '24px',
+          background: `radial-gradient(circle, ${currentColors.glow} 0%, transparent 70%)`,
+          opacity: 0.4,
+          filter: 'blur(4px)',
+          mixBlendMode: 'screen',
+          willChange: 'transform, opacity',
+          transition: 'opacity 0.2s ease, background 0.3s ease',
+        }}
+      />
+
+      {/* Soft blurred blue aura */}
+      <div
+        ref={auraRef}
+        className="fixed top-0 left-0 pointer-events-none z-[999997] hidden md:block rounded-full"
+        style={{
+          width: '24px',
+          height: '24px',
+          background: currentColors.aura,
+          filter: 'blur(8px)',
+          mixBlendMode: 'screen',
+          willChange: 'transform',
+        }}
+      />
+
+      {/* Electric pulse on hover */}
+      <div
+        ref={pulseRef}
+        className="fixed top-0 left-0 pointer-events-none z-[999996] hidden md:block rounded-full"
+        style={{
+          width: '24px',
+          height: '24px',
+          background: currentColors.glow,
+          animation: 'pulse 0.6s ease-in-out infinite',
+          filter: 'blur(2px)',
+          mixBlendMode: 'screen',
+          willChange: 'transform',
+          display: 'none',
+        }}
+      />
+
+      {/* Click brightness increase */}
+      <div
+        ref={clickGlowRef}
+        className="fixed top-0 left-0 pointer-events-none z-[999995] hidden md:block rounded-full"
+        style={{
+          width: '24px',
+          height: '24px',
+          background: currentColors.glow,
+          opacity: 0,
+          filter: 'blur(3px)',
+          mixBlendMode: 'screen',
+          willChange: 'transform, opacity',
+          transition: 'opacity 0.1s ease',
+        }}
       />
 
       {/* Click Ripple */}
       <div
         ref={rippleRef}
-        className="fixed top-0 left-0 pointer-events-none z-[9997] hidden md:block"
+        className="fixed top-0 left-0 pointer-events-none z-[999994] hidden md:block rounded-full"
         style={{
           width: '40px',
           height: '40px',
           borderRadius: '50%',
           background: `radial-gradient(circle, ${currentColors.ripple} 0%, transparent 70%)`,
-          transform: `translate3d(${cursorPosition.x}px, ${cursorPosition.y}px, 0) translate(-50%, -50%)`,
           opacity: 0,
           pointerEvents: 'none',
           mixBlendMode: 'screen',
+          willChange: 'transform, opacity',
         }}
       />
 
