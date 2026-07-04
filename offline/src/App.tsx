@@ -44,7 +44,7 @@ import { Football3D } from './components/Football3D';
 // @ts-ignore
 import stadiumBg from './assets/images/football2.png';
 import { BestPredictionsCarousel } from './components/BestPredictionsCarousel';
-import { CustomCursor } from './components/CustomCursor';
+import { CursorFX } from './components/CustomCursor';
 import { checkHealth } from './api';
 import {
   Search,
@@ -1584,8 +1584,8 @@ export default function App() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5, delay: 0.1 }}
     >
-      {/* Custom Cursor */}
-      <CustomCursor theme={cursorTheme} />
+      {/* Cursor FX */}
+      <CursorFX theme={cursorTheme} />
       {/* Top Premium Editorial Header */}
       <header id="app-header" className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full">
         

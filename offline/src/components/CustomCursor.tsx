@@ -1,8 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { CursorEngine } from './cursor/CursorEngine';
-import { GlowEngine } from './cursor/GlowEngine';
-import { EnergyEngine } from './cursor/EnergyEngine';
-import { CursorTrail } from './cursor/CursorTrail';
 
 type CursorTheme = 'upcoming' | 'live' | 'finished';
 
@@ -11,162 +7,114 @@ interface CustomCursorProps {
 }
 
 const THEME_COLORS = {
-  upcoming: {
-    primary: '#3B82F6',
-    secondary: '#60A5FA',
-    glow: 'rgba(59, 130, 246, 0.4)',
-  },
-  live: {
-    primary: '#EF4444',
-    secondary: '#F87171',
-    glow: 'rgba(239, 68, 68, 0.4)',
-  },
-  finished: {
-    primary: '#A855F7',
-    secondary: '#C084FC',
-    glow: 'rgba(168, 85, 247, 0.4)',
-  },
+  upcoming: { primary: '#3B82F6', glow: 'rgba(59, 130, 246, 0.3)' },
+  live: { primary: '#EF4444', glow: 'rgba(239, 68, 68, 0.3)' },
+  finished: { primary: '#A855F7', glow: 'rgba(168, 85, 247, 0.3)' },
 };
 
 const isTouchDevice = (): boolean => {
-  return (
-    'ontouchstart' in window ||
-    navigator.maxTouchPoints > 0 ||
-    // @ts-ignore
-    navigator.msMaxTouchPoints > 0
-  );
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 };
 
 const prefersReducedMotion = (): boolean => {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 };
 
-export const CustomCursor: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }) => {
-  const cursorRef = useRef<HTMLDivElement>(null);
-  const glowInnerRef = useRef<HTMLDivElement>(null);
-  const glowMediumRef = useRef<HTMLDivElement>(null);
-  const glowOuterRef = useRef<HTMLDivElement>(null);
-  const energyBorderRef = useRef<HTMLDivElement>(null);
-  const trailRef = useRef<HTMLDivElement>(null);
-  const clickPulseRef = useRef<HTMLDivElement>(null);
-
-  const enginesRef = useRef<{
-    cursor: CursorEngine | null;
-    glow: GlowEngine | null;
-    energy: EnergyEngine | null;
-    trail: CursorTrail | null;
-  }>({ cursor: null, glow: null, energy: null, trail: null });
-
+export const CursorFX: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }) => {
+  const glowRef = useRef<HTMLDivElement>(null);
+  const rippleContainerRef = useRef<HTMLDivElement>(null);
   const mouseXRef = useRef(0);
   const mouseYRef = useRef(0);
-  const prevMouseXRef = useRef(0);
-  const prevMouseYRef = useRef(0);
-  const velocityRef = useRef(0);
-  const isHoveringRef = useRef(false);
   const isTabActiveRef = useRef(true);
   const animationFrameRef = useRef<number | undefined>(undefined);
+  const magneticTargetRef = useRef<HTMLElement | null>(null);
+  const magneticOffsetRef = useRef({ x: 0, y: 0 });
 
   const currentColors = THEME_COLORS[theme];
 
   useEffect(() => {
-    if (isTouchDevice() || prefersReducedMotion()) {
-      return;
-    }
-
-    // Initialize engines when DOM elements are ready
-    const initEngines = () => {
-      if (cursorRef.current && glowInnerRef.current && glowMediumRef.current && glowOuterRef.current && energyBorderRef.current && trailRef.current) {
-        enginesRef.current.cursor = new CursorEngine(cursorRef.current);
-        enginesRef.current.glow = new GlowEngine(glowInnerRef.current, glowMediumRef.current, glowOuterRef.current);
-        enginesRef.current.energy = new EnergyEngine(energyBorderRef.current);
-        enginesRef.current.trail = new CursorTrail(trailRef.current);
-
-        // Set colors
-        enginesRef.current.energy?.setColors(currentColors.primary, currentColors.secondary);
-      }
-    };
-
-    initEngines();
+    if (isTouchDevice() || prefersReducedMotion()) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       mouseXRef.current = e.clientX;
       mouseYRef.current = e.clientY;
+
+      // Check for magnetic target
+      const target = e.target as HTMLElement;
+      const button = target.closest('button, a, [role="button"]');
+      magneticTargetRef.current = button as HTMLElement | null;
     };
 
-    const handleMouseOver = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const interactive = target.closest('button, a, [role="button"], .cursor-pointer, .group, .match-card, .nav-item');
-      isHoveringRef.current = !!interactive;
+    const handleMouseLeave = () => {
+      magneticTargetRef.current = null;
+      magneticOffsetRef.current = { x: 0, y: 0 };
     };
 
     const handleVisibilityChange = () => {
       isTabActiveRef.current = document.visibilityState === 'visible';
     };
 
-    const handleClick = () => {
-      if (!clickPulseRef.current) return;
-      const x = mouseXRef.current;
-      const y = mouseYRef.current;
+    const handleClick = (e: MouseEvent) => {
+      if (!rippleContainerRef.current) return;
       
-      clickPulseRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(0.5)`;
-      clickPulseRef.current.style.opacity = '1';
+      const ripple = document.createElement('div');
+      ripple.style.cssText = `
+        position: fixed;
+        left: ${e.clientX}px;
+        top: ${e.clientY}px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: radial-gradient(circle, ${currentColors.primary} 0%, transparent 70%);
+        pointer-events: none;
+        transform: translate(-50%, -50%) scale(0);
+        animation: rippleExpand 250ms ease-out forwards;
+      `;
       
-      const animation = clickPulseRef.current.animate(
-        [
-          { transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(0.5)`, opacity: 1 },
-          { transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(2)`, opacity: 0 },
-        ],
-        { duration: 150, easing: 'ease-out' }
-      );
+      rippleContainerRef.current.appendChild(ripple);
       
-      animation.onfinish = () => {
-        if (clickPulseRef.current) {
-          clickPulseRef.current.style.opacity = '0';
-        }
-      };
+      ripple.addEventListener('animationend', () => {
+        ripple.remove();
+      });
     };
 
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseover', handleMouseOver);
+    document.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('click', handleClick);
 
-    const animate = (timestamp: number) => {
+    const animate = () => {
       if (!isTabActiveRef.current) {
         animationFrameRef.current = requestAnimationFrame(animate);
         return;
       }
 
-      // Calculate velocity
-      const dx = mouseXRef.current - prevMouseXRef.current;
-      const dy = mouseYRef.current - prevMouseYRef.current;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      velocityRef.current = distance;
-      prevMouseXRef.current = mouseXRef.current;
-      prevMouseYRef.current = mouseYRef.current;
-
-      const velocity = velocityRef.current;
-      const angle = Math.atan2(dy, dx);
-
-      // Update all engines
-      enginesRef.current.cursor?.setPosition(mouseXRef.current, mouseYRef.current);
-      enginesRef.current.cursor?.setHovering(isHoveringRef.current);
-      enginesRef.current.cursor?.update();
-
-      enginesRef.current.glow?.setPosition(mouseXRef.current, mouseYRef.current);
-      enginesRef.current.glow?.setVelocity(velocity);
-      enginesRef.current.glow?.setHovering(isHoveringRef.current);
-      enginesRef.current.glow?.update();
-
-      enginesRef.current.energy?.setPosition(mouseXRef.current, mouseYRef.current);
-      enginesRef.current.energy?.setVelocity(velocity);
-      enginesRef.current.energy?.setHovering(isHoveringRef.current);
-      enginesRef.current.energy?.update(timestamp);
-
-      enginesRef.current.trail?.setPosition(mouseXRef.current, mouseYRef.current);
-      enginesRef.current.trail?.setVelocity(velocity);
-      enginesRef.current.trail?.setAngle(angle);
-      enginesRef.current.trail?.update(timestamp);
+      if (glowRef.current) {
+        // Calculate magnetic offset
+        let offsetX = 0;
+        let offsetY = 0;
+        
+        if (magneticTargetRef.current) {
+          const rect = magneticTargetRef.current.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          
+          const dx = centerX - mouseXRef.current;
+          const dy = centerY - mouseYRef.current;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < 100) {
+            const strength = (100 - distance) / 100;
+            offsetX = dx * strength * 0.3;
+            offsetY = dy * strength * 0.3;
+          }
+        }
+        
+        magneticOffsetRef.current = { x: offsetX, y: offsetY };
+        
+        // Single transform update per frame
+        glowRef.current.style.transform = `translate3d(${mouseXRef.current + offsetX}px, ${mouseYRef.current + offsetY}px, 0)`;
+      }
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -175,142 +123,92 @@ export const CustomCursor: React.FC<CustomCursorProps> = ({ theme = 'upcoming' }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseover', handleMouseOver);
+      document.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('click', handleClick);
-
       if (animationFrameRef.current !== undefined) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-
-      enginesRef.current.cursor?.destroy();
-      enginesRef.current.glow?.destroy();
-      enginesRef.current.energy?.destroy();
-      enginesRef.current.trail?.destroy();
     };
   }, [currentColors]);
 
-  if (isTouchDevice() || prefersReducedMotion()) {
-    return null;
-  }
+  if (isTouchDevice() || prefersReducedMotion()) return null;
 
   return (
     <>
-      {/* Layer 1: White cursor arrow - direct positioning */}
+      {/* Cursor FX Glow - follows native cursor */}
       <div
-        ref={cursorRef}
+        ref={glowRef}
         className="fixed top-0 left-0 pointer-events-none z-[999999] hidden md:block"
-        style={{ width: '24px', height: '24px', willChange: 'transform' }}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87a.5.5 0 0 0 .35-.85L6.35 2.86a.5.5 0 0 0-.85.35Z"
-            fill="#FFFFFF"
-            stroke={currentColors.primary}
-            strokeWidth="1.5"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-
-      {/* Layer 3: Living energy border */}
-      <div
-        ref={energyBorderRef}
-        className="fixed top-0 left-0 pointer-events-none z-[999998] hidden md:block"
-        style={{ width: '32px', height: '32px', willChange: 'transform, opacity', mixBlendMode: 'screen', opacity: 0.2 }}
-      />
-
-      {/* Layer 2: Multi-layer glow */}
-      <div
-        ref={glowInnerRef}
-        className="fixed top-0 left-0 pointer-events-none z-[999997] hidden md:block rounded-full"
         style={{
-          width: '18px',
-          height: '18px',
-          background: `radial-gradient(circle, ${currentColors.glow} 0%, transparent 60%)`,
-          filter: 'blur(3px)',
-          mixBlendMode: 'screen',
-          willChange: 'transform, opacity',
-          transition: 'opacity 0.15s ease-out',
-          opacity: 0.15,
-        }}
-      />
-      <div
-        ref={glowMediumRef}
-        className="fixed top-0 left-0 pointer-events-none z-[999996] hidden md:block rounded-full"
-        style={{
-          width: '24px',
-          height: '24px',
+          width: '16px',
+          height: '16px',
+          borderRadius: '50%',
           background: `radial-gradient(circle, ${currentColors.glow} 0%, transparent 70%)`,
           filter: 'blur(6px)',
           mixBlendMode: 'screen',
-          willChange: 'transform, opacity, width, height',
-          transition: 'opacity 0.2s ease-out, width 0.2s ease-out, height 0.2s ease-out',
-          opacity: 0.1,
-        }}
-      />
-      <div
-        ref={glowOuterRef}
-        className="fixed top-0 left-0 pointer-events-none z-[999995] hidden md:block rounded-full"
-        style={{
-          width: '36px',
-          height: '36px',
-          background: `radial-gradient(circle, ${currentColors.glow} 0%, transparent 80%)`,
-          filter: 'blur(12px)',
-          mixBlendMode: 'screen',
-          willChange: 'transform, opacity, width, height',
-          transition: 'opacity 0.25s ease-out, width 0.25s ease-out, height 0.25s ease-out',
-          opacity: 0.06,
+          opacity: 0.4,
+          willChange: 'transform',
+          transition: 'opacity 0.2s ease-out',
         }}
       />
 
-      {/* Layer 5: Subtle trail */}
-      <div
-        ref={trailRef}
-        className="fixed top-0 left-0 pointer-events-none z-[999994] hidden md:block"
-        style={{
-          width: '0px',
-          height: '3px',
-          background: `linear-gradient(90deg, transparent 0%, ${currentColors.primary} 30%, ${currentColors.secondary} 50%, ${currentColors.primary} 70%, transparent 100%)`,
-          filter: 'blur(2px)',
-          mixBlendMode: 'screen',
-          willChange: 'transform, opacity, width',
-          transition: 'opacity 0.08s ease-out',
-          opacity: 0,
-          borderRadius: '2px',
-        }}
-      />
-
-      {/* Click pulse */}
-      <div
-        ref={clickPulseRef}
-        className="fixed top-0 left-0 pointer-events-none z-[999993] hidden md:block rounded-full"
-        style={{
-          width: '28px',
-          height: '28px',
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${currentColors.primary} 0%, transparent 70%)`,
-          opacity: 0,
-          pointerEvents: 'none',
-          mixBlendMode: 'screen',
-          willChange: 'transform, opacity',
-        }}
-      />
+      {/* Ripple container for click effects */}
+      <div ref={rippleContainerRef} className="fixed top-0 left-0 pointer-events-none z-[999998] hidden md:block" />
 
       <style>{`
-        @media (pointer: fine) {
-          body, a, button, [role="button"], .cursor-pointer {
-            cursor: none !important;
+        @keyframes rippleExpand {
+          0% {
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0.6;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(4);
+            opacity: 0;
           }
         }
-        @media (pointer: coarse) {
-          body {
-            cursor: auto !important;
-          }
+
+        /* Button hover effects */
+        button:hover, a:hover, [role="button"]:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3), 0 0 20px rgba(59, 130, 246, 0.2);
+          border-color: rgba(59, 130, 246, 0.5);
+          transition: all 0.2s ease-out;
+        }
+
+        /* Prediction card hover effects */
+        .match-card:hover {
+          transform: translateY(-3px);
+          border-color: rgba(59, 130, 246, 0.6);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 30px rgba(59, 130, 246, 0.15);
+          background: rgba(20, 20, 20, 0.95);
+          transition: all 0.25s ease-out;
+        }
+
+        /* Navigation hover effects */
+        .nav-item {
+          position: relative;
+        }
+        .nav-item::after {
+          content: '';
+          position: absolute;
+          bottom: -2px;
+          left: 0;
+          width: 0;
+          height: 2px;
+          background: linear-gradient(90deg, #3B82F6, #60A5FA);
+          transition: width 0.3s ease-out;
+        }
+        .nav-item:hover::after {
+          width: 100%;
+        }
+        .nav-item:hover {
+          text-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+          transition: all 0.2s ease-out;
         }
       `}</style>
     </>
   );
 };
 
-export default CustomCursor;
+export default CursorFX;
