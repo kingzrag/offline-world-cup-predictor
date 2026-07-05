@@ -1751,6 +1751,63 @@ export default function App() {
                 <div className="absolute bottom-0 left-0 right-0 h-[25%]" style={{
                   background: 'linear-gradient(to top, rgba(26, 77, 26, 0.15) 0%, transparent 100%)'
                 }} />
+                
+                {/* Foreground football positioned near CTA button */}
+                <div className="absolute bottom-[15%] left-[8%] md:bottom-[12%] md:left-[5%] lg:bottom-[10%] lg:left-[4%] z-10 pointer-events-none" style={{
+                  width: '120px',
+                  height: '120px',
+                  transform: 'rotate(-15deg)'
+                }}>
+                  <svg 
+                    viewBox="0 0 100 100" 
+                    className="w-full h-full drop-shadow-2xl"
+                    style={{
+                      filter: 'brightness(1.1) contrast(1.05)'
+                    }}
+                  >
+                    {/* Football base - white */}
+                    <circle cx="50" cy="50" r="48" fill="#FFFFFF" />
+                    
+                    {/* Pentagon pattern - classic football design */}
+                    <g fill="#1a1a1a">
+                      {/* Center pentagon */}
+                      <polygon points="50,35 58,42 55,52 45,52 42,42" />
+                      
+                      {/* Surrounding pentagons */}
+                      <polygon points="50,15 58,22 55,32 45,32 42,22" transform="rotate(72 50 50)" />
+                      <polygon points="50,15 58,22 55,32 45,32 42,22" transform="rotate(144 50 50)" />
+                      <polygon points="50,15 58,22 55,32 45,32 42,22" transform="rotate(216 50 50)" />
+                      <polygon points="50,15 58,22 55,32 45,32 42,22" transform="rotate(288 50 50)" />
+                      
+                      {/* Edge pentagons */}
+                      <polygon points="25,25 33,32 30,42 20,42 17,32" transform="rotate(36 25 25)" />
+                      <polygon points="75,25 83,32 80,42 70,42 67,32" transform="rotate(-36 75 25)" />
+                      <polygon points="25,75 33,82 30,92 20,92 17,82" transform="rotate(-36 25 75)" />
+                      <polygon points="75,75 83,82 80,92 70,92 67,82" transform="rotate(36 75 75)" />
+                    </g>
+                    
+                    {/* Subtle shading for 3D effect */}
+                    <defs>
+                      <radialGradient id="ballShade" cx="30%" cy="30%" r="70%">
+                        <stop offset="0%" stopColor="rgba(255,255,255,0.3)" />
+                        <stop offset="100%" stopColor="rgba(0,0,0,0.1)" />
+                      </radialGradient>
+                    </defs>
+                    <circle cx="50" cy="50" r="48" fill="url(#ballShade)" style={{ mixBlendMode: 'multiply' }} />
+                    
+                    {/* Outer ring for definition */}
+                    <circle cx="50" cy="50" r="48" fill="none" stroke="#1a1a1a" strokeWidth="1" opacity="0.3" />
+                  </svg>
+                </div>
+                
+                {/* Subtle floodlights from above */}
+                <div className="absolute inset-0 z-5 pointer-events-none" style={{
+                  background: `
+                    radial-gradient(circle 8% at 15% 15%, rgba(255, 255, 240, 0.12) 0%, transparent 60%),
+                    radial-gradient(circle 8% at 85% 15%, rgba(255, 255, 240, 0.12) 0%, transparent 60%),
+                    radial-gradient(circle 6% at 50% 10%, rgba(255, 255, 240, 0.08) 0%, transparent 50%)
+                  `
+                }} />
               </div>
 
               {/* Floating content wrapped in standard content grid alignment */}
