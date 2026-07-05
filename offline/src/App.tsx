@@ -1680,26 +1680,104 @@ export default function App() {
                 transition: 'transform 0.05s ease-out, opacity 0.05s ease-out'
               }}
             >
-              {/* Crisp, high-detail stadium background spanning full width */}
-              <div className="absolute inset-0 z-0 pointer-events-none">
-                <img 
-                  src={football2}
-                  alt="Stadium Hero Background"
-                  className="w-full h-full object-cover scale-100 transition-all duration-300"
-                  style={{
-                    opacity: 0.55,
-                    filter: "brightness(0.95) contrast(1.20) saturate(0.72)"
-                  }}
-                  referrerPolicy="no-referrer"
-                />
-                {/* Reduced green tint — 30% less saturation, toned down brand overlay */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-[#1cdb5e]/2 via-[#1cdb5e]/5 to-[#1cdb5e]/3 mix-blend-screen opacity-35"></div>
-                {/* Premium cinematic top-to-bottom gradient — dark luxury broadcast aesthetic */}
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.85) 100%)' }}></div>
-                {/* Lateral depth — left edge darkened for text column readability */}
-                <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/10 to-black/32"></div>
-                {/* Deep vignette — edges pulled darker to focus on center stage */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_35%,rgba(0,0,0,0.92)_100%)]"></div>
+              {/* Cinematic premium stadium background */}
+              <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+                <style>{`
+                  @keyframes fogDrift {
+                    0%, 100% { opacity: 1; transform: translateX(0); }
+                    50% { opacity: 0.8; transform: translateX(20px); }
+                  }
+                  @keyframes particlesFloat {
+                    0%, 100% { opacity: 1; transform: translateY(0); }
+                    50% { opacity: 0.6; transform: translateY(-10px); }
+                  }
+                  @keyframes lightsPulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.85; }
+                  }
+                `}</style>
+                {/* Deep blue-black sky base */}
+                <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a1a] via-[#0f0f2a] to-[#1a1a2e]" />
+                
+                {/* Stadium architecture - modern curved roof structure */}
+                <div className="absolute inset-0" style={{
+                  background: `
+                    radial-gradient(ellipse 80% 50% at 50% 30%, rgba(30, 40, 60, 0.3) 0%, transparent 70%),
+                    radial-gradient(ellipse 60% 40% at 20% 40%, rgba(20, 30, 50, 0.4) 0%, transparent 60%),
+                    radial-gradient(ellipse 60% 40% at 80% 40%, rgba(20, 30, 50, 0.4) 0%, transparent 60%)
+                  `
+                }} />
+                
+                {/* Bright floodlights with gentle glow */}
+                <div className="absolute inset-0" style={{
+                  background: `
+                    radial-gradient(circle 3% at 15% 25%, rgba(255, 255, 240, 0.8) 0%, transparent 70%),
+                    radial-gradient(circle 3% at 85% 25%, rgba(255, 255, 240, 0.8) 0%, transparent 70%),
+                    radial-gradient(circle 2% at 50% 20%, rgba(255, 255, 240, 0.6) 0%, transparent 60%)
+                  `
+                }} />
+                
+                {/* Soft volumetric light beams from floodlights */}
+                <div className="absolute inset-0" style={{
+                  background: `
+                    linear-gradient(135deg, rgba(255, 255, 240, 0.03) 0%, transparent 40%),
+                    linear-gradient(225deg, rgba(255, 255, 240, 0.03) 0%, transparent 40%)
+                  `
+                }} />
+                
+                {/* Rich green pitch in lower third */}
+                <div className="absolute bottom-0 left-0 right-0 h-[35%]" style={{
+                  background: `
+                    linear-gradient(to top, #1a4d1a 0%, #2d5a2d 30%, #1a4d1a 60%, transparent 100%),
+                    radial-gradient(ellipse 100% 50% at 50% 100%, rgba(26, 77, 26, 0.6) 0%, transparent 70%)
+                  `
+                }} />
+                
+                {/* Crowd lighting effect */}
+                <div className="absolute inset-0" style={{
+                  background: `
+                    radial-gradient(ellipse 80% 30% at 50% 45%, rgba(255, 255, 200, 0.05) 0%, transparent 70%),
+                    radial-gradient(ellipse 60% 20% at 30% 50%, rgba(255, 255, 200, 0.08) 0%, transparent 60%),
+                    radial-gradient(ellipse 60% 20% at 70% 50%, rgba(255, 255, 200, 0.08) 0%, transparent 60%)
+                  `
+                }} />
+                
+                {/* Soft atmospheric fog */}
+                <div className="absolute inset-0" style={{
+                  background: 'linear-gradient(to bottom, transparent 40%, rgba(200, 210, 230, 0.08) 60%, rgba(200, 210, 230, 0.12) 80%, transparent 100%)',
+                  animation: 'fogDrift 20s ease-in-out infinite'
+                }} />
+                
+                {/* Floating dust particles */}
+                <div className="absolute inset-0" style={{
+                  background: `
+                    radial-gradient(circle 1px at 20% 60%, rgba(255, 255, 255, 0.3) 0%, transparent 100%),
+                    radial-gradient(circle 1px at 40% 70%, rgba(255, 255, 255, 0.2) 0%, transparent 100%),
+                    radial-gradient(circle 1px at 60% 55%, rgba(255, 255, 255, 0.25) 0%, transparent 100%),
+                    radial-gradient(circle 1px at 80% 65%, rgba(255, 255, 255, 0.2) 0%, transparent 100%),
+                    radial-gradient(circle 1px at 30% 80%, rgba(255, 255, 255, 0.15) 0%, transparent 100%),
+                    radial-gradient(circle 1px at 70% 75%, rgba(255, 255, 255, 0.2) 0%, transparent 100%)
+                  `,
+                  animation: 'particlesFloat 15s ease-in-out infinite'
+                }} />
+                
+                {/* Pulsing stadium lights */}
+                <div className="absolute inset-0" style={{
+                  background: `
+                    radial-gradient(circle 4% at 15% 25%, rgba(255, 255, 240, 0.9) 0%, transparent 70%),
+                    radial-gradient(circle 4% at 85% 25%, rgba(255, 255, 240, 0.9) 0%, transparent 70%)
+                  `,
+                  animation: 'lightsPulse 9s ease-in-out infinite'
+                }} />
+                
+                {/* Deep vignette for focus */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_40%,rgba(0,0,0,0.85)_100%)]" />
+                
+                {/* Lateral depth - left darker for text, right brighter for stats */}
+                <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/15 to-black/35" />
+                
+                {/* Black overlay for text readability */}
+                <div className="absolute inset-0 bg-black/60" />
               </div>
 
               {/* Floating content wrapped in standard content grid alignment */}
@@ -1722,9 +1800,17 @@ export default function App() {
                   <div className="flex flex-wrap gap-3 sm:gap-4">
                     <button
                       onClick={() => navigateTo('predictions')}
-                      className="px-5 sm:px-6 py-2.5 sm:py-3 bg-white hover:bg-zinc-100 text-black font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 flex items-center gap-1.5 border border-transparent shadow-lg shadow-white/5 active:scale-[0.98] cursor-pointer"
+                      className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#0B0B0B] text-[#22C55E] font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 flex items-center gap-1.5 border border-[#22C55E]/30 shadow-lg hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:shadow-[0_0_40px_rgba(34,197,94,0.15)] hover:border-[#22C55E] hover:-translate-y-0.5 hover:scale-[1.02] cursor-pointer group relative overflow-hidden"
+                      style={{
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)'
+                      }}
                     >
-                      VIEW PREDICTIONS →
+                      <span className="relative z-10 flex items-center gap-1.5 group-hover:gap-2 transition-all duration-300">
+                        VIEW PREDICTIONS
+                        <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#22C55E]/5 via-[#22C55E]/10 to-[#22C55E]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     </button>
                   </div>
                 </div>
