@@ -2038,25 +2038,16 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1, duration: 0.5 }}
-                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
                         <img 
                           src="/leagues/world-cup.svg" 
                           alt="FIFA World Cup" 
-                          className="w-[34px] h-[34px] mb-2 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
                         />
-                        <div className="w-[34px] h-[34px] mb-2 flex items-center justify-center text-zinc-500 hidden">
-                          ⚽
-                        </div>
-                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">FIFA World Cup</span>
+                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">FIFA World Cup</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
@@ -2065,25 +2056,16 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.15, duration: 0.5 }}
-                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
                         <img 
                           src="/leagues/premier-league.svg" 
                           alt="Premier League" 
-                          className="w-[34px] h-[34px] mb-2 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
                         />
-                        <div className="w-[34px] h-[34px] mb-2 flex items-center justify-center text-zinc-500 hidden">
-                          ⚽
-                        </div>
-                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Premier League</span>
+                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Premier League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
@@ -2092,25 +2074,16 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2, duration: 0.5 }}
-                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
                         <img 
                           src="/leagues/laliga.svg" 
                           alt="La Liga" 
-                          className="w-[34px] h-[34px] mb-2 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
                         />
-                        <div className="w-[34px] h-[34px] mb-2 flex items-center justify-center text-zinc-500 hidden">
-                          ⚽
-                        </div>
-                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">La Liga</span>
+                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">La Liga</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
@@ -2119,25 +2092,16 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.25, duration: 0.5 }}
-                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
                         <img 
                           src="/leagues/bundesliga.svg" 
                           alt="Bundesliga" 
-                          className="w-[34px] h-[34px] mb-2 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
                         />
-                        <div className="w-[34px] h-[34px] mb-2 flex items-center justify-center text-zinc-500 hidden">
-                          ⚽
-                        </div>
-                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Bundesliga</span>
+                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Bundesliga</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
@@ -2146,25 +2110,16 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.3, duration: 0.5 }}
-                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
                         <img 
                           src="/leagues/champions-league.svg" 
                           alt="Champions League" 
-                          className="w-[34px] h-[34px] mb-2 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
                         />
-                        <div className="w-[34px] h-[34px] mb-2 flex items-center justify-center text-zinc-500 hidden">
-                          ⚽
-                        </div>
-                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Champions League</span>
+                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Champions League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
@@ -2173,25 +2128,16 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.35, duration: 0.5 }}
-                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
                         <img 
                           src="/leagues/europa-league.svg" 
                           alt="Europa League" 
-                          className="w-[34px] h-[34px] mb-2 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
                         />
-                        <div className="w-[34px] h-[34px] mb-2 flex items-center justify-center text-zinc-500 hidden">
-                          ⚽
-                        </div>
-                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Europa League</span>
+                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Europa League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
@@ -2200,25 +2146,16 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4, duration: 0.5 }}
-                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
                         <img 
                           src="/leagues/serie-a.svg" 
                           alt="Serie A" 
-                          className="w-[34px] h-[34px] mb-2 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
                         />
-                        <div className="w-[34px] h-[34px] mb-2 flex items-center justify-center text-zinc-500 hidden">
-                          ⚽
-                        </div>
-                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Serie A</span>
+                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Serie A</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
@@ -3417,27 +3354,6 @@ export default function App() {
                     </p>
                   </div>
                   
-                  {/* Stats display banner */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-zinc-950/65 border border-zinc-900/60 p-4 rounded shrink-0 divide-x divide-zinc-900 w-full md:w-auto">
-                    <div className="px-3">
-                      <span className="text-[10px] font-mono text-zinc-500 block uppercase">Simulations</span>
-                      <span className="text-xs font-mono font-bold text-white">50,051 / match</span>
-                    </div>
-                    <div className="px-3">
-                      <span className="text-[10px] font-mono text-zinc-500 block uppercase">Fixtures</span>
-                      <span className="text-xs font-mono font-bold text-white">104 World Cup</span>
-                    </div>
-                    <div className="px-3">
-                      <span className="text-[10px] font-mono text-zinc-500 block uppercase">Nations</span>
-                      <span className="text-xs font-mono font-bold text-white">48 Nations</span>
-                    </div>
-                    <div className="px-3">
-                      <span className="text-[10px] font-mono text-zinc-500 block uppercase">Updated</span>
-                      <span className="text-xs font-mono font-bold text-green-accent flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-accent animate-pulse" /> Daily
-                      </span>
-                    </div>
-                  </div>
                 </div>
 
                 {/* THE 2-COLUMN INTEL DASHBOARD GRID */}
