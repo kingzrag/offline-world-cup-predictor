@@ -1699,17 +1699,15 @@ export default function App() {
                   }
                 `}</style>
                 
-                {/* High-resolution stadium background - sharp and crisp, zoomed out for cinematic view */}
+                {/* High-resolution stadium background - sharp and crisp, cinematic view */}
                 <img 
                   src={background}
                   alt="Premium Stadium Background"
                   className="absolute inset-0 w-full h-full object-cover"
                   style={{
                     backgroundSize: 'cover',
-                    backgroundPosition: 'center 65%',
-                    backgroundRepeat: 'no-repeat',
-                    transform: 'scale(0.90)',
-                    transformOrigin: 'center center'
+                    backgroundPosition: 'center 60%',
+                    backgroundRepeat: 'no-repeat'
                   }}
                   referrerPolicy="no-referrer"
                 />
@@ -1753,9 +1751,9 @@ export default function App() {
                   background: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 50%, rgba(0,0,0,0.65) 100%)'
                 }} />
                 
-                {/* Subtle green pitch lighting - reduced by 60-70% */}
-                <div className="absolute bottom-0 left-0 right-0 h-[25%]" style={{
-                  background: 'linear-gradient(to top, rgba(26, 77, 26, 0.15) 0%, transparent 100%)'
+                {/* Subtle green pitch lighting - improved depth gradient */}
+                <div className="absolute bottom-0 left-0 right-0 h-[30%]" style={{
+                  background: 'linear-gradient(to top, rgba(26, 77, 26, 0.12) 0%, rgba(10, 10, 10, 0.08) 50%, transparent 100%)'
                 }} />
                 
                 
@@ -1962,10 +1960,10 @@ export default function App() {
                   transition: 'opacity 0.4s ease-out'
                 }}
               >
-                <div className="max-w-5xl mx-auto px-6 md:px-12 py-6">
+                <div className="max-w-5xl mx-auto px-6 md:px-12 py-6 mb-8">
                   
-                  {/* Glass effect information strip */}
-                  <div className="bg-white/5 backdrop-blur-xl border border-white/8 rounded-2xl shadow-2xl overflow-hidden">
+                  {/* Glass effect information strip - transparent and integrated */}
+                  <div className="bg-[rgba(10,10,10,0.18)] backdrop-blur-md border border-[rgba(255,255,255,0.06)] rounded-2xl shadow-lg overflow-hidden">
                     <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-white/8">
                       
                       {/* Tournament Block */}
