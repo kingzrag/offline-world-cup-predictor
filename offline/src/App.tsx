@@ -1696,59 +1696,27 @@ export default function App() {
                     50% { opacity: 0.85; }
                   }
                 `}</style>
-                {/* Deep blue-black sky base */}
-                <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a1a] via-[#0f0f2a] to-[#1a1a2e]" />
                 
-                {/* Stadium architecture - modern curved roof structure */}
+                {/* High-resolution stadium image - sharp and crisp */}
+                <img 
+                  src={football2}
+                  alt="Premium Stadium Background"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat'
+                  }}
+                  referrerPolicy="no-referrer"
+                />
+                
+                {/* Subtle atmospheric fog - no blur */}
                 <div className="absolute inset-0" style={{
-                  background: `
-                    radial-gradient(ellipse 80% 50% at 50% 30%, rgba(30, 40, 60, 0.3) 0%, transparent 70%),
-                    radial-gradient(ellipse 60% 40% at 20% 40%, rgba(20, 30, 50, 0.4) 0%, transparent 60%),
-                    radial-gradient(ellipse 60% 40% at 80% 40%, rgba(20, 30, 50, 0.4) 0%, transparent 60%)
-                  `
-                }} />
-                
-                {/* Bright floodlights with gentle glow */}
-                <div className="absolute inset-0" style={{
-                  background: `
-                    radial-gradient(circle 3% at 15% 25%, rgba(255, 255, 240, 0.8) 0%, transparent 70%),
-                    radial-gradient(circle 3% at 85% 25%, rgba(255, 255, 240, 0.8) 0%, transparent 70%),
-                    radial-gradient(circle 2% at 50% 20%, rgba(255, 255, 240, 0.6) 0%, transparent 60%)
-                  `
-                }} />
-                
-                {/* Soft volumetric light beams from floodlights */}
-                <div className="absolute inset-0" style={{
-                  background: `
-                    linear-gradient(135deg, rgba(255, 255, 240, 0.03) 0%, transparent 40%),
-                    linear-gradient(225deg, rgba(255, 255, 240, 0.03) 0%, transparent 40%)
-                  `
-                }} />
-                
-                {/* Rich green pitch in lower third */}
-                <div className="absolute bottom-0 left-0 right-0 h-[35%]" style={{
-                  background: `
-                    linear-gradient(to top, #1a4d1a 0%, #2d5a2d 30%, #1a4d1a 60%, transparent 100%),
-                    radial-gradient(ellipse 100% 50% at 50% 100%, rgba(26, 77, 26, 0.6) 0%, transparent 70%)
-                  `
-                }} />
-                
-                {/* Crowd lighting effect */}
-                <div className="absolute inset-0" style={{
-                  background: `
-                    radial-gradient(ellipse 80% 30% at 50% 45%, rgba(255, 255, 200, 0.05) 0%, transparent 70%),
-                    radial-gradient(ellipse 60% 20% at 30% 50%, rgba(255, 255, 200, 0.08) 0%, transparent 60%),
-                    radial-gradient(ellipse 60% 20% at 70% 50%, rgba(255, 255, 200, 0.08) 0%, transparent 60%)
-                  `
-                }} />
-                
-                {/* Soft atmospheric fog */}
-                <div className="absolute inset-0" style={{
-                  background: 'linear-gradient(to bottom, transparent 40%, rgba(200, 210, 230, 0.08) 60%, rgba(200, 210, 230, 0.12) 80%, transparent 100%)',
+                  background: 'linear-gradient(to bottom, transparent 40%, rgba(200, 210, 230, 0.05) 60%, rgba(200, 210, 230, 0.08) 80%, transparent 100%)',
                   animation: 'fogDrift 20s ease-in-out infinite'
                 }} />
                 
-                {/* Floating dust particles */}
+                {/* Floating dust particles - no blur */}
                 <div className="absolute inset-0" style={{
                   background: `
                     radial-gradient(circle 1px at 20% 60%, rgba(255, 255, 255, 0.3) 0%, transparent 100%),
@@ -1761,23 +1729,28 @@ export default function App() {
                   animation: 'particlesFloat 15s ease-in-out infinite'
                 }} />
                 
-                {/* Pulsing stadium lights */}
+                {/* Pulsing stadium lights - no blur */}
                 <div className="absolute inset-0" style={{
                   background: `
-                    radial-gradient(circle 4% at 15% 25%, rgba(255, 255, 240, 0.9) 0%, transparent 70%),
-                    radial-gradient(circle 4% at 85% 25%, rgba(255, 255, 240, 0.9) 0%, transparent 70%)
+                    radial-gradient(circle 4% at 15% 25%, rgba(255, 255, 240, 0.15) 0%, transparent 70%),
+                    radial-gradient(circle 4% at 85% 25%, rgba(255, 255, 240, 0.15) 0%, transparent 70%)
                   `,
                   animation: 'lightsPulse 9s ease-in-out infinite'
                 }} />
                 
-                {/* Deep vignette for focus */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_40%,rgba(0,0,0,0.85)_100%)]" />
+                {/* Deep vignette for focus - no blur */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_40%,rgba(0,0,0,0.75)_100%)]" />
                 
                 {/* Lateral depth - left darker for text, right brighter for stats */}
-                <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/15 to-black/35" />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/10 to-black/30" />
                 
-                {/* Black overlay for text readability */}
-                <div className="absolute inset-0 bg-black/60" />
+                {/* Reduced black overlay for text readability (45-55%) */}
+                <div className="absolute inset-0 bg-black/50" />
+                
+                {/* Subtle green pitch lighting - reduced by 60-70% */}
+                <div className="absolute bottom-0 left-0 right-0 h-[25%]" style={{
+                  background: 'linear-gradient(to top, rgba(26, 77, 26, 0.15) 0%, transparent 100%)'
+                }} />
               </div>
 
               {/* Floating content wrapped in standard content grid alignment */}
