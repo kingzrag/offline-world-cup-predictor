@@ -1992,11 +1992,11 @@ export default function App() {
                         whileHover={{ y: -2 }}
                       >
                         <img 
-                          src="/leagues/world-cup.svg" 
+                          src="/leagues/fifa.jpeg" 
                           alt="FIFA World Cup" 
                           className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/world-cup.svg', e)}
+                          onError={(e) => console.error('Failed to load logo: /leagues/fifa.jpeg', e)}
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">FIFA World Cup</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
@@ -2011,11 +2011,11 @@ export default function App() {
                         whileHover={{ y: -2 }}
                       >
                         <img 
-                          src="/leagues/premier-league.svg" 
+                          src="/leagues/Premier_League.jpeg" 
                           alt="Premier League" 
                           className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/premier-league.svg', e)}
+                          onError={(e) => console.error('Failed to load logo: /leagues/Premier_League.jpeg', e)}
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Premier League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
@@ -2049,11 +2049,11 @@ export default function App() {
                         whileHover={{ y: -2 }}
                       >
                         <img 
-                          src="/leagues/bundesliga.svg" 
+                          src="/leagues/bundesliga.png" 
                           alt="Bundesliga" 
                           className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/bundesliga.svg', e)}
+                          onError={(e) => console.error('Failed to load logo: /leagues/bundesliga.png', e)}
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Bundesliga</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
@@ -2068,11 +2068,11 @@ export default function App() {
                         whileHover={{ y: -2 }}
                       >
                         <img 
-                          src="/leagues/champions-league.svg" 
+                          src="/leagues/UEFA.jpeg" 
                           alt="Champions League" 
                           className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/champions-league.svg', e)}
+                          onError={(e) => console.error('Failed to load logo: /leagues/UEFA.jpeg', e)}
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Champions League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
@@ -2087,11 +2087,11 @@ export default function App() {
                         whileHover={{ y: -2 }}
                       >
                         <img 
-                          src="/leagues/europa-league.svg" 
+                          src="/leagues/europa-league.png" 
                           alt="Europa League" 
                           className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/europa-league.svg', e)}
+                          onError={(e) => console.error('Failed to load logo: /leagues/europa-league.png', e)}
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Europa League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
@@ -2106,11 +2106,11 @@ export default function App() {
                         whileHover={{ y: -2 }}
                       >
                         <img 
-                          src="/leagues/serie-a.svg" 
+                          src="/leagues/serie-a.png" 
                           alt="Serie A" 
                           className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/serie-a.svg', e)}
+                          onError={(e) => console.error('Failed to load logo: /leagues/serie-a.png', e)}
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Serie A</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
