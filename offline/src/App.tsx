@@ -1779,9 +1779,6 @@ export default function App() {
 
                 {/* Left Column (60%): Editorial layout */}
                 <div className="lg:col-span-7 flex flex-col justify-center animate-fade-in text-left">
-                  <span className="text-[10px] sm:text-xs font-mono font-bold tracking-[0.3em] text-green-accent mb-2 sm:mb-3 uppercase block leading-none">
-                    AI FOOTBALL INTELLIGENCE
-                  </span>
                   <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-[76px] font-serif tracking-tight leading-[0.95] text-white mb-3 sm:mb-4">
                     Football <br />
                     <span className="italic font-normal">Intelligence<span className="text-green-accent">.</span></span>
@@ -1826,53 +1823,6 @@ export default function App() {
                   }}
                 >
                   
-                  {/* First Grid: 2x2 modular stats block */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <motion.div 
-                      variants={{
-                        hidden: { opacity: 0, y: 15 },
-                        show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
-                      }}
-                      className="bg-zinc-950/45 backdrop-blur-md border border-zinc-900/60 p-3.5 flex flex-col justify-center rounded shadow-xl hover:border-green-accent/20 transition-all duration-300 text-left"
-                    >
-                      <div className="text-2xl lg:text-3xl font-extrabold font-mono text-white tracking-tight">48</div>
-                      <div className="text-[10px] uppercase font-mono tracking-widest text-green-accent mt-1">Nations</div>
-                    </motion.div>
-
-                    <motion.div 
-                      variants={{
-                        hidden: { opacity: 0, y: 15 },
-                        show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
-                      }}
-                      className="bg-zinc-950/45 backdrop-blur-md border border-zinc-900/60 p-3.5 flex flex-col justify-center rounded shadow-xl hover:border-green-accent/20 transition-all duration-300 text-left"
-                    >
-                      <div className="text-2xl lg:text-3xl font-extrabold font-mono text-white tracking-tight">104</div>
-                      <div className="text-[10px] uppercase font-mono tracking-widest text-green-accent mt-1">Fixtures</div>
-                    </motion.div>
-
-                    <motion.div 
-                      variants={{
-                        hidden: { opacity: 0, y: 15 },
-                        show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
-                      }}
-                      className="bg-zinc-950/45 backdrop-blur-md border border-zinc-900/60 p-3.5 flex flex-col justify-center rounded shadow-xl hover:border-green-accent/20 transition-all duration-300 text-left"
-                    >
-                      <div className="text-xs lg:text-sm font-bold text-white tracking-wide font-sans truncate">USA • CAN • MEX</div>
-                      <div className="text-[10px] uppercase font-mono tracking-widest text-green-accent mt-1">Host Nations</div>
-                    </motion.div>
-
-                    <motion.div 
-                      variants={{
-                        hidden: { opacity: 0, y: 15 },
-                        show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
-                      }}
-                      className="bg-zinc-950/45 backdrop-blur-md border border-zinc-900/60 p-3.5 flex flex-col justify-center rounded shadow-xl hover:border-green-accent/20 transition-all duration-300 text-left"
-                    >
-                      <div className="text-xs lg:text-sm font-serif italic text-white font-semibold truncate">June 11, 2026</div>
-                      <div className="text-[10px] uppercase font-mono tracking-widest text-green-accent mt-1">First Match</div>
-                    </motion.div>
-                  </div>
-
                   {/* Featured live / upcoming match tracker */}
                   {(() => {
                     const featured = pickFeaturedMatch(sourceMatches);
@@ -2044,7 +1994,7 @@ export default function App() {
                         <img 
                           src="/leagues/world-cup.svg" 
                           alt="FIFA World Cup" 
-                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">FIFA World Cup</span>
@@ -2062,7 +2012,7 @@ export default function App() {
                         <img 
                           src="/leagues/premier-league.svg" 
                           alt="Premier League" 
-                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Premier League</span>
@@ -2080,7 +2030,7 @@ export default function App() {
                         <img 
                           src="/leagues/laliga.svg" 
                           alt="La Liga" 
-                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">La Liga</span>
@@ -2098,7 +2048,7 @@ export default function App() {
                         <img 
                           src="/leagues/bundesliga.svg" 
                           alt="Bundesliga" 
-                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Bundesliga</span>
@@ -2116,7 +2066,7 @@ export default function App() {
                         <img 
                           src="/leagues/champions-league.svg" 
                           alt="Champions League" 
-                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Champions League</span>
@@ -2134,7 +2084,7 @@ export default function App() {
                         <img 
                           src="/leagues/europa-league.svg" 
                           alt="Europa League" 
-                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Europa League</span>
@@ -2152,7 +2102,7 @@ export default function App() {
                         <img 
                           src="/leagues/serie-a.svg" 
                           alt="Serie A" 
-                          className="w-[38px] h-[38px] mb-1.5 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
                         />
                         <span className="text-[11px] font-medium text-white uppercase tracking-wide">Serie A</span>
