@@ -1699,15 +1699,17 @@ export default function App() {
                   }
                 `}</style>
                 
-                {/* High-resolution stadium background - sharp and crisp */}
+                {/* High-resolution stadium background - sharp and crisp, zoomed out for cinematic view */}
                 <img 
                   src={background}
                   alt="Premium Stadium Background"
                   className="absolute inset-0 w-full h-full object-cover"
                   style={{
                     backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat'
+                    backgroundPosition: 'center 65%',
+                    backgroundRepeat: 'no-repeat',
+                    transform: 'scale(0.90)',
+                    transformOrigin: 'center center'
                   }}
                   referrerPolicy="no-referrer"
                 />
@@ -1740,14 +1742,16 @@ export default function App() {
                   animation: 'lightsPulse 9s ease-in-out infinite'
                 }} />
                 
-                {/* Deep vignette for focus - no blur */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_40%,rgba(0,0,0,0.75)_100%)]" />
+                {/* Subtle vignette - avoid completely black corners */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_40%,rgba(0,0,0,0.55)_100%)]" />
                 
                 {/* Lateral depth - left darker for text, right brighter for stats */}
                 <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/10 to-black/30" />
                 
-                {/* Reduced black overlay for text readability (45-50%) */}
-                <div className="absolute inset-0 bg-black/48" />
+                {/* Premium gradient overlay - reduced darkness for stadium visibility */}
+                <div className="absolute inset-0" style={{
+                  background: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 50%, rgba(0,0,0,0.65) 100%)'
+                }} />
                 
                 {/* Subtle green pitch lighting - reduced by 60-70% */}
                 <div className="absolute bottom-0 left-0 right-0 h-[25%]" style={{
@@ -1755,12 +1759,12 @@ export default function App() {
                 }} />
                 
                 
-                {/* Subtle floodlights from above */}
+                {/* Enhanced floodlights with radial glow */}
                 <div className="absolute inset-0 z-5 pointer-events-none" style={{
                   background: `
-                    radial-gradient(circle 8% at 15% 15%, rgba(255, 255, 240, 0.12) 0%, transparent 60%),
-                    radial-gradient(circle 8% at 85% 15%, rgba(255, 255, 240, 0.12) 0%, transparent 60%),
-                    radial-gradient(circle 6% at 50% 10%, rgba(255, 255, 240, 0.08) 0%, transparent 50%)
+                    radial-gradient(circle 12% at 15% 15%, rgba(255, 255, 240, 0.25) 0%, transparent 70%),
+                    radial-gradient(circle 12% at 85% 15%, rgba(255, 255, 240, 0.25) 0%, transparent 70%),
+                    radial-gradient(circle 8% at 50% 10%, rgba(255, 255, 240, 0.15) 0%, transparent 55%)
                   `
                 }} />
               </div>
