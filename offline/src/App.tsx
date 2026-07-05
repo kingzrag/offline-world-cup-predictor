@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 // @ts-ignore
 import football2 from './assets/images/football2.png';
+// @ts-ignore
+import background from './assets/images/background.png';
 import { 
   getPredictions, 
   loadFixturesInstant,
@@ -1697,9 +1699,9 @@ export default function App() {
                   }
                 `}</style>
                 
-                {/* High-resolution stadium image - sharp and crisp */}
+                {/* High-resolution stadium background - sharp and crisp */}
                 <img 
-                  src={football2}
+                  src={background}
                   alt="Premium Stadium Background"
                   className="absolute inset-0 w-full h-full object-cover"
                   style={{
@@ -1744,61 +1746,14 @@ export default function App() {
                 {/* Lateral depth - left darker for text, right brighter for stats */}
                 <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/10 to-black/30" />
                 
-                {/* Reduced black overlay for text readability (45-55%) */}
-                <div className="absolute inset-0 bg-black/50" />
+                {/* Reduced black overlay for text readability (45-50%) */}
+                <div className="absolute inset-0 bg-black/48" />
                 
                 {/* Subtle green pitch lighting - reduced by 60-70% */}
                 <div className="absolute bottom-0 left-0 right-0 h-[25%]" style={{
                   background: 'linear-gradient(to top, rgba(26, 77, 26, 0.15) 0%, transparent 100%)'
                 }} />
                 
-                {/* Foreground football positioned near CTA button */}
-                <div className="absolute bottom-[15%] left-[8%] md:bottom-[12%] md:left-[5%] lg:bottom-[10%] lg:left-[4%] z-10 pointer-events-none" style={{
-                  width: '120px',
-                  height: '120px',
-                  transform: 'rotate(-15deg)'
-                }}>
-                  <svg 
-                    viewBox="0 0 100 100" 
-                    className="w-full h-full drop-shadow-2xl"
-                    style={{
-                      filter: 'brightness(1.1) contrast(1.05)'
-                    }}
-                  >
-                    {/* Football base - white */}
-                    <circle cx="50" cy="50" r="48" fill="#FFFFFF" />
-                    
-                    {/* Pentagon pattern - classic football design */}
-                    <g fill="#1a1a1a">
-                      {/* Center pentagon */}
-                      <polygon points="50,35 58,42 55,52 45,52 42,42" />
-                      
-                      {/* Surrounding pentagons */}
-                      <polygon points="50,15 58,22 55,32 45,32 42,22" transform="rotate(72 50 50)" />
-                      <polygon points="50,15 58,22 55,32 45,32 42,22" transform="rotate(144 50 50)" />
-                      <polygon points="50,15 58,22 55,32 45,32 42,22" transform="rotate(216 50 50)" />
-                      <polygon points="50,15 58,22 55,32 45,32 42,22" transform="rotate(288 50 50)" />
-                      
-                      {/* Edge pentagons */}
-                      <polygon points="25,25 33,32 30,42 20,42 17,32" transform="rotate(36 25 25)" />
-                      <polygon points="75,25 83,32 80,42 70,42 67,32" transform="rotate(-36 75 25)" />
-                      <polygon points="25,75 33,82 30,92 20,92 17,82" transform="rotate(-36 25 75)" />
-                      <polygon points="75,75 83,82 80,92 70,92 67,82" transform="rotate(36 75 75)" />
-                    </g>
-                    
-                    {/* Subtle shading for 3D effect */}
-                    <defs>
-                      <radialGradient id="ballShade" cx="30%" cy="30%" r="70%">
-                        <stop offset="0%" stopColor="rgba(255,255,255,0.3)" />
-                        <stop offset="100%" stopColor="rgba(0,0,0,0.1)" />
-                      </radialGradient>
-                    </defs>
-                    <circle cx="50" cy="50" r="48" fill="url(#ballShade)" style={{ mixBlendMode: 'multiply' }} />
-                    
-                    {/* Outer ring for definition */}
-                    <circle cx="50" cy="50" r="48" fill="none" stroke="#1a1a1a" strokeWidth="1" opacity="0.3" />
-                  </svg>
-                </div>
                 
                 {/* Subtle floodlights from above */}
                 <div className="absolute inset-0 z-5 pointer-events-none" style={{
@@ -1921,7 +1876,7 @@ export default function App() {
                           hidden: { opacity: 0, y: 15 },
                           show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
                         }}
-                        className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl hover:border-green-accent/30 transition-all duration-300 text-left"
+                        className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl hover:border-green-accent/40 hover:shadow-[0_0_20px_rgba(34,197,94,0.15)] hover:scale-[1.02] transition-all duration-300 text-left group"
                       >
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-[9px] uppercase font-mono tracking-widest text-green-accent font-bold">
@@ -1929,30 +1884,41 @@ export default function App() {
                           </span>
                           <MatchTimeDisplay match={featured} />
                         </div>
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-bold text-white uppercase">
-                            <span className="text-lg">{flagA}</span>
-                            <span>{featured.teamA}</span>
-                          </div>
-                          {featured.status === 'LIVE' || featured.status === 'COMPLETED' ? (
-                            <div className="flex items-center gap-3 text-2xl font-black text-white font-mono pl-7">
-                              <span>{featured.liveScore?.home ?? 0}</span>
-                              <span className="text-zinc-600 font-light text-lg">—</span>
-                              <span>{featured.liveScore?.away ?? 0}</span>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 text-sm font-bold text-white uppercase">
+                              <span className="text-lg">{flagA}</span>
+                              <span>{featured.teamA}</span>
                             </div>
-                          ) : (
-                            <div className="text-zinc-500 text-[10px] font-mono uppercase pl-7">vs</div>
+                            {featured.status === 'LIVE' || featured.status === 'COMPLETED' ? (
+                              <div className="flex items-center gap-3 text-2xl font-black text-white font-mono pl-7">
+                                <span>{featured.liveScore?.home ?? 0}</span>
+                                <span className="text-zinc-600 font-light text-lg">—</span>
+                                <span>{featured.liveScore?.away ?? 0}</span>
+                              </div>
+                            ) : (
+                              <div className="text-zinc-500 text-[10px] font-mono uppercase pl-7">vs</div>
+                            )}
+                            <div className="flex items-center gap-2 text-sm font-bold text-white uppercase">
+                              <span className="text-lg">{flagB}</span>
+                              <span>{featured.teamB}</span>
+                            </div>
+                          </div>
+                          {featured.status === 'UPCOMING' && (
+                            <div className="flex flex-col items-start md:items-end gap-2">
+                              <div className="text-[10px] font-mono text-zinc-400">
+                                Kickoff: <span className="text-white font-semibold">{formatKickoffTimeLocal(featured.kickoffTime)}</span>
+                              </div>
+                              <button
+                                onClick={() => openMatchAnalysis(featured)}
+                                className="h-[42px] px-5 bg-zinc-900/60 backdrop-blur-md border border-green-accent/30 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-900/80 hover:border-green-accent hover:shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:-translate-y-0.5 transition-all duration-300 group-hover:translate-x-1"
+                              >
+                                <span>Watch Preview</span>
+                                <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
+                              </button>
+                            </div>
                           )}
-                          <div className="flex items-center gap-2 text-sm font-bold text-white uppercase">
-                            <span className="text-lg">{flagB}</span>
-                            <span>{featured.teamB}</span>
-                          </div>
                         </div>
-                        {featured.status === 'UPCOMING' && (
-                          <div className="mt-3 pt-3 border-t border-zinc-900/80 text-[10px] font-mono text-zinc-400">
-                            Kickoff: <span className="text-white font-semibold">{formatKickoffTimeLocal(featured.kickoffTime)}</span>
-                          </div>
-                        )}
                       </motion.div>
                     );
                   })()}
