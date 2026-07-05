@@ -26,9 +26,7 @@ import {
 } from './api';
 import { MatchPrediction, TrophyProbability, IntelligenceInsight } from './types';
 import {
-  MOCK_MATCHES,
   MOCK_INTELLIGENCE,
-  MOCK_ACCURACY_STATS,
 } from './data';
 import { getFlag } from './flagUtils';
 import {
@@ -1773,7 +1771,7 @@ export default function App() {
                 {/* Left Column (60%): Editorial layout */}
                 <div className="lg:col-span-7 flex flex-col justify-center animate-fade-in text-left">
                   <span className="text-[10px] sm:text-xs font-mono font-bold tracking-[0.3em] text-green-accent mb-2 sm:mb-3 uppercase block leading-none">
-                    FIFA WORLD CUP 2026
+                    AI FOOTBALL INTELLIGENCE
                   </span>
                   <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-[76px] font-serif tracking-tight leading-[0.95] text-white mb-3 sm:mb-4">
                     Football <br />
@@ -1869,7 +1867,67 @@ export default function App() {
                   {/* Featured live / upcoming match tracker */}
                   {(() => {
                     const featured = pickFeaturedMatch(sourceMatches);
-                    if (!featured || isLoadingMatches) return null;
+                    
+                    // Error state
+                    if (matchError) {
+                      return (
+                        <motion.div
+                          variants={{
+                            hidden: { opacity: 0, y: 15 },
+                            show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
+                          }}
+                          className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl text-left"
+                        >
+                          <div className="text-center py-4">
+                            <div className="text-[9px] uppercase font-mono tracking-widest text-red-400 font-bold mb-2">
+                              Unable to load live football data
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    }
+                    
+                    // Loading state
+                    if (isLoadingMatches) {
+                      return (
+                        <motion.div
+                          variants={{
+                            hidden: { opacity: 0, y: 15 },
+                            show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
+                          }}
+                          className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl text-left"
+                        >
+                          <div className="animate-pulse space-y-3">
+                            <div className="h-3 bg-zinc-800 rounded w-1/3" />
+                            <div className="space-y-2">
+                              <div className="h-4 bg-zinc-800 rounded w-1/2" />
+                              <div className="h-8 bg-zinc-800 rounded w-3/4" />
+                              <div className="h-4 bg-zinc-800 rounded w-1/2" />
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    }
+                    
+                    // No matches available
+                    if (!featured) {
+                      return (
+                        <motion.div
+                          variants={{
+                            hidden: { opacity: 0, y: 15 },
+                            show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
+                          }}
+                          className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl text-left"
+                        >
+                          <div className="text-center py-4">
+                            <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 font-bold mb-2">
+                              No scheduled matches
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    }
+                    
                     const flagA = getFlag(featured.teamA);
                     const flagB = getFlag(featured.teamB);
                     return (
@@ -1974,7 +2032,7 @@ export default function App() {
                         className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
-                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🏆</span>
+                        <img src="/leagues/world-cup.svg" alt="FIFA World Cup" className="w-8 h-8 mb-2 group-hover:scale-[1.08] transition-transform duration-250" />
                         <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">FIFA World Cup</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
@@ -1987,7 +2045,7 @@ export default function App() {
                         className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
-                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🦁</span>
+                        <img src="/leagues/premier-league.svg" alt="Premier League" className="w-8 h-8 mb-2 group-hover:scale-[1.08] transition-transform duration-250" />
                         <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Premier League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
@@ -2000,7 +2058,7 @@ export default function App() {
                         className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
-                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">⚽</span>
+                        <img src="/leagues/laliga.svg" alt="La Liga" className="w-8 h-8 mb-2 group-hover:scale-[1.08] transition-transform duration-250" />
                         <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">La Liga</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
@@ -2013,7 +2071,7 @@ export default function App() {
                         className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
-                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🔴</span>
+                        <img src="/leagues/bundesliga.svg" alt="Bundesliga" className="w-8 h-8 mb-2 group-hover:scale-[1.08] transition-transform duration-250" />
                         <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Bundesliga</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
@@ -2026,7 +2084,7 @@ export default function App() {
                         className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
-                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">⭐</span>
+                        <img src="/leagues/champions-league.svg" alt="Champions League" className="w-8 h-8 mb-2 group-hover:scale-[1.08] transition-transform duration-250" />
                         <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Champions League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
@@ -2039,7 +2097,7 @@ export default function App() {
                         className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
-                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🏆</span>
+                        <img src="/leagues/europa-league.svg" alt="Europa League" className="w-8 h-8 mb-2 group-hover:scale-[1.08] transition-transform duration-250" />
                         <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Europa League</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
@@ -2052,7 +2110,7 @@ export default function App() {
                         className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
                         whileHover={{ y: -2 }}
                       >
-                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🔷</span>
+                        <img src="/leagues/serie-a.svg" alt="Serie A" className="w-8 h-8 mb-2 group-hover:scale-[1.08] transition-transform duration-250" />
                         <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Serie A</span>
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
