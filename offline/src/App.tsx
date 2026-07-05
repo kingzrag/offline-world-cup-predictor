@@ -1960,66 +1960,101 @@ export default function App() {
                   transition: 'opacity 0.4s ease-out'
                 }}
               >
-                <div className="max-w-5xl mx-auto px-6 md:px-12 py-6 mb-8">
+                <div className="max-w-7xl mx-auto px-6 md:px-12 py-6 mb-8">
                   
-                  {/* Glass effect information strip - transparent and integrated */}
-                  <div className="bg-[rgba(10,10,10,0.18)] backdrop-blur-md border border-[rgba(255,255,255,0.06)] rounded-2xl shadow-lg overflow-hidden">
-                    <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-white/8">
+                  {/* Premium Competitions Bar */}
+                  <div className="bg-[rgba(12,12,12,0.16)] backdrop-blur-md border border-[rgba(255,255,255,0.06)] rounded-[20px] shadow-lg overflow-hidden">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 divide-x divide-white/6">
                       
-                      {/* Tournament Block */}
+                      {/* FIFA World Cup */}
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1, duration: 0.5 }}
-                        className="relative group px-6 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300"
-                        whileHover={{ scale: 1.02 }}
+                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        whileHover={{ y: -2 }}
                       >
-                        <Trophy className="w-6 h-6 text-[#F8F8F8] mb-3 group-hover:scale-110 transition-transform duration-300" strokeWidth={1.75} />
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-1">Tournament</span>
-                        <span className="text-sm font-bold text-[#F8F8F8] group-hover:text-white transition-colors duration-300">48 Nations</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center" />
+                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🏆</span>
+                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">FIFA World Cup</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
-                      {/* Matches Block */}
+                      {/* Premier League */}
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.18, duration: 0.5 }}
-                        className="relative group px-6 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300"
-                        whileHover={{ scale: 1.02 }}
+                        transition={{ delay: 0.15, duration: 0.5 }}
+                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        whileHover={{ y: -2 }}
                       >
-                        <Activity className="w-6 h-6 text-[#F8F8F8] mb-3 group-hover:scale-110 transition-transform duration-300" strokeWidth={1.75} />
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-1">Matches</span>
-                        <span className="text-sm font-bold text-[#F8F8F8] group-hover:text-white transition-colors duration-300">104 Fixtures</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center" />
+                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🦁</span>
+                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Premier League</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
-                      {/* Hosts Block */}
+                      {/* La Liga */}
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.26, duration: 0.5 }}
-                        className="relative group px-6 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300"
-                        whileHover={{ scale: 1.02 }}
+                        transition={{ delay: 0.2, duration: 0.5 }}
+                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        whileHover={{ y: -2 }}
                       >
-                        <Globe className="w-6 h-6 text-[#F8F8F8] mb-3 group-hover:scale-110 transition-transform duration-300" strokeWidth={1.75} />
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-1">Hosts</span>
-                        <span className="text-sm font-bold text-[#F8F8F8] group-hover:text-white transition-colors duration-300">USA • CAN • MEX</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center" />
+                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">⚽</span>
+                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">La Liga</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
-                      {/* Kick-off Block */}
+                      {/* Bundesliga */}
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.34, duration: 0.5 }}
-                        className="relative group px-6 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300"
-                        whileHover={{ scale: 1.02 }}
+                        transition={{ delay: 0.25, duration: 0.5 }}
+                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        whileHover={{ y: -2 }}
                       >
-                        <Calendar className="w-6 h-6 text-[#F8F8F8] mb-3 group-hover:scale-110 transition-transform duration-300" strokeWidth={1.75} />
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mb-1">Kick-off</span>
-                        <span className="text-sm font-bold text-[#F8F8F8] group-hover:text-white transition-colors duration-300">June 11, 2026</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center" />
+                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🔴</span>
+                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Bundesliga</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
+                      </motion.div>
+
+                      {/* UEFA Champions League */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3, duration: 0.5 }}
+                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        whileHover={{ y: -2 }}
+                      >
+                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">⭐</span>
+                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Champions League</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
+                      </motion.div>
+
+                      {/* UEFA Europa League */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35, duration: 0.5 }}
+                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        whileHover={{ y: -2 }}
+                      >
+                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🏆</span>
+                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Europa League</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
+                      </motion.div>
+
+                      {/* Serie A */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4, duration: 0.5 }}
+                        className="relative group px-4 py-5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
+                        whileHover={{ y: -2 }}
+                      >
+                        <span className="text-3xl mb-2 group-hover:scale-[1.08] transition-transform duration-250">🔷</span>
+                        <span className="text-xs md:text-sm font-medium text-white uppercase tracking-wide">Serie A</span>
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
                       </motion.div>
 
                     </div>
