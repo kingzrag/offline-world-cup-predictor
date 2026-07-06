@@ -444,7 +444,7 @@ export function BestPredictionsCarousel({
 
           <motion.div
             ref={containerRef}
-            className="relative h-[420px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y"
+            className="relative h-[500px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y pt-8"
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.12}
@@ -463,7 +463,7 @@ export function BestPredictionsCarousel({
               return (
                 <motion.div
                   key={match.id}
-                  className="absolute top-0 left-1/2 will-change-transform"
+                  className="absolute top-8 left-1/2 will-change-transform"
                   style={{ width: cardWidth }}
                   initial={false}
                   animate={{
