@@ -138,6 +138,15 @@ export class AIService {
 
       let analysis = `📊 **Match Analysis: ${match.teamA} vs ${match.teamB}**\n\n`;
       
+      // Add live status if applicable
+      if (match.status === 'LIVE' && match.liveScore) {
+        analysis += `🔴 **LIVE** • Minute: ${match.minute ?? '?'}'\n`;
+        analysis += `**Current Score:** ${match.liveScore.home} - ${match.liveScore.away}\n\n`;
+      } else if (match.status === 'COMPLETED' && match.liveScore) {
+        analysis += `✅ **FULL TIME**\n`;
+        analysis += `**Final Score:** ${match.liveScore.home} - ${match.liveScore.away}\n\n`;
+      }
+      
       analysis += `**Prediction:** ${match.prediction}\n`;
       analysis += `**Confidence:** ${match.confidence}\n`;
       analysis += `**Probabilities:** ${match.teamA} ${match.probA}% | Draw ${match.probD}% | ${match.teamB} ${match.probB}%\n\n`;
@@ -152,6 +161,16 @@ export class AIService {
       analysis += `**Key Markets:**\n`;
       analysis += `• Over/Under 2.5: Over ${prediction.markets?.over_under?.['2.5']?.over?.toFixed(1)}% | Under ${prediction.markets?.over_under?.['2.5']?.under?.toFixed(1)}%\n`;
       analysis += `• BTTS: Yes ${prediction.markets?.btts?.yes?.toFixed(1)}% | No ${prediction.markets?.btts?.no?.toFixed(1)}%\n\n`;
+
+      // Add live-specific advice if match is live
+      if (match.status === 'LIVE' && match.liveScore) {
+        const scoreDiff = match.liveScore.home - match.liveScore.away;
+        if (scoreDiff !== 0) {
+          analysis += `🔴 **Live Betting Insight:**\n`;
+          analysis += `Current score difference suggests ${scoreDiff > 0 ? match.teamA : match.teamB} has momentum. `;
+          analysis += `Consider live markets like next goal scorer or adjusted Asian handicap.\n\n`;
+        }
+      }
 
       if (match.confidence === 'High') {
         analysis += `✅ This match has high model confidence, making it a relatively safer betting opportunity.\n`;

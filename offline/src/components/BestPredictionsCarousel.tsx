@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, memo, type RefObject } from "react";
 import { motion, type PanInfo } from "motion/react";
 import { AlertCircle, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import type { MatchPrediction } from "../types";
@@ -56,7 +56,16 @@ function MatchTimeDisplay({ match }: { match: MatchPrediction }) {
     return (
       <div className="flex items-center gap-1.5">
         <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+          <motion.span
+            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inline-flex h-full w-full rounded-full bg-red-500"
+          />
+          <motion.span
+            animate={{ scale: [1, 2, 1], opacity: [0.75, 0, 0.75] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inline-flex h-full w-full rounded-full bg-red-500"
+          />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
         </span>
         <span className="text-red-500 font-extrabold tracking-widest uppercase">LIVE</span>
@@ -88,7 +97,7 @@ interface PredictionCardProps {
   onAskAI?: (matchId: string) => void;
 }
 
-function PredictionCard({ match, isActive, onViewAnalysis, onAskAI }: PredictionCardProps) {
+const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAnalysis, onAskAI }: PredictionCardProps) {
   const flagA = getFlag(match.teamA);
   const flagB = getFlag(match.teamB);
 
@@ -140,9 +149,23 @@ function PredictionCard({ match, isActive, onViewAnalysis, onAskAI }: Prediction
               Live Score
             </span>
             <div className="flex items-center gap-3 text-3xl font-black text-white tracking-wider">
-              <span>{match.liveScore?.home ?? 0}</span>
+              <motion.span
+                key={`home-${match.liveScore?.home ?? 0}`}
+                initial={{ scale: 1.2, color: "#22C55E" }}
+                animate={{ scale: 1, color: "#ffffff" }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+              >
+                {match.liveScore?.home ?? 0}
+              </motion.span>
               <span className="text-zinc-700 font-light">—</span>
-              <span>{match.liveScore?.away ?? 0}</span>
+              <motion.span
+                key={`away-${match.liveScore?.away ?? 0}`}
+                initial={{ scale: 1.2, color: "#22C55E" }}
+                animate={{ scale: 1, color: "#ffffff" }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+              >
+                {match.liveScore?.away ?? 0}
+              </motion.span>
             </div>
           </div>
         ) : match.status === "COMPLETED" ? (
@@ -190,18 +213,56 @@ function PredictionCard({ match, isActive, onViewAnalysis, onAskAI }: Prediction
       <div className="mt-auto pt-1">
         <div className="mb-4">
           <div className="flex justify-between items-center gap-2 text-[11px] font-mono text-zinc-400 mb-2 min-w-0">
-            <span className="truncate font-semibold text-zinc-300">
+            <motion.span
+              key={`probA-${match.id}-${match.probA}`}
+              initial={{ scale: 1.1, color: "#22C55E" }}
+              animate={{ scale: 1, color: "#D4D4D8" }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="truncate font-semibold text-zinc-300"
+            >
               {match.teamACode} {match.probA}%
-            </span>
-            <span className="shrink-0 font-semibold text-zinc-400">Draw {match.probD}%</span>
-            <span className="truncate font-semibold text-zinc-300 text-right">
+            </motion.span>
+            <motion.span
+              key={`probD-${match.id}-${match.probD}`}
+              initial={{ scale: 1.1, color: "#22C55E" }}
+              animate={{ scale: 1, color: "#A1A1AA" }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="shrink-0 font-semibold text-zinc-400"
+            >
+              Draw {match.probD}%
+            </motion.span>
+            <motion.span
+              key={`probB-${match.id}-${match.probB}`}
+              initial={{ scale: 1.1, color: "#22C55E" }}
+              animate={{ scale: 1, color: "#D4D4D8" }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="truncate font-semibold text-zinc-300 text-right"
+            >
               {match.teamBCode} {match.probB}%
-            </span>
+            </motion.span>
           </div>
           <div className="h-1.5 w-full bg-zinc-900 flex rounded overflow-hidden">
-            <div className="h-full bg-green-accent" style={{ width: `${match.probA}%` }} />
-            <div className="h-full bg-zinc-750" style={{ width: `${match.probD}%` }} />
-            <div className="h-full bg-zinc-800" style={{ width: `${match.probB}%` }} />
+            <motion.div
+              key={`barA-${match.id}-${match.probA}`}
+              initial={{ width: 0 }}
+              animate={{ width: `${match.probA}%` }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="h-full bg-green-accent"
+            />
+            <motion.div
+              key={`barD-${match.id}-${match.probD}`}
+              initial={{ width: 0 }}
+              animate={{ width: `${match.probD}%` }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="h-full bg-zinc-750"
+            />
+            <motion.div
+              key={`barB-${match.id}-${match.probB}`}
+              initial={{ width: 0 }}
+              animate={{ width: `${match.probB}%` }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="h-full bg-zinc-800"
+            />
           </div>
         </div>
 
@@ -239,7 +300,7 @@ function PredictionCard({ match, isActive, onViewAnalysis, onAskAI }: Prediction
       </div>
     </div>
   );
-}
+});
 
 function useCarouselMetrics(containerRef: RefObject<HTMLDivElement | null>) {
   const [metrics, setMetrics] = useState({ cardWidth: 380, stride: 340 });

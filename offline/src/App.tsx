@@ -132,7 +132,16 @@ function MatchTimeDisplay({ match }: { match: MatchPrediction }) {
     return (
       <div className="flex items-center gap-1.5">
         <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+          <motion.span
+            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inline-flex h-full w-full rounded-full bg-red-500"
+          />
+          <motion.span
+            animate={{ scale: [1, 2, 1], opacity: [0.75, 0, 0.75] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inline-flex h-full w-full rounded-full bg-red-500"
+          />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
         </span>
         <span className="text-red-500 font-extrabold tracking-widest uppercase">LIVE</span>
@@ -407,7 +416,7 @@ export default function App() {
   const showHistoricalRef = useRef(showHistorical);
   showHistoricalRef.current = showHistorical;
 
-  // Auto-refresh fixtures: live scores every 30s, full list every 5min
+  // Auto-refresh fixtures: live scores every 15s during live matches, 5min when idle
   useEffect(() => {
     if (isLoadingMatches || matchError) return;
 
@@ -433,22 +442,44 @@ export default function App() {
       }
     };
 
-    const hasLive = sourceMatchesRef.current.some(m => m.status === 'LIVE');
-    if (hasLive) {
-      console.info("[App] Live matches detected — 30s score polling active");
-    }
+    let liveInterval: NodeJS.Timeout | null = null;
+    let idleInterval: NodeJS.Timeout | null = null;
 
-    const liveInterval = setInterval(() => {
-      if (sourceMatchesRef.current.some(m => m.status === 'LIVE')) {
-        refreshLive();
+    const updatePolling = () => {
+      const hasLive = sourceMatchesRef.current.some(m => m.status === 'LIVE');
+      
+      // Clear existing intervals
+      if (liveInterval) clearInterval(liveInterval);
+      if (idleInterval) clearInterval(idleInterval);
+      liveInterval = null;
+      idleInterval = null;
+
+      if (hasLive) {
+        console.info("[App] Live matches detected — 15s score polling active");
+        liveInterval = setInterval(refreshLive, 15_000);
+      } else {
+        console.info("[App] No live matches — 5min idle polling active");
+        idleInterval = setInterval(refreshAll, 5 * 60_000);
       }
-    }, 30_000);
+    };
 
-    const upcomingInterval = setInterval(refreshAll, 5 * 60_000);
+    // Initial setup
+    updatePolling();
+
+    // Watch for live match changes and adjust polling
+    const checkInterval = setInterval(() => {
+      const hasLive = sourceMatchesRef.current.some(m => m.status === 'LIVE');
+      const wasLive = liveInterval !== null;
+      
+      if (hasLive !== wasLive) {
+        updatePolling();
+      }
+    }, 5_000);
 
     return () => {
-      clearInterval(liveInterval);
-      clearInterval(upcomingInterval);
+      if (liveInterval) clearInterval(liveInterval);
+      if (idleInterval) clearInterval(idleInterval);
+      clearInterval(checkInterval);
     };
   }, [isLoadingMatches, matchError]);
 
@@ -1911,9 +1942,23 @@ export default function App() {
                             </div>
                             {featured.status === 'LIVE' || featured.status === 'COMPLETED' ? (
                               <div className="flex items-center gap-3 text-2xl font-black text-white font-mono pl-7">
-                                <span>{featured.liveScore?.home ?? 0}</span>
+                                <motion.span
+                                  key={`featured-home-${featured.liveScore?.home ?? 0}`}
+                                  initial={{ scale: 1.2, color: "#22C55E" }}
+                                  animate={{ scale: 1, color: "#ffffff" }}
+                                  transition={{ duration: 0.5, ease: "easeOut" }}
+                                >
+                                  {featured.liveScore?.home ?? 0}
+                                </motion.span>
                                 <span className="text-zinc-600 font-light text-lg">—</span>
-                                <span>{featured.liveScore?.away ?? 0}</span>
+                                <motion.span
+                                  key={`featured-away-${featured.liveScore?.away ?? 0}`}
+                                  initial={{ scale: 1.2, color: "#22C55E" }}
+                                  animate={{ scale: 1, color: "#ffffff" }}
+                                  transition={{ duration: 0.5, ease: "easeOut" }}
+                                >
+                                  {featured.liveScore?.away ?? 0}
+                                </motion.span>
                               </div>
                             ) : (
                               <div className="text-zinc-500 text-[10px] font-mono uppercase pl-7">vs</div>
@@ -2399,9 +2444,23 @@ export default function App() {
                           </h3>
                           {(heroMatch.status === 'LIVE' || heroMatch.status === 'COMPLETED') && (
                             <div className="flex items-center gap-3 text-3xl sm:text-4xl font-black text-white font-mono tracking-wider pt-2">
-                              <span>{heroMatch.liveScore?.home ?? 0}</span>
+                              <motion.span
+                                key={`hero-home-${heroMatch.liveScore?.home ?? 0}`}
+                                initial={{ scale: 1.2, color: "#22C55E" }}
+                                animate={{ scale: 1, color: "#ffffff" }}
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                              >
+                                {heroMatch.liveScore?.home ?? 0}
+                              </motion.span>
                               <span className="text-zinc-600 font-light">—</span>
-                              <span>{heroMatch.liveScore?.away ?? 0}</span>
+                              <motion.span
+                                key={`hero-away-${heroMatch.liveScore?.away ?? 0}`}
+                                initial={{ scale: 1.2, color: "#22C55E" }}
+                                animate={{ scale: 1, color: "#ffffff" }}
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                              >
+                                {heroMatch.liveScore?.away ?? 0}
+                              </motion.span>
                             </div>
                           )}
                         </div>
@@ -2573,9 +2632,15 @@ export default function App() {
                                       <span className="flex items-center gap-1 text-base select-none">{flagA}</span>
                                       <span>{match.teamA}</span>
                                       {match.liveScore ? (
-                                        <span className="text-[#1cdb5e] font-black font-mono text-[13px] mx-2 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800">
+                                        <motion.span
+                                          key={`list-${match.id}-score`}
+                                          initial={{ scale: 1.15, color: "#22C55E" }}
+                                          animate={{ scale: 1, color: "#1cdb5e" }}
+                                          transition={{ duration: 0.5, ease: "easeOut" }}
+                                          className="text-[#1cdb5e] font-black font-mono text-[13px] mx-2 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800"
+                                        >
                                           {match.liveScore.home} — {match.liveScore.away}
-                                        </span>
+                                        </motion.span>
                                       ) : (
                                         <span className="text-zinc-600 font-medium font-mono text-[10px] mx-1">V</span>
                                       )}
