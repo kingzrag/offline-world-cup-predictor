@@ -2070,7 +2070,7 @@ export default function App() {
                         <img 
                           src="/leagues/champions-league.svg" 
                           alt="Champions League" 
-                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
+                          className="w-16 h-16 object-contain group-hover:scale-[1.08] transition-transform duration-250"
                           loading="lazy"
                           onError={(e) => console.error('Failed to load logo: /leagues/champions-league.svg', e)}
                         />
