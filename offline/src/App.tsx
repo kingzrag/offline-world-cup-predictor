@@ -2213,12 +2213,6 @@ export default function App() {
               apiBase={API_BASE}
               onViewAnalysis={openMatchAnalysis}
               onViewAll={() => navigateTo('predictions')}
-              onAskAI={(matchId) => {
-                // This will trigger the AI assistant with match context
-                // For now, we'll implement a simple alert
-                // In the future, this will open the AI assistant with the match pre-selected
-                console.log('Ask AI about match:', matchId);
-              }}
               onRetry={() => setRetryTrigger(prev => prev + 1)}
               isModalOpen={!!selectedMatch || showSearchModal}
             />

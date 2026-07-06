@@ -473,7 +473,7 @@ export class AIService {
 
     // Default response
     return {
-      message: `I can help you with:\n\n• 🎯 Best bet today\n• 📊 Analyze specific matches\n• 📈 Highest confidence predictions\n• ⚽ Over/Under goals\n• 💰 BTTS predictions\n• 🤖 Explain predictions\n\nTry asking "Where should I bet today?" or click "Ask AI" on any match card for detailed analysis.`
+      message: `I can help you with:\n\n• 🎯 Best bet today\n• 📊 Analyze specific matches\n• 📈 Highest confidence predictions\n• ⚽ Over/Under goals\n• 💰 BTTS predictions\n• 🤖 Explain predictions\n\nTry asking "Where should I bet today?" or click the floating AI button in the bottom-right corner for detailed analysis.`
     };
   }
 }

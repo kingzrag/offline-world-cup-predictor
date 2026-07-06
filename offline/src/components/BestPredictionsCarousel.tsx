@@ -94,10 +94,9 @@ interface PredictionCardProps {
   match: MatchPrediction;
   isActive: boolean;
   onViewAnalysis: (match: MatchPrediction) => void;
-  onAskAI?: (matchId: string) => void;
 }
 
-const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAnalysis, onAskAI }: PredictionCardProps) {
+const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAnalysis }: PredictionCardProps) {
   const flagA = getFlag(match.teamA);
   const flagB = getFlag(match.teamB);
 
@@ -274,28 +273,16 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
           >
             {match.confidence} Confidence
           </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewAnalysis(match);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="text-xs font-mono font-bold text-white hover:text-green-accent flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-            >
-              View Analysis <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onAskAI?.(match.id);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="text-[10px] font-mono font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-400/30 rounded-lg"
-            >
-              🤖 Ask AI
-            </button>
-          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewAnalysis(match);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="text-xs font-mono font-bold text-white hover:text-green-accent flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+          >
+            View Analysis <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>
@@ -339,7 +326,6 @@ export interface BestPredictionsCarouselProps {
   apiBase?: string;
   onViewAnalysis: (match: MatchPrediction) => void;
   onViewAll?: () => void;
-  onAskAI?: (matchId: string) => void;
   onRetry?: () => void;
   isModalOpen?: boolean;
 }
@@ -351,7 +337,6 @@ export function BestPredictionsCarousel({
   apiBase = "",
   onViewAnalysis,
   onViewAll,
-  onAskAI,
   onRetry,
   isModalOpen = false,
 }: BestPredictionsCarouselProps) {
@@ -539,7 +524,6 @@ export function BestPredictionsCarousel({
                     match={match}
                     isActive={isActive}
                     onViewAnalysis={onViewAnalysis}
-                    onAskAI={onAskAI}
                   />
                 </motion.div>
               );
