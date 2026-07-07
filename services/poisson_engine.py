@@ -185,11 +185,161 @@ def get_over_under_probabilities_from_matrix(matrix: Dict[str, float]) -> Dict[s
 
     return results
 
-def get_asian_handicap_probabilities_from_matrix(matrix: Dict[str, float]) -> Dict[str, Any]:
+def _calculate_asian_handicap_cover_probability(
+    matrix: Dict[str, float],
+    line: float,
+    is_home_fav: bool
+) -> float:
     """
-    Calculates the suggested Asian Handicap lines and probability of covering each line from a final score matrix.
+    Helper function to calculate cover probability for a single Asian Handicap line.
+    
+    Args:
+        matrix: Poisson probability matrix
+        line: Handicap line (e.g., -0.5, 0.25, etc.)
+        is_home_fav: Whether home team is favored
+        
+    Returns:
+        Cover probability (0.0 to 1.0)
     """
-    # Calculate expected goal difference from matrix
+    cover_prob = 0.0
+    for score_str, prob in matrix.items():
+        h, a = map(int, score_str.split('-'))
+        fav_score = h if is_home_fav else a
+        dog_score = a if is_home_fav else h
+        goal_diff = fav_score - dog_score
+        
+        # Calculate cover probability based on line type
+        if line == 0:
+            # Draw No Bet: win if goal_diff > 0, push if goal_diff == 0
+            if goal_diff > 0:
+                cover_prob += prob
+            elif goal_diff == 0:
+                cover_prob += prob * 0.5
+        elif line < 0:
+            # Negative handicap (favored team)
+            abs_line = abs(line)
+            if abs_line == 0.25:
+                if goal_diff >= 1:
+                    cover_prob += prob
+                elif goal_diff == 0:
+                    cover_prob += prob * 0.5
+            elif abs_line == 0.5:
+                if goal_diff >= 1:
+                    cover_prob += prob
+            elif abs_line == 0.75:
+                if goal_diff >= 2:
+                    cover_prob += prob
+                elif goal_diff == 1:
+                    cover_prob += prob * 0.5
+            elif abs_line == 1.0:
+                if goal_diff >= 2:
+                    cover_prob += prob
+                elif goal_diff == 1:
+                    cover_prob += prob
+            elif abs_line == 1.25:
+                if goal_diff >= 2:
+                    cover_prob += prob
+                elif goal_diff == 1:
+                    cover_prob += prob * 0.5
+            elif abs_line == 1.5:
+                if goal_diff >= 2:
+                    cover_prob += prob
+                elif goal_diff == 1:
+                    cover_prob += prob * 0.5
+            elif abs_line == 1.75:
+                if goal_diff >= 3:
+                    cover_prob += prob
+                elif goal_diff == 2:
+                    cover_prob += prob * 0.5
+            elif abs_line == 2.0:
+                if goal_diff >= 3:
+                    cover_prob += prob
+                elif goal_diff == 2:
+                    cover_prob += prob
+            elif abs_line == 2.25:
+                if goal_diff >= 3:
+                    cover_prob += prob
+                elif goal_diff == 2:
+                    cover_prob += prob * 0.5
+            elif abs_line == 2.5:
+                if goal_diff >= 3:
+                    cover_prob += prob
+                elif goal_diff == 2:
+                    cover_prob += prob * 0.5
+            elif abs_line == 2.75:
+                if goal_diff >= 4:
+                    cover_prob += prob
+                elif goal_diff == 3:
+                    cover_prob += prob * 0.5
+            elif abs_line == 3.0:
+                if goal_diff >= 4:
+                    cover_prob += prob
+                elif goal_diff == 3:
+                    cover_prob += prob
+        else:
+            # Positive handicap (underdog team)
+            if line == 0.25:
+                if goal_diff >= 0:
+                    cover_prob += prob
+                elif goal_diff == -1:
+                    cover_prob += prob * 0.5
+            elif line == 0.5:
+                if goal_diff >= 0:
+                    cover_prob += prob
+            elif line == 0.75:
+                if goal_diff >= 0:
+                    cover_prob += prob
+                elif goal_diff == -1:
+                    cover_prob += prob * 0.5
+            elif line == 1.0:
+                if goal_diff >= -1:
+                    cover_prob += prob
+            elif line == 1.25:
+                if goal_diff >= -1:
+                    cover_prob += prob
+                elif goal_diff == -2:
+                    cover_prob += prob * 0.5
+            elif line == 1.5:
+                if goal_diff >= -1:
+                    cover_prob += prob
+                elif goal_diff == -2:
+                    cover_prob += prob * 0.5
+            elif line == 1.75:
+                if goal_diff >= -2:
+                    cover_prob += prob
+                elif goal_diff == -3:
+                    cover_prob += prob * 0.5
+            elif line == 2.0:
+                if goal_diff >= -2:
+                    cover_prob += prob
+            elif line == 2.25:
+                if goal_diff >= -2:
+                    cover_prob += prob
+                elif goal_diff == -3:
+                    cover_prob += prob * 0.5
+            elif line == 2.5:
+                if goal_diff >= -2:
+                    cover_prob += prob
+                elif goal_diff == -3:
+                    cover_prob += prob * 0.5
+            elif line == 2.75:
+                if goal_diff >= -3:
+                    cover_prob += prob
+                elif goal_diff == -4:
+                    cover_prob += prob * 0.5
+            elif line == 3.0:
+                if goal_diff >= -3:
+                    cover_prob += prob
+    
+    return cover_prob
+
+def _get_expected_goal_difference(matrix: Dict[str, float]) -> Tuple[float, bool]:
+    """
+    Helper function to calculate expected goal difference from matrix.
+    
+    Returns:
+        (diff, is_home_fav) where diff is expected_home - expected_away
+    """
     exp_home = 0.0
     exp_away = 0.0
     for score_str, prob in matrix.items():
@@ -199,46 +349,23 @@ def get_asian_handicap_probabilities_from_matrix(matrix: Dict[str, float]) -> Di
     
     diff = exp_home - exp_away
     is_home_fav = diff >= 0
+    return diff, is_home_fav
+
+def get_asian_handicap_probabilities_from_matrix(matrix: Dict[str, float]) -> Dict[str, Any]:
+    """
+    Calculates the suggested Asian Handicap lines and probability of covering each line from a final score matrix.
+    
+    Reuses helper functions to avoid code duplication.
+    """
+    diff, is_home_fav = _get_expected_goal_difference(matrix)
     prefix = "Home" if is_home_fav else "Away"
     
-    # Lines to generate
+    # Lines to generate (legacy limited set)
     lines = [-0.25, -0.5, -0.75, -1.0]
     
     results = {}
-    # We will sum probabilities from the joint matrix
-    # P(cover) calculations:
     for line in lines:
-        cover_prob = 0.0
-        for score_str, prob in matrix.items():
-            h, a = map(int, score_str.split('-'))
-            fav_score = h if is_home_fav else a
-            dog_score = a if is_home_fav else h
-            goal_diff = fav_score - dog_score
-            
-            # Evaluate covering based on line
-            if line == -0.25:
-                # Win if goal_diff >= 1. Half-loss (refund 0.5) if goal_diff == 0.
-                if goal_diff >= 1:
-                    cover_prob += prob
-                elif goal_diff == 0:
-                    cover_prob += prob * 0.5
-            elif line == -0.5:
-                # Win if goal_diff >= 1.
-                if goal_diff >= 1:
-                    cover_prob += prob
-            elif line == -0.75:
-                # Full win if goal_diff >= 2. Half win if goal_diff == 1.
-                if goal_diff >= 2:
-                    cover_prob += prob
-                elif goal_diff == 1:
-                    cover_prob += prob * 0.5
-            elif line == -1.0:
-                # Full win if goal_diff >= 2. Push if goal_diff == 1 (refunded/covered).
-                if goal_diff >= 2:
-                    cover_prob += prob
-                elif goal_diff == 1:
-                    cover_prob += prob
-                    
+        cover_prob = _calculate_asian_handicap_cover_probability(matrix, line, is_home_fav)
         results[f"{prefix} {line}"] = round(cover_prob, 4)
         
     return {
@@ -338,6 +465,247 @@ def get_1x2_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
         "away_win_probability": round(away_win, 4),
     }
 
+def get_double_chance_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
+    """
+    Calculates Double Chance probabilities by summing appropriate scoreline probabilities.
+    
+    - 1X: Home Win or Draw = P(home wins) + P(draw)
+    - 12: Home Win or Away Win = P(home wins) + P(away wins)
+    - X2: Draw or Away Win = P(draw) + P(away wins)
+    
+    Reuses get_1x2_probabilities to avoid duplicate matrix iteration.
+    """
+    outcome_probs = get_1x2_probabilities(matrix)
+    home_win = outcome_probs["home_win_probability"]
+    draw = outcome_probs["draw_probability"]
+    away_win = outcome_probs["away_win_probability"]
+    
+    # Calculate double chance probabilities
+    one_x = home_win + draw  # Home Win or Draw
+    one_two = home_win + away_win  # Home Win or Away Win
+    x_two = draw + away_win  # Draw or Away Win
+    
+    return {
+        "1x": round(one_x, 4),
+        "12": round(one_two, 4),
+        "x2": round(x_two, 4),
+    }
+
+def get_draw_no_bet_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
+    """
+    Calculates Draw No Bet (DNB) probabilities by excluding draw probability and normalizing.
+    
+    Home DNB = Home Win / (Home Win + Away Win)
+    Away DNB = Away Win / (Home Win + Away Win)
+    
+    Reuses get_1x2_probabilities to avoid duplicate matrix iteration.
+    """
+    outcome_probs = get_1x2_probabilities(matrix)
+    home_win = outcome_probs["home_win_probability"]
+    away_win = outcome_probs["away_win_probability"]
+    
+    # Normalize excluding draw probability
+    total_non_draw = home_win + away_win
+    
+    if total_non_draw > 0:
+        home_dnb = home_win / total_non_draw
+        away_dnb = away_win / total_non_draw
+    else:
+        # Edge case: all draws
+        home_dnb = 0.5
+        away_dnb = 0.5
+    
+    return {
+        "home": round(home_dnb, 4),
+        "away": round(away_dnb, 4),
+    }
+
+def get_win_to_nil_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
+    """
+    Calculates Win To Nil probabilities using the existing Poisson score matrix.
+    
+    P(Home wins AND Away scores 0) = Sum of probabilities where home > away AND away = 0
+    P(Away wins AND Home scores 0) = Sum of probabilities where away > home AND home = 0
+    """
+    home_win_to_nil = 0.0
+    away_win_to_nil = 0.0
+    
+    for score, p in matrix.items():
+        parts = score.split('-')
+        h = int(parts[0])
+        a = int(parts[1])
+        
+        # Home wins and away scores 0
+        if h > a and a == 0:
+            home_win_to_nil += p
+        
+        # Away wins and home scores 0
+        if a > h and h == 0:
+            away_win_to_nil += p
+    
+    return {
+        "home": round(home_win_to_nil, 4),
+        "away": round(away_win_to_nil, 4),
+    }
+
+def get_winning_margin_probabilities(matrix: Dict[str, float]) -> Dict[str, Dict[str, float]]:
+    """
+    Calculates Winning Margin probabilities for home and away teams.
+    
+    Returns probabilities for:
+    - 1_goal: win by exactly 1 goal
+    - 2_goals: win by exactly 2 goals
+    - 3_plus: win by 3 or more goals
+    """
+    home_1_goal = 0.0
+    home_2_goals = 0.0
+    home_3_plus = 0.0
+    away_1_goal = 0.0
+    away_2_goals = 0.0
+    away_3_plus = 0.0
+    
+    for score, p in matrix.items():
+        parts = score.split('-')
+        h = int(parts[0])
+        a = int(parts[1])
+        margin = h - a
+        
+        if margin == 1:
+            home_1_goal += p
+        elif margin == 2:
+            home_2_goals += p
+        elif margin >= 3:
+            home_3_plus += p
+        elif margin == -1:
+            away_1_goal += p
+        elif margin == -2:
+            away_2_goals += p
+        elif margin <= -3:
+            away_3_plus += p
+    
+    return {
+        "home": {
+            "1_goal": round(home_1_goal, 4),
+            "2_goals": round(home_2_goals, 4),
+            "3_plus": round(home_3_plus, 4),
+        },
+        "away": {
+            "1_goal": round(away_1_goal, 4),
+            "2_goals": round(away_2_goals, 4),
+            "3_plus": round(away_3_plus, 4),
+        },
+    }
+
+def get_goal_range_probabilities(matrix: Dict[str, float]) -> Dict[str, float]:
+    """
+    Calculates Goal Range probabilities based on total goals in every scoreline.
+    
+    Returns:
+    - 0_goals: P(total goals = 0)
+    - 1_goal: P(total goals = 1)
+    - 2_goals: P(total goals = 2)
+    - 3_goals: P(total goals = 3)
+    - 4_goals: P(total goals = 4)
+    - 5_plus: P(total goals >= 5)
+    """
+    goal_ranges = {
+        "0_goals": 0.0,
+        "1_goal": 0.0,
+        "2_goals": 0.0,
+        "3_goals": 0.0,
+        "4_goals": 0.0,
+        "5_plus": 0.0,
+    }
+    
+    for score, p in matrix.items():
+        parts = score.split('-')
+        h = int(parts[0])
+        a = int(parts[1])
+        total = h + a
+        
+        if total == 0:
+            goal_ranges["0_goals"] += p
+        elif total == 1:
+            goal_ranges["1_goal"] += p
+        elif total == 2:
+            goal_ranges["2_goals"] += p
+        elif total == 3:
+            goal_ranges["3_goals"] += p
+        elif total == 4:
+            goal_ranges["4_goals"] += p
+        elif total >= 5:
+            goal_ranges["5_plus"] += p
+    
+    return {k: round(v, 4) for k, v in goal_ranges.items()}
+
+def get_full_correct_score_matrix(matrix: Dict[str, float]) -> List[Dict[str, Any]]:
+    """
+    Returns the full correct score matrix from 0-0 through 6-6, sorted by probability descending.
+    
+    This includes every scoreline in the matrix, not just the top 5.
+    """
+    # Filter scores within 0-6 range for both teams
+    filtered_scores = []
+    for score_str, prob in matrix.items():
+        parts = score_str.split('-')
+        h = int(parts[0])
+        a = int(parts[1])
+        if h <= 6 and a <= 6:
+            filtered_scores.append({
+                "score": score_str,
+                "probability": round(prob, 4)
+            })
+    
+    # Sort by probability descending
+    filtered_scores.sort(key=lambda x: x["probability"], reverse=True)
+    
+    return filtered_scores
+
+def get_expanded_asian_handicap_probabilities(matrix: Dict[str, float]) -> Dict[str, Any]:
+    """
+    Calculates expanded Asian Handicap lines from -3.0 to +3.0 in 0.25 increments.
+    
+    Returns probabilities for every line using the existing score probability matrix.
+    Reuses helper functions to avoid code duplication.
+    """
+    diff, is_home_fav = _get_expected_goal_difference(matrix)
+    prefix = "Home" if is_home_fav else "Away"
+    
+    # Expanded lines from -3.0 to +3.0 in 0.25 increments
+    lines = [-3.0, -2.75, -2.5, -2.25, -2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0]
+    
+    results = {}
+    for line in lines:
+        cover_prob = _calculate_asian_handicap_cover_probability(matrix, line, is_home_fav)
+        results[f"{prefix} {line}"] = round(cover_prob, 4)
+    
+    return {
+        "favored_team_prefix": prefix,
+        "suggested_lines": results
+    }
+
+def get_expanded_over_under_probabilities(matrix: Dict[str, float]) -> Dict[str, Dict[str, float]]:
+    """
+    Calculates expanded Over/Under probabilities for 0.5 through 7.5 lines.
+    
+    For a line like 1.5:
+    - Under: total goals < 1.5 (i.e., 0 or 1 goals)
+    - Over: total goals >= 1.5 (i.e., 2 or more goals)
+    """
+    results = {}
+    for line in (0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5):
+        under = 0.0
+        for score_str, prob in matrix.items():
+            h, a = map(int, score_str.split('-'))
+            total = h + a
+            # Use proper floating-point comparison for half-point lines
+            if total < line:
+                under += prob
+        over = 1.0 - under
+        results[str(line)] = {"over": round(over, 4), "under": round(under, 4)}
+
+    return results
+
 
 def evaluate_poisson_engine(
     expected_home_goals: float,
@@ -382,11 +750,19 @@ def evaluate_poisson_engine(
 
     correct_scores  = get_correct_scores(matrix)
     btts            = get_btts_probabilities_from_matrix(matrix, current_home_score, current_away_score)
-    over_under      = get_over_under_probabilities_from_matrix(matrix)
-    asian_handicap  = get_asian_handicap_probabilities_from_matrix(matrix)
+    over_under      = get_expanded_over_under_probabilities(matrix)  # Use expanded version
+    asian_handicap  = get_expanded_asian_handicap_probabilities(matrix)  # Use expanded version
     team_goals      = get_team_goals_probabilities_from_matrix(matrix, current_home_score, current_away_score)
     clean_sheet     = get_clean_sheet_probabilities_from_matrix(matrix, current_home_score, current_away_score)
     outcome_probs   = get_1x2_probabilities(matrix)
+    
+    # New derived markets
+    double_chance   = get_double_chance_probabilities(matrix)
+    draw_no_bet     = get_draw_no_bet_probabilities(matrix)
+    win_to_nil      = get_win_to_nil_probabilities(matrix)
+    winning_margin  = get_winning_margin_probabilities(matrix)
+    goal_range      = get_goal_range_probabilities(matrix)
+    full_correct_score_matrix = get_full_correct_score_matrix(matrix)
 
     return {
         "probability_matrix": rounded_matrix,
@@ -398,4 +774,11 @@ def evaluate_poisson_engine(
         "team_goals":         team_goals,
         "clean_sheet":        clean_sheet,
         "outcome_probabilities": outcome_probs,
+        # New derived markets
+        "double_chance":      double_chance,
+        "draw_no_bet":        draw_no_bet,
+        "win_to_nil":         win_to_nil,
+        "winning_margin":     winning_margin,
+        "goal_range":         goal_range,
+        "correct_score_matrix": full_correct_score_matrix,
     }

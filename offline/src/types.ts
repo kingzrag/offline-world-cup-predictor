@@ -32,6 +32,44 @@ export interface TeamGoalMarket {
   over_2_5: number;
 }
 
+export interface DoubleChanceMarket {
+  "1x": number;  // Home Win or Draw
+  "12": number;  // Home Win or Away Win
+  "x2": number;  // Draw or Away Win
+}
+
+export interface DrawNoBetMarket {
+  home: number;  // Home DNB probability
+  away: number;  // Away DNB probability
+}
+
+export interface WinToNilMarket {
+  home: number;  // Home wins AND away scores 0
+  away: number;  // Away wins AND home scores 0
+}
+
+export interface WinningMarginMarket {
+  home: {
+    "1_goal": number;
+    "2_goals": number;
+    "3_plus": number;
+  };
+  away: {
+    "1_goal": number;
+    "2_goals": number;
+    "3_plus": number;
+  };
+}
+
+export interface GoalRangeMarket {
+  "0_goals": number;
+  "1_goal": number;
+  "2_goals": number;
+  "3_goals": number;
+  "4_goals": number;
+  "5_plus": number;
+}
+
 // ── Core prediction interfaces ────────────────────────────────────────────────
 
 export interface MatchPrediction {
@@ -118,6 +156,9 @@ export interface MatchPrediction {
     "2.5": OverUnderLine;
     "3.5": OverUnderLine;
     "4.5"?: OverUnderLine;
+    "5.5"?: OverUnderLine;
+    "6.5"?: OverUnderLine;
+    "7.5"?: OverUnderLine;
   };
   bttsMarket?: BTTSMarket;
   cleanSheetMarket?: CleanSheetMarket;  // Poisson-derived clean sheet probabilities
@@ -130,6 +171,13 @@ export interface MatchPrediction {
   };
   totalExpectedGoals?: number;
   modelConfidence?: number;
+  // New derived markets
+  doubleChanceMarket?: DoubleChanceMarket;
+  drawNoBetMarket?: DrawNoBetMarket;
+  winToNilMarket?: WinToNilMarket;
+  winningMarginMarket?: WinningMarginMarket;
+  goalRangeMarket?: GoalRangeMarket;
+  correctScoreMatrix?: ScorelineProbability[];
 
   // Monte Carlo qualification & advancement (from /tournament/simulation)
   qualifyProbA?: number;  // 0–100 probability teamA qualifies from group

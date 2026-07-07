@@ -119,6 +119,44 @@ export interface BackendTeamGoals {
   away: { over_0_5: number; over_1_5: number; over_2_5: number };
 }
 
+export interface BackendDoubleChance {
+  "1x": number;
+  "12": number;
+  "x2": number;
+}
+
+export interface BackendDrawNoBet {
+  home: number;
+  away: number;
+}
+
+export interface BackendWinToNil {
+  home: number;
+  away: number;
+}
+
+export interface BackendWinningMargin {
+  home: {
+    "1_goal": number;
+    "2_goals": number;
+    "3_plus": number;
+  };
+  away: {
+    "1_goal": number;
+    "2_goals": number;
+    "3_plus": number;
+  };
+}
+
+export interface BackendGoalRange {
+  "0_goals": number;
+  "1_goal": number;
+  "2_goals": number;
+  "3_goals": number;
+  "4_goals": number;
+  "5_plus": number;
+}
+
 export interface BackendMarkets {
   over_under: {
     "0.5"?: BackendOverUnderLine;
@@ -126,6 +164,9 @@ export interface BackendMarkets {
     "2.5": BackendOverUnderLine;
     "3.5": BackendOverUnderLine;
     "4.5"?: BackendOverUnderLine;
+    "5.5"?: BackendOverUnderLine;
+    "6.5"?: BackendOverUnderLine;
+    "7.5"?: BackendOverUnderLine;
   };
   btts: BackendBTTS;
   most_likely_score: string;
@@ -134,6 +175,13 @@ export interface BackendMarkets {
   team_goals: BackendTeamGoals;
   probability_matrix: Record<string, number>;
   clean_sheet?: CleanSheetMarket;
+  // New derived markets
+  double_chance?: BackendDoubleChance;
+  draw_no_bet?: BackendDrawNoBet;
+  win_to_nil?: BackendWinToNil;
+  winning_margin?: BackendWinningMargin;
+  goal_range?: BackendGoalRange;
+  correct_score_matrix?: BackendScoreline[];
 }
 
 export interface BackendModelVersions {
@@ -252,11 +300,22 @@ export interface BackendFixtureEnriched extends BackendFixture {
         "2.5": OverUnderLine;
         "3.5": OverUnderLine;
         "4.5"?: OverUnderLine;
+        "5.5"?: OverUnderLine;
+        "6.5"?: OverUnderLine;
+        "7.5"?: OverUnderLine;
       };
       clean_sheet: CleanSheetMarket;
       most_likely_score: string;
       top_5_scorelines: ScorelineProbability[];
       team_goals: TeamGoalMarket;
+      asian_handicap?: AsianHandicap;
+      // New derived markets
+      double_chance?: BackendDoubleChance;
+      draw_no_bet?: BackendDrawNoBet;
+      win_to_nil?: BackendWinToNil;
+      winning_margin?: BackendWinningMargin;
+      goal_range?: BackendGoalRange;
+      correct_score_matrix?: BackendScoreline[];
     };
   } | null;
 }
@@ -677,6 +736,13 @@ export function mapBackendPrediction(
     top5Scorelines: m.top_5_scorelines,
     asianHandicap: m.asian_handicap,
     teamGoals: m.team_goals,
+    // New derived markets
+    doubleChanceMarket: m.double_chance,
+    drawNoBetMarket: m.draw_no_bet,
+    winToNilMarket: m.win_to_nil,
+    winningMarginMarket: m.winning_margin,
+    goalRangeMarket: m.goal_range,
+    correctScoreMatrix: m.correct_score_matrix,
     // Badge for live-model indicator in UI
     isLiveData: true,
   };
@@ -844,6 +910,13 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     predictionObj.cleanSheetMarket = enrichment.markets.clean_sheet;
     predictionObj.teamGoals = enrichment.markets.team_goals;
     predictionObj.asianHandicap = enrichment.markets.asian_handicap;
+    // New derived markets
+    predictionObj.doubleChanceMarket = enrichment.markets.double_chance;
+    predictionObj.drawNoBetMarket = enrichment.markets.draw_no_bet;
+    predictionObj.winToNilMarket = enrichment.markets.win_to_nil;
+    predictionObj.winningMarginMarket = enrichment.markets.winning_margin;
+    predictionObj.goalRangeMarket = enrichment.markets.goal_range;
+    predictionObj.correctScoreMatrix = enrichment.markets.correct_score_matrix;
   }
 
   return predictionObj;
