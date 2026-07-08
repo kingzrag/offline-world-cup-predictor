@@ -25,6 +25,50 @@ const getTeamColor = (teamName: string): string => {
   return colorMap[teamName] || '#6b6656';
 };
 
+// ── Helper: Deduplicate injuries ────────────────────────────────────────────
+// Injuries arrive as strings of the form "Player Name (Injury Description)".
+// Duplicates occur when the same player appears twice, once with a real
+// description and once where the description is blank or just repeats the name.
+function deduplicateInjuries(injuries: string[]): string[] {
+  // Parse each string into { player, injury, raw }
+  const parsed = injuries.map((raw) => {
+    const match = raw.match(/^(.+?)\s*\((.*)\)\s*$/);
+    if (match) {
+      return { player: match[1].trim(), injury: match[2].trim(), raw };
+    }
+    // No parentheses — treat whole string as player name with no description
+    return { player: raw.trim(), injury: '', raw };
+  });
+
+  // A description is "invalid" if it's empty or simply repeats the player name
+  const isValidDescription = (player: string, injury: string): boolean => {
+    if (!injury) return false;
+    return injury.trim().toLowerCase() !== player.trim().toLowerCase();
+  };
+
+  // Merge by normalised player name — prefer the entry with a valid description
+  const seen = new Map<string, typeof parsed[0]>();
+  for (const entry of parsed) {
+    const key = entry.player.toLowerCase().replace(/\s+/g, ' ');
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, entry);
+    } else {
+      // Keep whichever has the better description
+      const existingGood = isValidDescription(existing.player, existing.injury);
+      const currentGood  = isValidDescription(entry.player,    entry.injury);
+      if (currentGood && !existingGood) {
+        seen.set(key, entry);
+      }
+    }
+  }
+
+  // Reconstruct display strings
+  return Array.from(seen.values()).map(({ player, injury }) =>
+    isValidDescription(player, injury) ? `${player} (${injury})` : player
+  );
+}
+
 // ── Helper: Confidence Ratings ──────────────────────────────────────────────
 type ConfidenceRating = 'STRONG' | 'GOOD' | 'LEAN' | 'AVOID';
 
@@ -1023,15 +1067,15 @@ export default function MatchAnalysis({
                     <AlertCircle className="w-3.5 h-3.5 text-[#6b6656] stroke-[1.75]" />
                     <span>Injuries</span>
                   </div>
-                  {match.injuriesA?.length ? (
+                  {(() => { const dedupedA = deduplicateInjuries(match.injuriesA ?? []); return dedupedA.length ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {match.injuriesA.map((p, i) => (
+                      {dedupedA.map((p, i) => (
                         <span key={i} className="text-[11px] font-mono bg-[#232219] border border-[rgba(237,232,222,0.08)] text-[#a39c8a] px-2 py-0.5 rounded-[3px]">{p}</span>
                       ))}
                     </div>
                   ) : (
                     <p className="text-xs font-serif italic text-[#6b6656]">No players reported injured</p>
-                  )}
+                  ); })()}
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5 text-[9px] font-mono text-[#6b6656] uppercase tracking-wider mb-2">
@@ -1073,15 +1117,15 @@ export default function MatchAnalysis({
                     <AlertCircle className="w-3.5 h-3.5 text-[#6b6656] stroke-[1.75]" />
                     <span>Injuries</span>
                   </div>
-                  {match.injuriesB?.length ? (
+                  {(() => { const dedupedB = deduplicateInjuries(match.injuriesB ?? []); return dedupedB.length ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {match.injuriesB.map((p, i) => (
+                      {dedupedB.map((p, i) => (
                         <span key={i} className="text-[11px] font-mono bg-[#232219] border border-[rgba(237,232,222,0.08)] text-[#a39c8a] px-2 py-0.5 rounded-[3px]">{p}</span>
                       ))}
                     </div>
                   ) : (
                     <p className="text-xs font-serif italic text-[#6b6656]">No players reported injured</p>
-                  )}
+                  ); })()}
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5 text-[9px] font-mono text-[#6b6656] uppercase tracking-wider mb-2">
