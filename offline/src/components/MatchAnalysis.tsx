@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowLeft, Star, TrendingUp, Shield, Target, Zap, Award } from 'lucide-react';
+import { X, ArrowLeft, Star, TrendingUp, Shield, Target, Zap, Award, Trophy, Goal, ChartColumn, Clock3, Users, History, Scale, BarChart3 } from 'lucide-react';
 import { MatchPrediction } from '../types';
 
 interface MatchAnalysisProps {
@@ -262,28 +262,28 @@ export default function MatchAnalysis({
         {/* Key Insights - Horizontal Pills */}
         <section className="mb-6">
           <div className="flex gap-3 overflow-x-auto pb-2">
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center gap-2">
-              <span>⚽</span>
+            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
+              <Goal className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
               <span className="text-[10px] text-[#98A2B3]">xG</span>
               <span className="text-xs font-semibold text-[#F5F5F5]">{totalXG?.toFixed(2) || 'N/A'}</span>
             </div>
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center gap-2">
-              <span>🥅</span>
+            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
+              <Target className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
               <span className="text-[10px] text-[#98A2B3]">BTTS</span>
               <span className="text-xs font-semibold text-[#F5F5F5]">{match.bttsMarket?.yes ? Math.round(match.bttsMarket.yes * 100) : 'N/A'}%</span>
             </div>
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center gap-2">
-              <span>🏆</span>
+            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
+              <Trophy className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
               <span className="text-[10px] text-[#98A2B3]">{probB > probA ? match.teamB : match.teamA}</span>
               <span className="text-xs font-semibold text-[#34D399]">Favoured</span>
             </div>
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center gap-2">
-              <span>🔥</span>
+            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
+              <TrendingUp className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
               <span className="text-[10px] text-[#98A2B3]">Over 2.5</span>
               <span className="text-xs font-semibold text-[#F5F5F5]">{match.overUnder?.['2.5']?.over ? Math.round(match.overUnder['2.5'].over * 100) : 'N/A'}%</span>
             </div>
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex items-center gap-2">
-              <span>📈</span>
+            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
+              <Scale className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
               <span className="text-[10px] text-[#98A2B3]">Value</span>
               <span className="text-xs font-semibold text-[#4F8CFF]">Strong</span>
             </div>
@@ -299,19 +299,26 @@ export default function MatchAnalysis({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
               className="col-span-2"
+              whileHover={{ y: -2 }}
             >
-              <div className="bg-[#232B36] rounded-xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="text-2xl">⭐</span>
-                  <span className="text-xs font-semibold text-[#98A2B3] uppercase tracking-wider">Top Pick</span>
+              <div className="bg-[#222933] rounded-xl p-6 shadow-[0_4px_18px_rgba(0,0,0,0.16)] h-full border-t-2 border-[#F5B301] hover:shadow-[0_6px_24px_rgba(0,0,0,0.2)] transition-shadow duration-250">
+                <div className="flex items-center gap-2 mb-5">
+                  <Trophy className="w-4 h-4 text-[#F5B301]" />
+                  <span className="text-xs font-semibold text-[#98A2B3] uppercase tracking-wider">Model Pick</span>
                 </div>
-                <div className="text-3xl font-bold text-[#F5F5F5] mb-2 tracking-tight">{match.prediction || 'N/A'}</div>
-                <div className="text-4xl font-black text-[#34D399] mb-3 tracking-tight">{Math.max(probA, probB, probD)}%</div>
-                <div className={`text-xs font-semibold ${
-                  match.confidence === 'High' ? 'text-[#34D399]' : 
-                  match.confidence === 'Medium' ? 'text-[#F5B301]' : 'text-[#98A2B3]'
-                }`}>
-                  {match.confidence === 'High' ? 'Elite Confidence' : match.confidence === 'Medium' ? 'High Confidence' : 'Moderate Confidence'}
+                <div className="text-3xl font-bold text-[#F5F5F5] mb-3 tracking-tight">{match.prediction || 'N/A'}</div>
+                <div className="text-2xl font-semibold text-[#98A2B3] mb-4 tracking-tight">{Math.max(probA, probB, probD)}%</div>
+                <div className="flex items-center gap-2 mb-6">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-[#34D399]" />
+                  </span>
+                  <span className="text-xs text-[#98A2B3] font-normal">
+                    {match.confidence === 'High' ? 'Elite Confidence' : match.confidence === 'Medium' ? 'High Confidence' : 'Moderate Confidence'}
+                  </span>
+                </div>
+                <div className="mt-auto pt-4 border-t border-[#2A323E] flex items-center gap-2">
+                  <Trophy className="w-3 h-3 text-[#F5B301]" />
+                  <span className="text-[10px] text-[#98A2B3] font-normal">Updated just now</span>
                 </div>
               </div>
             </motion.div>
@@ -323,8 +330,11 @@ export default function MatchAnalysis({
               transition={{ delay: 0.35 }}
               className="col-span-1"
             >
-              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full">
-                <div className="text-[10px] text-[#98A2B3] mb-2 uppercase tracking-wider">Expected Goals</div>
+              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] h-full hover:bg-[#232B36] transition-colors duration-250">
+                <div className="flex items-center gap-2 mb-2">
+                  <Goal className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">xG</span>
+                </div>
                 <div className="text-xl font-semibold text-[#F5F5F5]">{totalXG?.toFixed(2) || 'N/A'}</div>
               </div>
             </motion.div>
@@ -334,8 +344,11 @@ export default function MatchAnalysis({
               transition={{ delay: 0.4 }}
               className="col-span-1"
             >
-              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full">
-                <div className="text-[10px] text-[#98A2B3] mb-2 uppercase tracking-wider">Most Likely Score</div>
+              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] h-full hover:bg-[#232B36] transition-colors duration-250">
+                <div className="flex items-center gap-2 mb-2">
+                  <ChartColumn className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Prediction</span>
+                </div>
                 <div className="text-xl font-semibold text-[#F5F5F5]">{match.mostLikelyScore || 'N/A'}</div>
               </div>
             </motion.div>
@@ -353,19 +366,29 @@ export default function MatchAnalysis({
         >
           <SectionHeader title="Betting Markets" subtitle="Probability-based market analysis" />
           
-          <div className="bg-[#151A22] rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] overflow-hidden">
+          <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#232B36]">
+                <tr className="bg-[#1C222C] border-b border-[#232B36]">
                   <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Market</th>
                   <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Probability</th>
                   <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Strength</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamACode} or Draw</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.doubleChanceMarket?.['1x'] ? Math.round(match.doubleChanceMarket['1x'] * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.doubleChanceMarket?.['1x'] ? Math.round(match.doubleChanceMarket['1x'] * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.doubleChanceMarket?.['1x'] ? Math.round(match.doubleChanceMarket['1x'] * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.doubleChanceMarket?.['1x'] || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -377,9 +400,19 @@ export default function MatchAnalysis({
                     </span>
                   </td>
                 </tr>
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamBCode} or Draw</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.doubleChanceMarket?.['x2'] ? Math.round(match.doubleChanceMarket['x2'] * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.doubleChanceMarket?.['x2'] ? Math.round(match.doubleChanceMarket['x2'] * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.doubleChanceMarket?.['x2'] ? Math.round(match.doubleChanceMarket['x2'] * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.doubleChanceMarket?.['x2'] || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -391,9 +424,19 @@ export default function MatchAnalysis({
                     </span>
                   </td>
                 </tr>
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamACode} or {match.teamBCode}</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.doubleChanceMarket?.['12'] ? Math.round(match.doubleChanceMarket['12'] * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.doubleChanceMarket?.['12'] ? Math.round(match.doubleChanceMarket['12'] * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.doubleChanceMarket?.['12'] ? Math.round(match.doubleChanceMarket['12'] * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.doubleChanceMarket?.['12'] || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -405,9 +448,19 @@ export default function MatchAnalysis({
                     </span>
                   </td>
                 </tr>
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamACode} DNB</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.drawNoBetMarket?.home ? Math.round(match.drawNoBetMarket.home * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.drawNoBetMarket?.home ? Math.round(match.drawNoBetMarket.home * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.drawNoBetMarket?.home ? Math.round(match.drawNoBetMarket.home * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.drawNoBetMarket?.home || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -419,9 +472,19 @@ export default function MatchAnalysis({
                     </span>
                   </td>
                 </tr>
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamBCode} DNB</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.drawNoBetMarket?.away ? Math.round(match.drawNoBetMarket.away * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.drawNoBetMarket?.away ? Math.round(match.drawNoBetMarket.away * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.drawNoBetMarket?.away ? Math.round(match.drawNoBetMarket.away * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.drawNoBetMarket?.away || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -433,9 +496,19 @@ export default function MatchAnalysis({
                     </span>
                   </td>
                 </tr>
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamACode} Win to Nil</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.winToNilMarket?.home ? Math.round(match.winToNilMarket.home * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.winToNilMarket?.home ? Math.round(match.winToNilMarket.home * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.winToNilMarket?.home ? Math.round(match.winToNilMarket.home * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.winToNilMarket?.home || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -449,7 +522,17 @@ export default function MatchAnalysis({
                 </tr>
                 <tr>
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamBCode} Win to Nil</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.winToNilMarket?.away ? Math.round(match.winToNilMarket.away * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.winToNilMarket?.away ? Math.round(match.winToNilMarket.away * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.winToNilMarket?.away ? Math.round(match.winToNilMarket.away * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.winToNilMarket?.away || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -477,10 +560,10 @@ export default function MatchAnalysis({
         >
           <SectionHeader title="Goal Markets" subtitle="Over/Under and BTTS probabilities" />
           
-          <div className="bg-[#151A22] rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] overflow-hidden">
+          <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#232B36]">
+                <tr className="bg-[#1C222C] border-b border-[#232B36]">
                   <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Market</th>
                   <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Probability</th>
                   <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Strength</th>
@@ -489,9 +572,19 @@ export default function MatchAnalysis({
               <tbody>
                 {['0.5', '1.5', '2.5', '3.5', '4.5'].map((line) => (
                   <React.Fragment key={line}>
-                    <tr className="border-b border-[#1C222C]">
+                    <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                       <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">Over {line}</td>
-                      <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.overUnder?.[line]?.over ? Math.round(match.overUnder[line].over * 100) : 'N/A'}%</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-[#F5F5F5] text-sm">{match.overUnder?.[line]?.over ? Math.round(match.overUnder[line].over * 100) : 'N/A'}%</span>
+                          <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-[#34D399] rounded-full"
+                              style={{ width: `${match.overUnder?.[line]?.over ? Math.round(match.overUnder[line].over * 100) : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`text-xs font-semibold px-2 py-1 rounded ${
                           (match.overUnder?.[line]?.over || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -503,9 +596,19 @@ export default function MatchAnalysis({
                         </span>
                       </td>
                     </tr>
-                    <tr className="border-b border-[#1C222C]">
+                    <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                       <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">Under {line}</td>
-                      <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.overUnder?.[line]?.under ? Math.round(match.overUnder[line].under * 100) : 'N/A'}%</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-[#F5F5F5] text-sm">{match.overUnder?.[line]?.under ? Math.round(match.overUnder[line].under * 100) : 'N/A'}%</span>
+                          <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-[#34D399] rounded-full"
+                              style={{ width: `${match.overUnder?.[line]?.under ? Math.round(match.overUnder[line].under * 100) : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`text-xs font-semibold px-2 py-1 rounded ${
                           (match.overUnder?.[line]?.under || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -519,9 +622,19 @@ export default function MatchAnalysis({
                     </tr>
                   </React.Fragment>
                 ))}
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">BTTS Yes</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.bttsMarket?.yes ? Math.round(match.bttsMarket.yes * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.bttsMarket?.yes ? Math.round(match.bttsMarket.yes * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.bttsMarket?.yes ? Math.round(match.bttsMarket.yes * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.bttsMarket?.yes || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -535,7 +648,17 @@ export default function MatchAnalysis({
                 </tr>
                 <tr>
                   <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">BTTS No</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.bttsMarket?.no ? Math.round(match.bttsMarket.no * 100) : 'N/A'}%</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[#F5F5F5] text-sm">{match.bttsMarket?.no ? Math.round(match.bttsMarket.no * 100) : 'N/A'}%</span>
+                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#34D399] rounded-full"
+                          style={{ width: `${match.bttsMarket?.no ? Math.round(match.bttsMarket.no * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-xs font-semibold px-2 py-1 rounded ${
                       (match.bttsMarket?.no || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -575,10 +698,10 @@ export default function MatchAnalysis({
             const sortedLines = lines.sort((a, b) => b.rawLine - a.rawLine);
             
             return (
-              <div className="bg-[#151A22] rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] overflow-hidden">
+              <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[#232B36]">
+                    <tr className="bg-[#1C222C] border-b border-[#232B36]">
                       <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Line</th>
                       <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Probability</th>
                       <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Strength</th>
@@ -586,9 +709,19 @@ export default function MatchAnalysis({
                   </thead>
                   <tbody>
                     {sortedLines.map((item, index) => (
-                      <tr key={item.line} className={index < sortedLines.length - 1 ? "border-b border-[#1C222C]" : ""}>
+                      <tr key={item.line} className={index < sortedLines.length - 1 ? "border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250" : "hover:bg-[#1C222C]/50 transition-colors duration-250"}>
                         <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{item.line}</td>
-                        <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{item.probability}%</td>
+                        <td className="px-4 py-2.5 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-[#F5F5F5] text-sm">{item.probability}%</span>
+                            <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-[#34D399] rounded-full"
+                                style={{ width: `${item.probability}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
                         <td className="px-4 py-2.5 text-center">
                           <span className={`text-xs font-semibold px-2 py-1 rounded ${
                             item.probability >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
@@ -619,10 +752,10 @@ export default function MatchAnalysis({
         >
           <SectionHeader title="Correct Scores" subtitle="Most likely scorelines" />
           
-          <div className="bg-[#151A22] rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] overflow-hidden">
+          <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#232B36]">
+                <tr className="bg-[#1C222C] border-b border-[#232B36]">
                   <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Rank</th>
                   <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Score</th>
                   <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Probability</th>
@@ -630,8 +763,8 @@ export default function MatchAnalysis({
               </thead>
               <tbody>
                 {match.top5Scorelines?.map((score, index) => (
-                  <tr key={index} className={index < (match.top5Scorelines?.length || 0) - 1 ? "border-b border-[#1C222C]" : ""}>
-                    <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}</td>
+                  <tr key={index} className={index < (match.top5Scorelines?.length || 0) - 1 ? "border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250" : "hover:bg-[#1C222C]/50 transition-colors duration-250"}>
+                    <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{index === 0 ? <Trophy className="w-4 h-4 text-[#F5B301]" /> : index === 1 ? <Trophy className="w-4 h-4 text-[#98A2B3]" /> : index === 2 ? <Trophy className="w-4 h-4 text-[#6B7280]" /> : `${index + 1}.`}</td>
                     <td className="px-4 py-2.5 text-[#F5F5F5] font-semibold">{score.score}</td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-3">
@@ -662,27 +795,27 @@ export default function MatchAnalysis({
         >
           <SectionHeader title="Team Statistics" subtitle="Comparative team metrics" />
           
-          <div className="bg-[#151A22] rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] overflow-hidden">
+          <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#232B36]">
+                <tr className="bg-[#1C222C] border-b border-[#232B36]">
                   <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Metric</th>
                   <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">{match.teamA}</th>
                   <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">{match.teamB}</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#98A2B3] font-normal">FIFA Rank</td>
                   <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.fifaRankA || 'N/A'}</td>
                   <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.fifaRankB || 'N/A'}</td>
                 </tr>
-                <tr className="border-b border-[#1C222C]">
+                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#98A2B3] font-normal">ELO Rating</td>
                   <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.eloRankA || 'N/A'}</td>
                   <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.eloRankB || 'N/A'}</td>
                 </tr>
-                <tr>
+                <tr className="hover:bg-[#1C222C]/50 transition-colors duration-250">
                   <td className="px-4 py-2.5 text-[#98A2B3] font-normal">Squad Value</td>
                   <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.squadValueA || 'N/A'}</td>
                   <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.squadValueB || 'N/A'}</td>
@@ -704,10 +837,34 @@ export default function MatchAnalysis({
           <SectionHeader title="Model Confidence" subtitle="Prediction reliability metrics" />
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MetricCard label="Calibration" value={match.confidence || 'N/A'} status="good" />
-            <MetricCard label="Agreement" value="85%" status="good" />
-            <MetricCard label="Variance" value="Low" status="good" />
-            <MetricCard label="Freshness" value="Recent" status="good" />
+            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+              <div className="flex items-center gap-2 mb-2">
+                <Scale className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Calibration</span>
+              </div>
+              <div className="text-xl font-semibold text-[#F5F5F5]">{match.confidence || 'N/A'}</div>
+            </div>
+            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+              <div className="flex items-center gap-2 mb-2">
+                <BarChart3 className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Agreement</span>
+              </div>
+              <div className="text-xl font-semibold text-[#F5F5F5]">85%</div>
+            </div>
+            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+              <div className="flex items-center gap-2 mb-2">
+                <ChartColumn className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Variance</span>
+              </div>
+              <div className="text-xl font-semibold text-[#F5F5F5]">Low</div>
+            </div>
+            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock3 className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Freshness</span>
+              </div>
+              <div className="text-xl font-semibold text-[#F5F5F5]">Recent</div>
+            </div>
           </div>
         </motion.section>
 
@@ -722,23 +879,29 @@ export default function MatchAnalysis({
         >
           <SectionHeader title="Head to Head" subtitle="Historical match data" />
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <PremiumCard>
-              <h3 className="text-base font-semibold text-[#F5F5F5] mb-5 tracking-tight">{match.teamA} Recent Form</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+              <div className="flex items-center gap-2 mb-3">
+                <History className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamA} Form</span>
+              </div>
               <div className="flex gap-2">
                 {match.recentFormA?.map((result, i) => (
                   <FormBadge key={i} result={result} />
                 ))}
               </div>
-            </PremiumCard>
-            <PremiumCard>
-              <h3 className="text-base font-semibold text-[#F5F5F5] mb-5 tracking-tight">{match.teamB} Recent Form</h3>
+            </div>
+            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+              <div className="flex items-center gap-2 mb-3">
+                <History className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamB} Form</span>
+              </div>
               <div className="flex gap-2">
                 {match.recentFormB?.map((result, i) => (
                   <FormBadge key={i} result={result} />
                 ))}
               </div>
-            </PremiumCard>
+            </div>
           </div>
         </motion.section>
 
@@ -753,33 +916,39 @@ export default function MatchAnalysis({
         >
           <SectionHeader title="Squad Health" subtitle="Injuries and suspensions" />
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <PremiumCard>
-              <h3 className="text-base font-semibold text-[#F5F5F5] mb-5 tracking-tight">{match.teamA}</h3>
-              <div className="space-y-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamA}</span>
+              </div>
+              <div className="space-y-3 text-sm">
                 <div>
-                  <span className="text-[#98A2B3] text-xs uppercase tracking-wider font-normal">Injured</span>
-                  <p className="text-[#F5F5F5] mt-2">{match.injuriesA?.join(', ') || 'None'}</p>
+                  <span className="text-[#98A2B3] text-[10px] uppercase tracking-wider font-normal">Injured</span>
+                  <p className="text-[#F5F5F5] mt-1">{match.injuriesA?.join(', ') || 'None'}</p>
                 </div>
                 <div>
-                  <span className="text-[#98A2B3] text-xs uppercase tracking-wider font-normal">Suspended</span>
-                  <p className="text-[#F5F5F5] mt-2">{match.suspensionsA?.join(', ') || 'None'}</p>
+                  <span className="text-[#98A2B3] text-[10px] uppercase tracking-wider font-normal">Suspended</span>
+                  <p className="text-[#F5F5F5] mt-1">{match.suspensionsA?.join(', ') || 'None'}</p>
                 </div>
               </div>
-            </PremiumCard>
-            <PremiumCard>
-              <h3 className="text-base font-semibold text-[#F5F5F5] mb-5 tracking-tight">{match.teamB}</h3>
-              <div className="space-y-4 text-sm">
+            </div>
+            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamB}</span>
+              </div>
+              <div className="space-y-3 text-sm">
                 <div>
-                  <span className="text-[#98A2B3] text-xs uppercase tracking-wider font-normal">Injured</span>
-                  <p className="text-[#F5F5F5] mt-2">{match.injuriesB?.join(', ') || 'None'}</p>
+                  <span className="text-[#98A2B3] text-[10px] uppercase tracking-wider font-normal">Injured</span>
+                  <p className="text-[#F5F5F5] mt-1">{match.injuriesB?.join(', ') || 'None'}</p>
                 </div>
                 <div>
-                  <span className="text-[#98A2B3] text-xs uppercase tracking-wider font-normal">Suspended</span>
-                  <p className="text-[#F5F5F5] mt-2">{match.suspensionsB?.join(', ') || 'None'}</p>
+                  <span className="text-[#98A2B3] text-[10px] uppercase tracking-wider font-normal">Suspended</span>
+                  <p className="text-[#F5F5F5] mt-1">{match.suspensionsB?.join(', ') || 'None'}</p>
                 </div>
               </div>
-            </PremiumCard>
+            </div>
           </div>
         </motion.section>
 
@@ -795,41 +964,47 @@ export default function MatchAnalysis({
           >
             <SectionHeader title="Team Goals" subtitle="Over/Under by team" />
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <PremiumCard>
-                <h3 className="text-base font-semibold text-[#F5F5F5] mb-5 tracking-tight">{match.teamA}</h3>
-                <div className="space-y-3">
-                  <MarketRow 
-                    label="Over 0.5" 
-                    probability={match.teamGoals.home.over_0_5 ? Math.round(match.teamGoals.home.over_0_5 * 100) : null} 
-                  />
-                  <MarketRow 
-                    label="Over 1.5" 
-                    probability={match.teamGoals.home.over_1_5 ? Math.round(match.teamGoals.home.over_1_5 * 100) : null} 
-                  />
-                  <MarketRow 
-                    label="Over 2.5" 
-                    probability={match.teamGoals.home.over_2_5 ? Math.round(match.teamGoals.home.over_2_5 * 100) : null} 
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+                <div className="flex items-center gap-2 mb-3">
+                  <Goal className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamA}</span>
                 </div>
-              </PremiumCard>
-              <PremiumCard>
-                <h3 className="text-base font-semibold text-[#F5F5F5] mb-5 tracking-tight">{match.teamB}</h3>
-                <div className="space-y-3">
-                  <MarketRow 
-                    label="Over 0.5" 
-                    probability={match.teamGoals.away.over_0_5 ? Math.round(match.teamGoals.away.over_0_5 * 100) : null} 
-                  />
-                  <MarketRow 
-                    label="Over 1.5" 
-                    probability={match.teamGoals.away.over_1_5 ? Math.round(match.teamGoals.away.over_1_5 * 100) : null} 
-                  />
-                  <MarketRow 
-                    label="Over 2.5" 
-                    probability={match.teamGoals.away.over_2_5 ? Math.round(match.teamGoals.away.over_2_5 * 100) : null} 
-                  />
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-[#F5F5F5]">Over 0.5</span>
+                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.home.over_0_5 ? Math.round(match.teamGoals.home.over_0_5 * 100) : 'N/A'}%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-[#F5F5F5]">Over 1.5</span>
+                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.home.over_1_5 ? Math.round(match.teamGoals.home.over_1_5 * 100) : 'N/A'}%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-[#F5F5F5]">Over 2.5</span>
+                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.home.over_2_5 ? Math.round(match.teamGoals.home.over_2_5 * 100) : 'N/A'}%</span>
+                  </div>
                 </div>
-              </PremiumCard>
+              </div>
+              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
+                <div className="flex items-center gap-2 mb-3">
+                  <Goal className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
+                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamB}</span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-[#F5F5F5]">Over 0.5</span>
+                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.away.over_0_5 ? Math.round(match.teamGoals.away.over_0_5 * 100) : 'N/A'}%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-[#F5F5F5]">Over 1.5</span>
+                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.away.over_1_5 ? Math.round(match.teamGoals.away.over_1_5 * 100) : 'N/A'}%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-[#F5F5F5]">Over 2.5</span>
+                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.away.over_2_5 ? Math.round(match.teamGoals.away.over_2_5 * 100) : 'N/A'}%</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.section>
         )}
@@ -842,27 +1017,30 @@ export default function MatchAnalysis({
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.5 }}
         >
-          <div className="bg-[#181C22] rounded-2xl p-10 shadow-[0_8px_30px_rgba(0,0,0,0.18)]">
-            <h2 className="text-3xl font-bold text-[#F5F5F5] mb-8 tracking-tight">Match Verdict</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+          <div className="bg-[#171C24] rounded-xl p-6 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+            <div className="flex items-center gap-2 mb-6">
+              <Trophy className="w-5 h-5 text-[#F5B301]" />
+              <h2 className="text-xl font-bold text-[#F5F5F5] tracking-tight">Match Verdict</h2>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div>
-                <div className="text-xs text-[#98A2B3] uppercase tracking-wider mb-2">Top Pick</div>
-                <div className="text-xl font-bold text-[#F5F5F5]">{match.prediction || 'N/A'}</div>
+                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">Top Pick</div>
+                <div className="text-lg font-semibold text-[#F5F5F5]">{match.prediction || 'N/A'}</div>
               </div>
               <div>
-                <div className="text-xs text-[#98A2B3] uppercase tracking-wider mb-2">Expected Score</div>
-                <div className="text-xl font-bold text-[#F5F5F5]">{match.mostLikelyScore || 'N/A'}</div>
+                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">Prediction</div>
+                <div className="text-lg font-semibold text-[#F5F5F5]">{match.mostLikelyScore || 'N/A'}</div>
               </div>
               <div>
-                <div className="text-xs text-[#98A2B3] uppercase tracking-wider mb-2">Winning Probability</div>
-                <div className="text-xl font-bold text-[#F5F5F5]">{Math.max(probA, probB, probD)}%</div>
+                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">Probability</div>
+                <div className="text-lg font-semibold text-[#F5F5F5]">{Math.max(probA, probB, probD)}%</div>
               </div>
               <div>
-                <div className="text-xs text-[#98A2B3] uppercase tracking-wider mb-2">Expected Goals</div>
-                <div className="text-xl font-bold text-[#F5F5F5]">{totalXG?.toFixed(2) || 'N/A'}</div>
+                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">xG</div>
+                <div className="text-lg font-semibold text-[#F5F5F5]">{totalXG?.toFixed(2) || 'N/A'}</div>
               </div>
             </div>
-            <p className="text-[#98A2B3] text-base leading-relaxed max-w-3xl">
+            <p className="text-[#98A2B3] text-sm leading-relaxed max-w-3xl">
               Based on comprehensive analysis, {match.prediction || 'the prediction'} shows {match.confidence?.toLowerCase() || 'moderate'} confidence. 
               The model indicates {Math.max(probA, probB, probD)}% probability for this outcome, supported by expected goals of {totalXG?.toFixed(2) || 'N/A'}.
             </p>
