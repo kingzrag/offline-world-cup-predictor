@@ -570,24 +570,18 @@ export default function MatchAnalysis({
         <EditorialBlock id="section-overview" ref={sectionRefs.overview}>
           <div className="flex flex-col gap-6">
             {/* Header info / Meta */}
-            <div className="flex items-center justify-between text-[10px] font-mono text-[#6b6656] uppercase tracking-wider border-b border-[rgba(237,232,222,0.10)] pb-2">
+            <div className="flex items-center text-[10px] font-mono text-[#6b6656] uppercase tracking-wider border-b border-[rgba(237,232,222,0.10)] pb-2">
               <div className="flex items-center gap-1.5">
                 <Trophy className="w-3.5 h-3.5 text-[#6b6656] stroke-[1.75]" />
                 <span className="text-[#ece7da]">{match.stage}</span>
               </div>
-              {match.venue && (
-                <div className="flex items-center gap-1.5">
-                  <span>STADIUM:</span>
-                  <span className="text-[#ece7da]">{match.venue}</span>
-                </div>
-              )}
             </div>
 
             {/* Teams and 1X2 Probabilities Row */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               {/* Home Team */}
               <div
-                className="flex items-center gap-4 py-2 px-3 border-l-4 bg-[#232219]/30 rounded-r-[4px]"
+                className="flex-1 flex items-center gap-4 py-2 px-3 border-l-4 bg-[#232219]/30 rounded-r-[4px]"
                 style={{ borderLeftColor: getTeamColor(match.teamA) }}
               >
                 <span className="text-3xl">{flagA}</span>
@@ -598,7 +592,7 @@ export default function MatchAnalysis({
               </div>
 
               {/* Data overview */}
-              <div className="flex items-center justify-center gap-6 py-2 px-4 border border-[rgba(237,232,222,0.08)] bg-[#232219]/20 rounded-[4px]">
+              <div className="flex items-center justify-center gap-6 py-2 px-6 border border-[rgba(237,232,222,0.08)] bg-[#232219]/20 rounded-[4px] shrink-0">
                 <div className="text-center">
                   <div className="text-xs font-mono text-[#6b6656] uppercase tracking-wider mb-1">HOME</div>
                   <div className="text-xl font-mono font-bold text-[#ece7da]">{probA}%</div>
@@ -615,7 +609,7 @@ export default function MatchAnalysis({
 
               {/* Away Team */}
               <div
-                className="flex items-center justify-end gap-4 py-2 px-3 border-r-4 bg-[#232219]/30 rounded-l-[4px] text-right"
+                className="flex-1 flex items-center justify-end gap-4 py-2 px-3 border-r-4 bg-[#232219]/30 rounded-l-[4px] text-right"
                 style={{ borderRightColor: getTeamColor(match.teamB) }}
               >
                 <div>
@@ -922,34 +916,126 @@ export default function MatchAnalysis({
             subtitle="Handicap line probabilities"
             icon={<BarChart3 className="w-[18px] h-[18px] stroke-[1.75]" />}
           >
-            {match.asianHandicap?.lines ? (
-              <div className="overflow-hidden">
-                {/* Header row */}
-                <div className="flex items-center gap-4 px-4 py-2 bg-[#232219] border-b border-[rgba(237,232,222,0.06)] font-mono text-[9px] text-[#a39c8a] uppercase tracking-wider">
-                  <span className="w-36 shrink-0">Line</span>
-                  <span className="flex-1">Probability</span>
-                  <span className="w-12 text-right">Prob</span>
-                  <span className="w-20 text-right">Confidence</span>
+            {match.asianHandicap?.lines ? (() => {
+              const ah = match.asianHandicap!;
+              // Determine which team is favored based on the stored string
+              const favoredIsHome =
+                ah.favored_team.toLowerCase() === 'home' ||
+                ah.favored_team === match.teamA;
+              const favoredTeam = favoredIsHome ? match.teamA : match.teamB;
+              const favoredFlag = favoredIsHome ? flagA : flagB;
+              const otherTeam   = favoredIsHome ? match.teamB : match.teamA;
+              const otherFlag   = favoredIsHome ? flagB : flagA;
+
+              // Build sorted rows for the favored team
+              const favoredRows = Object.entries(ah.lines)
+                .map(([line, val]) => ({
+                  line: parseFloat(line),
+                  lineStr: line,
+                  prob: Math.round((val as number) <= 1 ? (val as number) * 100 : (val as number)),
+                }))
+                .sort((a, b) => b.line - a.line);
+
+              // Other team rows: mirrored line, complement probability
+              const otherRows = favoredRows
+                .map(({ line, prob }) => ({
+                  line: -line,
+                  lineStr: (-line > 0 ? `+${-line}` : `${-line}`),
+                  prob: 100 - prob,
+                }))
+                .sort((a, b) => b.line - a.line);
+
+              const formatLine = (n: number): string =>
+                n > 0 ? `+${n}` : `${n}`;
+
+              const TeamHandicapCard = ({
+                teamName,
+                flag,
+                rows,
+              }: {
+                teamName: string;
+                flag: string;
+                rows: { line: number; lineStr: string; prob: number }[];
+              }) => {
+                return (
+                  <div className="flex-1 min-w-0 bg-[#1b1a14] border border-[rgba(237,232,222,0.10)] rounded-[4px] overflow-hidden">
+                    {/* Card header */}
+                    <div
+                      className="flex items-center gap-2.5 px-4 py-3 border-b border-[rgba(237,232,222,0.10)]"
+                      style={{ borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: getTeamColor(teamName) }}
+                    >
+                      <span className="text-lg leading-none">{flag}</span>
+                      <span className="text-xs font-sans font-bold uppercase tracking-wider text-[#ece7da]">{teamName}</span>
+                    </div>
+                    {/* Column headers */}
+                    <div className="flex items-center gap-3 px-4 py-1.5 bg-[#232219] border-b border-[rgba(237,232,222,0.06)]">
+                      <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-14 shrink-0">Line</span>
+                      <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider flex-1">Probability</span>
+                      <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-10 text-right">%</span>
+                      <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-16 text-right">Conf.</span>
+                    </div>
+                    {/* Rows */}
+                    {rows.map(({ line, prob }, idx) => {
+                      const rating = getConfidenceRating(prob);
+                      const colors = getConfidenceColors(rating);
+                      return (
+                        <div
+                          key={`${teamName}-${line}`}
+                          className={`flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[rgba(237,232,222,0.02)] ${
+                            idx < rows.length - 1 ? 'border-b border-[rgba(237,232,222,0.05)]' : ''
+                          }`}
+                        >
+                          {/* Line value */}
+                          <span
+                            className="text-xs font-mono font-semibold w-14 shrink-0"
+                            style={{ color: line === 0 ? '#a39c8a' : line < 0 ? '#4c8a83' : '#c9902f' }}
+                          >
+                            {formatLine(line)}
+                          </span>
+                          {/* Progress bar */}
+                          <div className="flex-1">
+                            <div className="w-full h-[4px] bg-[#232219] rounded-full overflow-hidden">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                whileInView={{ width: `${Math.min(prob, 100)}%` }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.5, ease: 'easeOut', delay: idx * 0.02 }}
+                                className="h-full rounded-full"
+                                style={{ backgroundColor: colors.text }}
+                              />
+                            </div>
+                          </div>
+                          {/* Percentage */}
+                          <span className="text-xs font-mono font-semibold text-[#ece7da] w-10 text-right">
+                            {prob}%
+                          </span>
+                          {/* Confidence badge */}
+                          <div className="w-16 flex justify-end shrink-0">
+                            <span
+                              className="inline-block px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-[3px]"
+                              style={{
+                                color: colors.text,
+                                backgroundColor: colors.bg,
+                                borderLeft: `3px solid ${colors.borderLeft}`,
+                              }}
+                            >
+                              {rating}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              };
+
+              return (
+                <div className="flex flex-col md:flex-row gap-4 p-4">
+                  <TeamHandicapCard teamName={favoredTeam} flag={favoredFlag} rows={favoredRows} />
+                  <TeamHandicapCard teamName={otherTeam}   flag={otherFlag}   rows={otherRows} />
                 </div>
-                <div>
-                  {Object.entries(match.asianHandicap.lines)
-                    .map(([line, val]) => ({
-                      label: `${match.asianHandicap!.favored_team} ${line}`,
-                      prob: Math.round((val as number) <= 1 ? (val as number) * 100 : (val as number)),
-                      rawLine: parseFloat(line),
-                    }))
-                    .sort((a, b) => b.rawLine - a.rawLine)
-                    .map((item, idx, arr) => (
-                      <EditorialRow
-                        key={item.label}
-                        label={item.label}
-                        probability={item.prob}
-                        borderBottom={idx < arr.length - 1}
-                      />
-                    ))}
-                </div>
-              </div>
-            ) : (
+              );
+            })() : (
               <div className="px-5 py-6 text-xs font-mono text-[#6b6656] text-center">No handicap data available</div>
             )}
           </CollapsibleEditorialBlock>
