@@ -69,6 +69,21 @@ function deduplicateInjuries(injuries: string[]): string[] {
   );
 }
 
+// ── Fixed handicap line order (never changes, mirrors a real sportsbook) ─────
+const HANDICAP_LINES = [
+  -3, -2.75, -2.5, -2.25, -2, -1.75, -1.5, -1.25, -1, -0.75, -0.5, -0.25,
+  0,
+  0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3,
+] as const;
+
+// Parse a backend line-key like "Home -1.5" or "Away +0.25" → numeric handicap
+const parseAHLine = (key: string): number => {
+  const parts = key.trim().split(/\s+/);
+  const lastPart = parts[parts.length - 1];
+  const num = parseFloat(lastPart);
+  return isNaN(num) ? 0 : num;
+};
+
 // ── Helper: Confidence Ratings ──────────────────────────────────────────────
 type ConfidenceRating = 'STRONG' | 'GOOD' | 'LEAN' | 'AVOID';
 
@@ -927,34 +942,26 @@ export default function MatchAnalysis({
               const otherTeam   = favoredIsHome ? match.teamB : match.teamA;
               const otherFlag   = favoredIsHome ? flagB : flagA;
 
-              // Helper to parse line key like "Home -1.5" or "Away +0.25" to a number
-              const parseAHLine = (key: string): number => {
-                const parts = key.trim().split(/\s+/);
-                const lastPart = parts[parts.length - 1];
-                const num = parseFloat(lastPart);
-                return isNaN(num) ? 0 : num;
-              };
+              // Build a lookup map: handicap number → probability
+              // Keys from the backend look like "Home -1.5"; we strip the prefix.
+              const favoredLookup = new Map<number, number>();
+              Object.entries(ah.lines).forEach(([lineKey, val]) => {
+                const lineNum = parseAHLine(lineKey);
+                const prob = Math.round((val as number) <= 1 ? (val as number) * 100 : (val as number));
+                favoredLookup.set(lineNum, prob);
+              });
 
-              // Build sorted rows for the favored team (ascending: e.g. -3.0 to +3.0)
-              const favoredRows = Object.entries(ah.lines)
-                .map(([lineKey, val]) => {
-                  const lineNum = parseAHLine(lineKey);
-                  return {
-                    line: lineNum,
-                    lineStr: lineKey,
-                    prob: Math.round((val as number) <= 1 ? (val as number) * 100 : (val as number)),
-                  };
-                })
-                .sort((a, b) => a.line - b.line);
+              // Derive rows in FIXED order — never sort, never shift
+              const favoredRows = HANDICAP_LINES.map((line) => ({
+                line,
+                prob: favoredLookup.get(line) ?? favoredLookup.get(-line) ?? 50,
+              }));
 
-              // Other team rows: mirrored line, complement probability (sorted descending: e.g. +3.0 to -3.0)
-              const otherRows = favoredRows
-                .map(({ line, prob }) => ({
-                  line: -line,
-                  lineStr: (-line > 0 ? `+${-line}` : `${-line}`),
-                  prob: 100 - prob,
-                }))
-                .sort((a, b) => b.line - a.line);
+              // Mirror: same row positions, complementary probability, negated line
+              const otherRows = HANDICAP_LINES.map((line) => ({
+                line: -line as number,
+                prob: 100 - (favoredLookup.get(line) ?? favoredLookup.get(-line) ?? 50),
+              }));
 
               const formatLine = (n: number): string =>
                 n > 0 ? `+${n}` : `${n}`;
@@ -966,7 +973,7 @@ export default function MatchAnalysis({
               }: {
                 teamName: string;
                 flag: string;
-                rows: { line: number; lineStr: string; prob: number }[];
+                rows: { line: number; prob: number }[];
               }) => {
                 return (
                   <div className="flex-1 min-w-0 bg-[#1b1a14] border border-[rgba(237,232,222,0.10)] rounded-[4px] overflow-hidden">
