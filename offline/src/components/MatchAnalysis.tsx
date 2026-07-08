@@ -296,6 +296,94 @@ function CollapsibleEditorialBlock({
   );
 }
 
+// ── Format a handicap line number as a display string ───────────────────────
+const formatLine = (n: number): string => (n > 0 ? `+${n}` : `${n}`);
+
+// ── Asian Handicap Team Card ──────────────────────────────────────────────────
+// Defined at module level (outside the render path) so React never creates
+// a new component type on re-renders — which would cause full remount and
+// restart all bar animations from 0.
+const TeamHandicapCard = React.memo(function TeamHandicapCard({
+  teamName,
+  flag,
+  rows,
+}: {
+  teamName: string;
+  flag: string;
+  rows: { line: number; prob: number }[];
+}) {
+  return (
+    <div className="flex-1 min-w-0 bg-[#1b1a14] border border-[rgba(237,232,222,0.10)] rounded-[4px] overflow-hidden">
+      {/* Card header */}
+      <div
+        className="flex items-center gap-2.5 px-4 py-3 border-b border-[rgba(237,232,222,0.10)]"
+        style={{ borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: getTeamColor(teamName) }}
+      >
+        <span className="text-lg leading-none">{flag}</span>
+        <span className="text-xs font-sans font-bold uppercase tracking-wider text-[#ece7da]">{teamName}</span>
+      </div>
+      {/* Column headers */}
+      <div className="flex items-center gap-3 px-4 py-1.5 bg-[#232219] border-b border-[rgba(237,232,222,0.06)]">
+        <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-14 shrink-0">Line</span>
+        <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider flex-1">Probability</span>
+        <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-10 text-right">%</span>
+        <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-16 text-right">Conf.</span>
+      </div>
+      {/* Rows — key is the stable numeric line; `animate` (not whileInView)
+          transitions in-place when prob updates, never restarting from 0 */}
+      {rows.map(({ line, prob }) => {
+        const rating = getConfidenceRating(prob);
+        const colors = getConfidenceColors(rating);
+        return (
+          <div
+            key={line}
+            className="flex items-center gap-3 px-4 py-2.5 border-b border-[rgba(237,232,222,0.05)] last:border-b-0
+                       transition-colors hover:bg-[rgba(237,232,222,0.02)]"
+          >
+            {/* Line value */}
+            <span
+              className="text-xs font-mono font-semibold w-14 shrink-0"
+              style={{ color: line === 0 ? '#a39c8a' : line < 0 ? '#4c8a83' : '#c9902f' }}
+            >
+              {formatLine(line)}
+            </span>
+            {/* Progress bar — uses `animate` so Framer Motion smoothly
+                transitions between old and new width without resetting to 0 */}
+            <div className="flex-1">
+              <div className="w-full h-[4px] bg-[#232219] rounded-full overflow-hidden">
+                <motion.div
+                  animate={{ width: `${Math.min(prob, 100)}%` }}
+                  initial={{ width: 0 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
+                  className="h-full rounded-full"
+                  style={{ backgroundColor: colors.text }}
+                />
+              </div>
+            </div>
+            {/* Percentage */}
+            <span className="text-xs font-mono font-semibold text-[#ece7da] w-10 text-right">
+              {prob}%
+            </span>
+            {/* Confidence badge */}
+            <div className="w-16 flex justify-end shrink-0">
+              <span
+                className="inline-block px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-[3px]"
+                style={{
+                  color: colors.text,
+                  backgroundColor: colors.bg,
+                  borderLeft: `3px solid ${colors.borderLeft}`,
+                }}
+              >
+                {rating}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+
 export default function MatchAnalysis({
   match,
   onClose,
@@ -962,90 +1050,6 @@ export default function MatchAnalysis({
                 line: -line as number,
                 prob: 100 - (favoredLookup.get(line) ?? favoredLookup.get(-line) ?? 50),
               }));
-
-              const formatLine = (n: number): string =>
-                n > 0 ? `+${n}` : `${n}`;
-
-              const TeamHandicapCard = ({
-                teamName,
-                flag,
-                rows,
-              }: {
-                teamName: string;
-                flag: string;
-                rows: { line: number; prob: number }[];
-              }) => {
-                return (
-                  <div className="flex-1 min-w-0 bg-[#1b1a14] border border-[rgba(237,232,222,0.10)] rounded-[4px] overflow-hidden">
-                    {/* Card header */}
-                    <div
-                      className="flex items-center gap-2.5 px-4 py-3 border-b border-[rgba(237,232,222,0.10)]"
-                      style={{ borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: getTeamColor(teamName) }}
-                    >
-                      <span className="text-lg leading-none">{flag}</span>
-                      <span className="text-xs font-sans font-bold uppercase tracking-wider text-[#ece7da]">{teamName}</span>
-                    </div>
-                    {/* Column headers */}
-                    <div className="flex items-center gap-3 px-4 py-1.5 bg-[#232219] border-b border-[rgba(237,232,222,0.06)]">
-                      <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-14 shrink-0">Line</span>
-                      <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider flex-1">Probability</span>
-                      <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-10 text-right">%</span>
-                      <span className="text-[9px] font-mono text-[#6b6656] uppercase tracking-wider w-16 text-right">Conf.</span>
-                    </div>
-                    {/* Rows */}
-                    {rows.map(({ line, prob }, idx) => {
-                      const rating = getConfidenceRating(prob);
-                      const colors = getConfidenceColors(rating);
-                      return (
-                        <div
-                          key={`${teamName}-${line}`}
-                          className={`flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[rgba(237,232,222,0.02)] ${
-                            idx < rows.length - 1 ? 'border-b border-[rgba(237,232,222,0.05)]' : ''
-                          }`}
-                        >
-                          {/* Line value */}
-                          <span
-                            className="text-xs font-mono font-semibold w-14 shrink-0"
-                            style={{ color: line === 0 ? '#a39c8a' : line < 0 ? '#4c8a83' : '#c9902f' }}
-                          >
-                            {formatLine(line)}
-                          </span>
-                          {/* Progress bar */}
-                          <div className="flex-1">
-                            <div className="w-full h-[4px] bg-[#232219] rounded-full overflow-hidden">
-                              <motion.div
-                                initial={{ width: 0 }}
-                                whileInView={{ width: `${Math.min(prob, 100)}%` }}
-                                viewport={{ once: true }}
-                                transition={{ duration: 0.5, ease: 'easeOut', delay: idx * 0.02 }}
-                                className="h-full rounded-full"
-                                style={{ backgroundColor: colors.text }}
-                              />
-                            </div>
-                          </div>
-                          {/* Percentage */}
-                          <span className="text-xs font-mono font-semibold text-[#ece7da] w-10 text-right">
-                            {prob}%
-                          </span>
-                          {/* Confidence badge */}
-                          <div className="w-16 flex justify-end shrink-0">
-                            <span
-                              className="inline-block px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider rounded-[3px]"
-                              style={{
-                                color: colors.text,
-                                backgroundColor: colors.bg,
-                                borderLeft: `3px solid ${colors.borderLeft}`,
-                              }}
-                            >
-                              {rating}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              };
 
               return (
                 <div className="flex flex-col md:flex-row gap-4 p-4">
