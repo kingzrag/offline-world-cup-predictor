@@ -927,16 +927,27 @@ export default function MatchAnalysis({
               const otherTeam   = favoredIsHome ? match.teamB : match.teamA;
               const otherFlag   = favoredIsHome ? flagB : flagA;
 
-              // Build sorted rows for the favored team
-              const favoredRows = Object.entries(ah.lines)
-                .map(([line, val]) => ({
-                  line: parseFloat(line),
-                  lineStr: line,
-                  prob: Math.round((val as number) <= 1 ? (val as number) * 100 : (val as number)),
-                }))
-                .sort((a, b) => b.line - a.line);
+              // Helper to parse line key like "Home -1.5" or "Away +0.25" to a number
+              const parseAHLine = (key: string): number => {
+                const parts = key.trim().split(/\s+/);
+                const lastPart = parts[parts.length - 1];
+                const num = parseFloat(lastPart);
+                return isNaN(num) ? 0 : num;
+              };
 
-              // Other team rows: mirrored line, complement probability
+              // Build sorted rows for the favored team (ascending: e.g. -3.0 to +3.0)
+              const favoredRows = Object.entries(ah.lines)
+                .map(([lineKey, val]) => {
+                  const lineNum = parseAHLine(lineKey);
+                  return {
+                    line: lineNum,
+                    lineStr: lineKey,
+                    prob: Math.round((val as number) <= 1 ? (val as number) * 100 : (val as number)),
+                  };
+                })
+                .sort((a, b) => a.line - b.line);
+
+              // Other team rows: mirrored line, complement probability (sorted descending: e.g. +3.0 to -3.0)
               const otherRows = favoredRows
                 .map(({ line, prob }) => ({
                   line: -line,
