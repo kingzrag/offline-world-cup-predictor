@@ -244,7 +244,6 @@ export default function App() {
   const [sourceMatches, setSourceMatches] = useState<MatchPrediction[]>([]);
   const [isLoadingMatches, setIsLoadingMatches] = useState<boolean>(true);
   const [matchError, setMatchError] = useState<string | null>(null);
-  const [showHistorical, setShowHistorical] = useState<boolean>(false);
 
   // Infinite scrolling state
   const [currentLimit, setCurrentLimit] = useState<number>(30);
@@ -283,7 +282,7 @@ export default function App() {
         try {
           // ── Phase 1: render fixtures instantly (no ML inference) ────────────
           console.log(`[App] Attempt ${attempt} → loading fixtures instantly...`);
-          const fixtures = await loadFixturesInstant(undefined, showHistorical, signal, currentLimit);
+          const fixtures = await loadFixturesInstant(undefined, false, signal, currentLimit);
           if (signal.aborted) return;
 
           console.log(`[App] Attempt ${attempt} succeeded: ${fixtures.length} fixtures rendered instantly.`);
@@ -363,7 +362,7 @@ export default function App() {
     return () => {
       controller.abort();
     };
-  }, [showHistorical, retryTrigger, currentLimit]);
+  }, [retryTrigger, currentLimit]);
 
   // Load more fixtures function
   const loadMoreFixtures = async () => {
@@ -375,7 +374,7 @@ export default function App() {
     try {
       const controller = new AbortController();
       const signal = controller.signal;
-      const fixtures = await loadFixturesInstant(undefined, showHistorical, signal, newLimit);
+      const fixtures = await loadFixturesInstant(undefined, false, signal, newLimit);
       
       setSourceMatches(sortSourceMatches(fixtures));
       setCurrentLimit(newLimit);
@@ -404,7 +403,7 @@ export default function App() {
     try {
       const controller = new AbortController();
       const signal = controller.signal;
-      const fixtures = await loadFixturesInstant(undefined, showHistorical, signal, prefetchLimit);
+      const fixtures = await loadFixturesInstant(undefined, false, signal, prefetchLimit);
       console.log(`[App] Prefetch complete: ${fixtures.length} fixtures ready`);
       // Data is cached in the API layer, ready for instant display
     } catch (err) {
@@ -414,8 +413,6 @@ export default function App() {
 
   const sourceMatchesRef = useRef(sourceMatches);
   sourceMatchesRef.current = sourceMatches;
-  const showHistoricalRef = useRef(showHistorical);
-  showHistoricalRef.current = showHistorical;
 
   // Auto-refresh fixtures: live scores every 15s during live matches, 5min when idle
   useEffect(() => {
@@ -434,7 +431,7 @@ export default function App() {
       try {
         const updated = await refreshFixturesFromApi(
           sourceMatchesRef.current,
-          showHistoricalRef.current
+          false
         );
         setSourceMatches(sortSourceMatches(updated));
         console.info("[App] Full fixture refresh completed");
@@ -848,10 +845,8 @@ export default function App() {
   const getSortedAndFilteredMatches = () => {
     let list = [...sourceMatches];
     
-    // Filter out historical matches if the toggle is OFF
-    if (!showHistorical) {
-      list = list.filter(m => getYear(m) >= 2026);
-    }
+    // Filter out historical matches
+    list = list.filter(m => getYear(m) >= 2026);
     
     if (selectedFilter === 'Live') {
       list = list.filter(m => m.status === 'LIVE');
@@ -2339,8 +2334,8 @@ export default function App() {
               <>
                 {/* STICKY FILTER BAR */}
                 <div className="sticky top-[80px] z-20 bg-black/95 backdrop-blur-md border-b border-zinc-900 py-3 mt-1 px-6 md:px-12 w-full">
-                  <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4 py-1 text-zinc-400 select-none">
-                    <div className="flex items-center overflow-x-auto gap-2.5 scrollbar-none flex-1">
+                  <div className="max-w-7xl mx-auto flex items-center py-1 text-zinc-400 select-none">
+                    <div className="flex items-center overflow-x-auto gap-2.5 scrollbar-none w-full">
                       {[
                         'All Matches',
                         'Live',
@@ -2372,24 +2367,6 @@ export default function App() {
                           </button>
                         );
                       })}
-                    </div>
-                    {/* Toggle Switch */}
-                    <div className="flex items-center justify-between lg:justify-end gap-2 sm:gap-3 shrink-0 bg-zinc-950/60 border border-zinc-900 rounded px-3 sm:px-4 py-2 hover:border-zinc-800 transition duration-300">
-                      <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                        Show Historical
-                      </span>
-                      <button
-                        onClick={() => setShowHistorical(!showHistorical)}
-                        className={`w-8 h-5 sm:w-9 sm:h-5 rounded-full transition-colors duration-200 relative outline-none cursor-pointer ${
-                          showHistorical ? 'bg-green-accent' : 'bg-zinc-800'
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 left-0.5 bg-zinc-100 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full transition-transform duration-200 ${
-                            showHistorical ? 'translate-x-3.5 sm:translate-x-4' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
                     </div>
                   </div>
                 </div>
