@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowLeft, Star, TrendingUp, Shield, Target, Zap, Award, Trophy, Goal, ChartColumn, Clock3, Users, History, Scale, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Star, TrendingUp, Shield, Target, Zap, Award, Trophy, Goal, ChartColumn, Clock3, Users, History, Scale, BarChart3, ChevronDown, ChevronUp, AlertCircle, Ban } from 'lucide-react';
 import { MatchPrediction } from '../types';
 
 interface MatchAnalysisProps {
@@ -10,62 +10,260 @@ interface MatchAnalysisProps {
   drawerTeamLoading?: boolean;
 }
 
-export default function MatchAnalysis({ 
-  match, 
-  onClose, 
+// ── Helper: confidence badge ─────────────────────────────────────────────────
+function ConfidenceBadge({ probability }: { probability: number | null }) {
+  if (probability === null) return <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#232B36] text-[#98A2B3]">N/A</span>;
+  if (probability >= 75) return <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#34D399]/10 text-[#34D399]">Strong</span>;
+  if (probability >= 60) return <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#34D399]/5 text-[#34D399]/80">Good</span>;
+  if (probability >= 45) return <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#F5B301]/10 text-[#F5B301]">Lean</span>;
+  return <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#232B36] text-[#98A2B3]">Avoid</span>;
+}
+
+// ── Helper: progress bar ─────────────────────────────────────────────────────
+function ProgressBar({ value, color = '#34D399' }: { value: number; color?: string }) {
+  return (
+    <div className="w-full h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+      <motion.div
+        initial={{ width: 0 }}
+        whileInView={{ width: `${Math.min(value, 100)}%` }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.7, ease: 'easeOut' }}
+        className="h-full rounded-full"
+        style={{ backgroundColor: color }}
+      />
+    </div>
+  );
+}
+
+// ── Section Header ────────────────────────────────────────────────────────────
+function SectionHeader({ title, subtitle, icon }: { title: string; subtitle?: string; icon?: React.ReactNode }) {
+  return (
+    <div className="mb-5 flex items-center gap-3">
+      {icon && <div className="text-[#4F8CFF]">{icon}</div>}
+      <div>
+        <h2 className="text-base font-semibold text-[#F5F5F5] tracking-tight">{title}</h2>
+        {subtitle && <p className="text-[10px] text-[#98A2B3] font-normal mt-0.5">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ── Outcome Card (for 1X2, Double Chance, DNB, BTTS, To Qualify) ──────────────
+function OutcomeCard({
+  label,
+  probability,
+  highlighted = false,
+  sub,
+}: {
+  label: string;
+  probability: number | null;
+  highlighted?: boolean;
+  sub?: string;
+}) {
+  return (
+    <motion.div
+      whileHover={{ y: -2 }}
+      className={`flex-1 rounded-xl p-4 text-center transition-all duration-200 ${
+        highlighted
+          ? 'bg-[#1E2A1E] border border-[#34D399]/30 shadow-[0_0_16px_rgba(52,211,153,0.08)]'
+          : 'bg-[#1C222C] border border-transparent hover:bg-[#232B36]'
+      }`}
+    >
+      <div className="text-xs text-[#98A2B3] mb-2 font-normal">{label}</div>
+      <div className={`text-2xl font-bold mb-1 tracking-tight ${highlighted ? 'text-[#34D399]' : 'text-[#F5F5F5]'}`}>
+        {probability !== null ? `${probability}%` : 'N/A'}
+      </div>
+      {sub && <div className="text-[10px] text-[#98A2B3] mt-1">{sub}</div>}
+      <div className="mt-2">
+        <ConfidenceBadge probability={probability} />
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Market Row (for Total Goals table-style) ──────────────────────────────────
+function MarketRow({
+  label,
+  probability,
+  borderBottom = true,
+}: {
+  label: string;
+  probability: number | null;
+  borderBottom?: boolean;
+}) {
+  const pct = probability ?? null;
+  return (
+    <div className={`flex items-center gap-4 px-4 py-3 hover:bg-[#1C222C]/60 transition-colors duration-150 ${borderBottom ? 'border-b border-[#1C222C]' : ''}`}>
+      <span className="text-sm text-[#F5F5F5] w-28 font-normal shrink-0">{label}</span>
+      <div className="flex-1">
+        <ProgressBar value={pct ?? 0} color={pct && pct >= 60 ? '#34D399' : pct && pct >= 45 ? '#F5B301' : '#4F8CFF'} />
+      </div>
+      <span className="text-sm font-semibold text-[#F5F5F5] w-10 text-right">{pct !== null ? `${pct}%` : 'N/A'}</span>
+      <div className="w-14 flex justify-end">
+        <ConfidenceBadge probability={pct} />
+      </div>
+    </div>
+  );
+}
+
+// ── Over/Under Row Pair ───────────────────────────────────────────────────────
+function OverUnderRowPair({
+  line,
+  over,
+  under,
+  isLast = false,
+}: {
+  line: string;
+  over: number | null;
+  under: number | null;
+  isLast?: boolean;
+}) {
+  return (
+    <>
+      <MarketRow label={`Over ${line}`} probability={over} borderBottom />
+      <MarketRow label={`Under ${line}`} probability={under} borderBottom={!isLast} />
+      {!isLast && <div className="h-px bg-[#232B36] mx-4" />}
+    </>
+  );
+}
+
+// ── Collapsible Section ───────────────────────────────────────────────────────
+function CollapsibleSection({
+  title,
+  subtitle,
+  icon,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-[#151A22] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#1C222C]/40 transition-colors duration-150"
+      >
+        <div className="flex items-center gap-3">
+          {icon && <div className="text-[#4F8CFF]">{icon}</div>}
+          <div className="text-left">
+            <div className="text-sm font-semibold text-[#F5F5F5]">{title}</div>
+            {subtitle && <div className="text-[10px] text-[#98A2B3] mt-0.5">{subtitle}</div>}
+          </div>
+        </div>
+        {open ? (
+          <ChevronUp className="w-4 h-4 text-[#98A2B3] shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-[#98A2B3] shrink-0" />
+        )}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="content"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-[#1C222C]">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Form Badge ────────────────────────────────────────────────────────────────
+function FormBadge({ result }: { result: string }) {
+  const colors = {
+    W: 'bg-[#34D399]/10 text-[#34D399]',
+    D: 'bg-[#1D222A] text-[#98A2B3]',
+    L: 'bg-[#EF4444]/10 text-[#EF4444]',
+  };
+  const labels = { W: 'Win', D: 'Draw', L: 'Loss' };
+  return (
+    <span
+      className={`w-7 h-7 flex items-center justify-center rounded text-xs font-bold ${colors[result as keyof typeof colors]}`}
+      title={labels[result as keyof typeof labels]}
+    >
+      {result}
+    </span>
+  );
+}
+
+// ── section motion wrapper ────────────────────────────────────────────────────
+function AnimSection({ id, children, className = '' }: { id?: string; children: React.ReactNode; className?: string }) {
+  return (
+    <motion.section
+      id={id}
+      className={className}
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.45 }}
+    >
+      {children}
+    </motion.section>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+export default function MatchAnalysis({
+  match,
+  onClose,
   onBack,
-  drawerTeamLoading = false
+  drawerTeamLoading = false,
 }: MatchAnalysisProps) {
   const [activeSection, setActiveSection] = useState('overview');
 
-  // Helper functions extracted from App.tsx
   const getFlag = (teamName: string) => {
     const flagMap: { [key: string]: string } = {
-      'Argentina': '🇦🇷', 'Australia': '🇦🇺', 'Belgium': '🇧🇪', 'Brazil': '🇧🇷',
-      'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'France': '🇫🇷', 'Germany': '🇩🇪', 'Italy': '🇮🇹',
-      'Netherlands': '🇳🇱', 'Portugal': '🇵🇹', 'Spain': '🇪🇸', 'USA': '🇺🇸',
-      'Uruguay': '🇺🇾', 'Croatia': '🇭🇷', 'Denmark': '🇩🇰', 'Mexico': '🇲🇽',
-      'Japan': '🇯🇵', 'South Korea': '🇰🇷', 'Morocco': '🇲🇦', 'Switzerland': '🇨🇭',
-      'Poland': '🇵🇱', 'Senegal': '🇸🇳', 'Ecuador': '🇪🇨', 'Wales': '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
-      'Iran': '🇮🇷', 'Saudi Arabia': '🇸🇦', 'Tunisia': '🇹🇳', 'Canada': '🇨🇦',
-      'Ghana': '🇬🇭', 'Cameroon': '🇨🇲', 'Serbia': '🇷🇸', 'Qatar': '🇶🇦',
-      'Egypt': '🇪🇬', 'China': '🇨🇳', 'South Africa': '🇿🇦', 'Nigeria': '🇳🇬',
-      'Ivory Coast': '🇨🇮', 'Algeria': '🇩🇿', 'Russia': '🇷🇺', 'Turkey': '🇹🇷',
-      'Greece': '🇬🇷', 'Sweden': '🇸🇪', 'Norway': '🇳🇴', 'Colombia': '🇨🇴',
-      'Chile': '🇨🇱', 'Peru': '🇵🇪', 'Paraguay': '🇵🇾', 'Bolivia': '🇧🇴',
-      'Venezuela': '🇻🇪', 'Jamaica': '🇯🇲', 'Costa Rica': '🇨🇷', 'Panama': '🇵🇦',
-      'Honduras': '🇭🇳', 'El Salvador': '🇸🇻', 'Guatemala': '🇬🇹', 'New Zealand': '🇳🇿',
-      'Iceland': '🇮🇸', 'Finland': '🇫🇮', 'Republic of Ireland': '🇮🇪', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
-      'Ukraine': '🇺🇦', 'Czech Republic': '🇨🇿', 'Slovakia': '🇸🇰', 'Austria': '🇦🇹',
-      'Hungary': '🇭🇺', 'Romania': '🇷🇴', 'Bulgaria': '🇧🇬', 'Belarus': '🇧🇾',
-      'Slovenia': '🇸🇮', 'North Macedonia': '🇲🇰', 'Albania': '🇦🇱', 'Bosnia': '🇧🇦',
-      'Montenegro': '🇲🇪', 'Kosovo': '🇽🇰', 'Lithuania': '🇱🇹', 'Latvia': '🇱🇻',
-      'Estonia': '🇪🇪', 'Luxembourg': '🇱🇺', 'Cyprus': '🇨🇾', 'Malta': '🇲🇹',
-      'Armenia': '🇦🇲', 'Azerbaijan': '🇦🇿', 'Georgia': '🇬🇪', 'Kazakhstan': '🇰🇿',
-      'Uzbekistan': '🇺🇿', 'Kyrgyzstan': '🇰🇬', 'Tajikistan': '🇹🇯', 'Turkmenistan': '🇹🇲',
-      'Afghanistan': '🇦🇫', 'Pakistan': '🇵🇰', 'India': '🇮🇳', 'Bangladesh': '🇧🇩',
-      'Sri Lanka': '🇱🇰', 'Nepal': '🇳🇵', 'Bhutan': '🇧🇹', 'Maldives': '🇲🇻',
-      'Thailand': '🇹🇭', 'Vietnam': '🇻🇳', 'Cambodia': '🇰🇭', 'Laos': '🇱🇦',
-      'Myanmar': '🇲🇲', 'Malaysia': '🇲🇾', 'Singapore': '🇸🇬', 'Indonesia': '🇮🇩',
-      'Philippines': '🇵🇭', 'Brunei': '🇧🇳', 'East Timor': '🇹🇱', 'North Korea': '🇰🇵',
-      'South Sudan': '🇸🇸', 'Ethiopia': '🇪🇹', 'Kenya': '🇰🇪', 'Tanzania': '🇹🇿',
-      'Uganda': '🇺🇬', 'Rwanda': '🇷🇼', 'Burundi': '🇧🇮', 'DR Congo': '🇨🇩',
-      'Congo': '🇨🇬', 'Gabon': '🇬🇦', 'Angola': '🇦🇴',
-      'Mozambique': '🇲🇿', 'Zambia': '🇿🇲', 'Zimbabwe': '🇿🇼', 'Botswana': '🇧🇼',
-      'Namibia': '🇳🇦', 'Lesotho': '🇱🇸', 'Eswatini': '🇸🇿',
-      'Madagascar': '🇲🇬', 'Mauritius': '🇲🇺', 'Seychelles': '🇸🇨', 'Comoros': '🇰🇲',
-      'Libya': '🇱🇾', 'Mauritania': '🇲🇷', 'Western Sahara': '🇪🇭', 'Mali': '🇲🇱', 'Niger': '🇳🇪',
-      'Chad': '🇹🇩', 'Sudan': '🇸🇩', 'Eritrea': '🇪🇷', 'Djibouti': '🇩🇯',
-      'Somalia': '🇸🇴', 'Central African Republic': '🇨🇫', 'Equatorial Guinea': '🇬🇶',
-      'Sao Tome and Principe': '🇸🇹', 'Gambia': '🇬🇲', 'Guinea-Bissau': '🇬🇼',
-      'Guinea': '🇬🇳', 'Sierra Leone': '🇸🇱', 'Liberia': '🇱🇷'
+      Argentina: '🇦🇷', Australia: '🇦🇺', Belgium: '🇧🇪', Brazil: '🇧🇷',
+      England: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', France: '🇫🇷', Germany: '🇩🇪', Italy: '🇮🇹',
+      Netherlands: '🇳🇱', Portugal: '🇵🇹', Spain: '🇪🇸', USA: '🇺🇸',
+      Uruguay: '🇺🇾', Croatia: '🇭🇷', Denmark: '🇩🇰', Mexico: '🇲🇽',
+      Japan: '🇯🇵', 'South Korea': '🇰🇷', Morocco: '🇲🇦', Switzerland: '🇨🇭',
+      Poland: '🇵🇱', Senegal: '🇸🇳', Ecuador: '🇪🇨', Wales: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+      Iran: '🇮🇷', 'Saudi Arabia': '🇸🇦', Tunisia: '🇹🇳', Canada: '🇨🇦',
+      Ghana: '🇬🇭', Cameroon: '🇨🇲', Serbia: '🇷🇸', Qatar: '🇶🇦',
+      Egypt: '🇪🇬', China: '🇨🇳', 'South Africa': '🇿🇦', Nigeria: '🇳🇬',
+      'Ivory Coast': '🇨🇮', Algeria: '🇩🇿', Russia: '🇷🇺', Turkey: '🇹🇷',
+      Greece: '🇬🇷', Sweden: '🇸🇪', Norway: '🇳🇴', Colombia: '🇨🇴',
+      Chile: '🇨🇱', Peru: '🇵🇪', Paraguay: '🇵🇾', Bolivia: '🇧🇴',
+      Venezuela: '🇻🇪', Jamaica: '🇯🇲', 'Costa Rica': '🇨🇷', Panama: '🇵🇦',
+      Honduras: '🇭🇳', 'El Salvador': '🇸🇻', Guatemala: '🇬🇹', 'New Zealand': '🇳🇿',
+      Iceland: '🇮🇸', Finland: '🇫🇮', 'Republic of Ireland': '🇮🇪', Scotland: '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+      Ukraine: '🇺🇦', 'Czech Republic': '🇨🇿', Slovakia: '🇸🇰', Austria: '🇦🇹',
+      Hungary: '🇭🇺', Romania: '🇷🇴', Bulgaria: '🇧🇬', Belarus: '🇧🇾',
+      Slovenia: '🇸🇮', 'North Macedonia': '🇲🇰', Albania: '🇦🇱', Bosnia: '🇧🇦',
+      Montenegro: '🇲🇪', Kosovo: '🇽🇰', Lithuania: '🇱🇹', Latvia: '🇱🇻',
+      Estonia: '🇪🇪', Luxembourg: '🇱🇺', Cyprus: '🇨🇾', Malta: '🇲🇹',
+      Armenia: '🇦🇲', Azerbaijan: '🇦🇿', Georgia: '🇬🇪', Kazakhstan: '🇰🇿',
+      Uzbekistan: '🇺🇿', Kyrgyzstan: '🇰🇬', Tajikistan: '🇹🇯', Turkmenistan: '🇹🇲',
+      Afghanistan: '🇦🇫', Pakistan: '🇵🇰', India: '🇮🇳', Bangladesh: '🇧🇩',
+      'Sri Lanka': '🇱🇰', Nepal: '🇳🇵', Bhutan: '🇧🇹', Maldives: '🇲🇻',
+      Thailand: '🇹🇭', Vietnam: '🇻🇳', Cambodia: '🇰🇭', Laos: '🇱🇦',
+      Myanmar: '🇲🇲', Malaysia: '🇲🇾', Singapore: '🇸🇬', Indonesia: '🇮🇩',
+      Philippines: '🇵🇭', Brunei: '🇧🇳', 'East Timor': '🇹🇱', 'North Korea': '🇰🇵',
+      'South Sudan': '🇸🇸', Ethiopia: '🇪🇹', Kenya: '🇰🇪', Tanzania: '🇹🇿',
+      Uganda: '🇺🇬', Rwanda: '🇷🇼', Burundi: '🇧🇮', 'DR Congo': '🇨🇩',
+      Congo: '🇨🇬', Gabon: '🇬🇦', Angola: '🇦🇴',
+      Mozambique: '🇲🇿', Zambia: '🇿🇲', Zimbabwe: '🇿🇼', Botswana: '🇧🇼',
+      Namibia: '🇳🇦', Lesotho: '🇱🇸', Eswatini: '🇸🇿',
+      Madagascar: '🇲🇬', Mauritius: '🇲🇺', Seychelles: '🇸🇨', Comoros: '🇰🇲',
+      Libya: '🇱🇾', Mauritania: '🇲🇷', 'Western Sahara': '🇪🇭', Mali: '🇲🇱', Niger: '🇳🇪',
+      Chad: '🇹🇩', Sudan: '🇸🇩', Eritrea: '🇪🇷', Djibouti: '🇩🇯',
+      Somalia: '🇸🇴', 'Central African Republic': '🇨🇫', 'Equatorial Guinea': '🇬🇶',
+      'Sao Tome and Principe': '🇸🇹', Gambia: '🇬🇲', 'Guinea-Bissau': '🇬🇼',
+      Guinea: '🇬🇳', 'Sierra Leone': '🇸🇱', Liberia: '🇱🇷',
     };
     return flagMap[teamName] || '🏳️';
-  };
-
-  const formatXG = (xg: number | undefined | null) => {
-    if (xg === null || xg === undefined) return 'N/A';
-    return xg.toFixed(2);
   };
 
   const probA = match.probA ?? 0;
@@ -78,17 +276,50 @@ export default function MatchAnalysis({
   const flagA = getFlag(match.teamA);
   const flagB = getFlag(match.teamB);
 
+  // Which outcome is the top pick
+  const topProbability = Math.max(probA, probB, probD);
+  const isKnockout = match.stage?.toLowerCase().includes('knockout') ||
+    match.stage?.toLowerCase().includes('round of') ||
+    match.stage?.toLowerCase().includes('quarter') ||
+    match.stage?.toLowerCase().includes('semi') ||
+    match.stage?.toLowerCase().includes('final') ||
+    !!match.qualifyProbA;
+
+  // Double Chance computed values (raw probabilities are 0-1 or already 0-100)
+  const dc1x = match.doubleChanceMarket?.['1x'] != null ? Math.round((match.doubleChanceMarket['1x'] <= 1 ? match.doubleChanceMarket['1x'] * 100 : match.doubleChanceMarket['1x'])) : null;
+  const dc12 = match.doubleChanceMarket?.['12'] != null ? Math.round((match.doubleChanceMarket['12'] <= 1 ? match.doubleChanceMarket['12'] * 100 : match.doubleChanceMarket['12'])) : null;
+  const dcX2 = match.doubleChanceMarket?.['x2'] != null ? Math.round((match.doubleChanceMarket['x2'] <= 1 ? match.doubleChanceMarket['x2'] * 100 : match.doubleChanceMarket['x2'])) : null;
+
+  // DNB
+  const dnbHome = match.drawNoBetMarket?.home != null ? Math.round((match.drawNoBetMarket.home <= 1 ? match.drawNoBetMarket.home * 100 : match.drawNoBetMarket.home)) : null;
+  const dnbAway = match.drawNoBetMarket?.away != null ? Math.round((match.drawNoBetMarket.away <= 1 ? match.drawNoBetMarket.away * 100 : match.drawNoBetMarket.away)) : null;
+
+  // BTTS
+  const bttsYes = match.bttsMarket?.yes != null ? Math.round((match.bttsMarket.yes <= 1 ? match.bttsMarket.yes * 100 : match.bttsMarket.yes)) : null;
+  const bttsNo = match.bttsMarket?.no != null ? Math.round((match.bttsMarket.no <= 1 ? match.bttsMarket.no * 100 : match.bttsMarket.no)) : null;
+
+  // Over/Under helper
+  const ouPct = (line: string, side: 'over' | 'under'): number | null => {
+    const val = match.overUnder?.[line as keyof typeof match.overUnder]?.[side];
+    if (val == null) return null;
+    return Math.round(val <= 1 ? val * 100 : val);
+  };
+
+  // Asian Total lines
+  const asianTotalLines = ['1.25', '1.5', '1.75', '2', '2.25', '2.5', '2.75', '3'];
+
+  // Qualify probs
+  const qualifyA = match.qualifyProbA != null ? Math.round(match.qualifyProbA) : null;
+  const qualifyB = match.qualifyProbB != null ? Math.round(match.qualifyProbB) : null;
+
   const navItems = [
     { id: 'overview', label: 'Overview' },
-    { id: 'markets', label: 'Markets' },
+    { id: 'main-markets', label: 'Main Markets' },
     { id: 'goals', label: 'Goals' },
     { id: 'handicap', label: 'Handicap' },
     { id: 'scores', label: 'Scores' },
     { id: 'statistics', label: 'Statistics' },
-    { id: 'model', label: 'Model' },
-    { id: 'history', label: 'History' },
-    { id: 'squad', label: 'Squad' },
-    ...(match.teamGoals ? [{ id: 'team-goals', label: 'Team Goals' }] : []),
+    { id: 'team-news', label: 'Team News' },
   ];
 
   const scrollToSection = (sectionId: string) => {
@@ -106,31 +337,25 @@ export default function MatchAnalysis({
       exit={{ opacity: 0 }}
       className="fixed inset-0 bg-[#0E1117] z-50 overflow-y-auto"
     >
-      {/* Back Button */}
+      {/* Top bar — Back button only */}
       <div className="sticky top-0 bg-[#0E1117]/95 backdrop-blur-xl border-b border-white/5 z-50">
-        <div className="max-w-[1380px] mx-auto px-10 py-3 flex items-center gap-4">
+        <div className="max-w-[1380px] mx-auto px-6 py-3 flex items-center gap-4">
           {onBack && (
             <button
               onClick={onBack}
               className="flex items-center gap-2 text-[#98A2B3] hover:text-[#F5F5F5] transition-colors text-sm font-normal"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Back to Matches</span>
+              <span>← Back to Matches</span>
             </button>
           )}
-          <button
-            onClick={onClose}
-            className="ml-auto p-2 text-[#98A2B3] hover:text-[#F5F5F5] hover:bg-[#181C22] rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
       </div>
 
       {/* Sticky Navigation */}
-      <div className="sticky top-[60px] bg-[#0E1117]/95 backdrop-blur-xl border-b border-white/5 z-40">
-        <div className="max-w-[1380px] mx-auto px-10">
-          <nav className="flex gap-6 overflow-x-auto py-3">
+      <div className="sticky top-[49px] bg-[#0E1117]/95 backdrop-blur-xl border-b border-white/5 z-40">
+        <div className="max-w-[1380px] mx-auto px-6">
+          <nav className="flex gap-6 overflow-x-auto py-3 scrollbar-hide">
             {navItems.map((item) => (
               <button
                 key={item.id}
@@ -147,7 +372,7 @@ export default function MatchAnalysis({
                     layoutId="activeNav"
                     className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#4F8CFF] rounded-full"
                     initial={false}
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                   />
                 )}
               </button>
@@ -156,1143 +381,826 @@ export default function MatchAnalysis({
         </div>
       </div>
 
-      <div className="max-w-[1380px] mx-auto px-10 py-6">
-        {/* Hero Section - Ultra Compact */}
-        <section id="section-overview" className="mb-8">
-          <div className="bg-[#151A22] rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
-            {/* Match Header Row */}
-            <div className="flex items-center justify-between mb-3">
+      <div className="max-w-[1380px] mx-auto px-6 py-6 space-y-8">
+
+        {/* ── HERO SECTION ─────────────────────────────────────────────────── */}
+        <AnimSection id="section-overview">
+          <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+            {/* Teams header */}
+            <div className="flex items-center justify-between mb-4">
+              {/* Team A */}
               <div className="flex items-center gap-3">
-                <span className="text-2xl">{flagA}</span>
+                <span className="text-3xl">{flagA}</span>
                 <div>
-                  <h1 className="text-lg font-semibold text-[#F5F5F5] tracking-tight">{match.teamA}</h1>
+                  <h1 className="text-xl font-bold text-[#F5F5F5] tracking-tight">{match.teamA}</h1>
                   <p className="text-[10px] text-[#98A2B3]">{match.teamACode}</p>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="text-xl font-bold text-[#F5F5F5] tracking-tight"
-                  >
-                    {probA}%
-                  </motion.div>
-                </div>
-                <div className="text-center">
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                    className="text-sm font-bold text-[#98A2B3]/40 tracking-tight"
-                  >
-                    {probD}%
-                  </motion.div>
-                </div>
-                <div className="text-center">
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="text-xl font-bold text-[#F5F5F5] tracking-tight"
-                  >
-                    {probB}%
-                  </motion.div>
-                </div>
+
+              {/* Center: probabilities */}
+              <div className="flex items-center gap-5 text-center">
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                  <div className="text-2xl font-bold text-[#F5F5F5]">{probA}%</div>
+                  <div className="text-[10px] text-[#98A2B3] mt-0.5">Home</div>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                  <div className="text-base font-bold text-[#98A2B3]/60">{probD}%</div>
+                  <div className="text-[10px] text-[#98A2B3]/60 mt-0.5">Draw</div>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                  <div className="text-2xl font-bold text-[#F5F5F5]">{probB}%</div>
+                  <div className="text-[10px] text-[#98A2B3] mt-0.5">Away</div>
+                </motion.div>
               </div>
-              
+
+              {/* Team B */}
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <h1 className="text-lg font-semibold text-[#F5F5F5] tracking-tight">{match.teamB}</h1>
+                  <h1 className="text-xl font-bold text-[#F5F5F5] tracking-tight">{match.teamB}</h1>
                   <p className="text-[10px] text-[#98A2B3]">{match.teamBCode}</p>
                 </div>
-                <span className="text-2xl">{flagB}</span>
+                <span className="text-3xl">{flagB}</span>
               </div>
             </div>
 
-            {/* Probability Bar */}
-            <div className="h-1.5 bg-[#0E1117] rounded-full overflow-hidden flex mb-3">
-              <motion.div 
+            {/* Probability bar */}
+            <div className="h-1.5 bg-[#0E1117] rounded-full overflow-hidden flex mb-4">
+              <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${probA}%` }}
-                transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
-                className={`h-full ${probA > probB ? 'bg-[#34D399]' : 'bg-[#232B36]'} rounded-l-full`}
+                transition={{ duration: 0.8, delay: 0.3, ease: 'easeOut' }}
+                className={`h-full ${probA > probB ? 'bg-[#34D399]' : 'bg-[#4F8CFF]'} rounded-l-full`}
               />
-              <motion.div 
+              <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${probD}%` }}
-                transition={{ duration: 0.8, delay: 0.35, ease: "easeOut" }}
+                transition={{ duration: 0.8, delay: 0.35, ease: 'easeOut' }}
                 className="h-full bg-[#232B36]"
               />
-              <motion.div 
+              <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${probB}%` }}
-                transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-                className={`h-full ${probB > probA ? 'bg-[#34D399]' : 'bg-[#232B36]'} rounded-r-full`}
+                transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' }}
+                className={`h-full ${probB > probA ? 'bg-[#34D399]' : 'bg-[#4F8CFF]'} rounded-r-full`}
               />
             </div>
 
-            {/* Match Info Row */}
-            <div className="flex items-center justify-between text-[10px] text-[#98A2B3]">
+            {/* Meta info grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="bg-[#1C222C] rounded-lg px-3 py-2.5">
+                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-1">Predicted Score</div>
+                <div className="text-sm font-semibold text-[#F5F5F5]">{match.mostLikelyScore || 'N/A'}</div>
+              </div>
+              <div className="bg-[#1C222C] rounded-lg px-3 py-2.5">
+                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-1">Expected Goals (xG)</div>
+                <div className="text-sm font-semibold text-[#F5F5F5]">
+                  {xGA?.toFixed(2) || '—'} – {xGB?.toFixed(2) || '—'}
+                </div>
+              </div>
+              <div className="bg-[#1C222C] rounded-lg px-3 py-2.5">
+                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-1">Confidence</div>
+                <div className={`text-sm font-semibold ${
+                  match.confidence === 'High' ? 'text-[#34D399]' :
+                  match.confidence === 'Medium' ? 'text-[#F5B301]' : 'text-[#98A2B3]'
+                }`}>{match.confidence || 'N/A'}</div>
+              </div>
+              <div className="bg-[#1C222C] rounded-lg px-3 py-2.5">
+                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-1">Top Pick</div>
+                <div className="text-sm font-semibold text-[#4F8CFF]">{match.prediction || 'N/A'}</div>
+              </div>
+            </div>
+
+            {/* Tournament + Venue */}
+            <div className="flex items-center justify-between text-[11px] text-[#98A2B3]">
               <div className="flex items-center gap-2">
                 {match.status === 'LIVE' && (
                   <span className="flex items-center gap-1 text-[#EF4444] font-semibold">
-                    <span className="relative flex h-1 w-1">
+                    <span className="relative flex h-1.5 w-1.5">
                       <span className="absolute inline-flex h-full w-full rounded-full bg-[#EF4444] animate-ping" />
-                      <span className="relative inline-flex rounded-full h-1 w-1 bg-[#EF4444]" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#EF4444]" />
                     </span>
                     LIVE {match.minute}'
                   </span>
                 )}
+                <Trophy className="w-3.5 h-3.5 text-[#F5B301]" />
                 <span className="text-[#34D399]">{match.stage}</span>
-                <span>•</span>
-                <span>{match.venue || 'TBD'}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <span>⭐</span>
-                <span className="text-[#F5F5F5] font-semibold">Top Pick:</span>
-                <span className="text-[#4F8CFF]">{match.prediction || 'N/A'}</span>
-              </div>
+              {match.venue && (
+                <div className="flex items-center gap-1">
+                  <span>🏟</span>
+                  <span>{match.venue}</span>
+                </div>
+              )}
             </div>
           </div>
-        </section>
+        </AnimSection>
 
-        {/* Key Insights - Horizontal Pills */}
-        <section className="mb-6">
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
-              <Goal className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-              <span className="text-[10px] text-[#98A2B3]">xG</span>
-              <span className="text-xs font-semibold text-[#F5F5F5]">{totalXG?.toFixed(2) || 'N/A'}</span>
-            </div>
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
-              <Target className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-              <span className="text-[10px] text-[#98A2B3]">BTTS</span>
-              <span className="text-xs font-semibold text-[#F5F5F5]">{match.bttsMarket?.yes ? Math.round(match.bttsMarket.yes * 100) : 'N/A'}%</span>
-            </div>
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
-              <Trophy className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-              <span className="text-[10px] text-[#98A2B3]">{probB > probA ? match.teamB : match.teamA}</span>
-              <span className="text-xs font-semibold text-[#34D399]">Favoured</span>
-            </div>
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
-              <TrendingUp className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-              <span className="text-[10px] text-[#98A2B3]">Over 2.5</span>
-              <span className="text-xs font-semibold text-[#F5F5F5]">{match.overUnder?.['2.5']?.over ? Math.round(match.overUnder['2.5'].over * 100) : 'N/A'}%</span>
-            </div>
-            <div className="flex-shrink-0 bg-[#1C222C] rounded-lg px-4 py-2 shadow-[0_4px_18px_rgba(0,0,0,0.16)] flex items-center gap-2 hover:bg-[#232B36] transition-colors duration-250">
-              <Scale className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-              <span className="text-[10px] text-[#98A2B3]">Value</span>
-              <span className="text-xs font-semibold text-[#4F8CFF]">Strong</span>
+        {/* ── MAIN MARKETS ─────────────────────────────────────────────────── */}
+        <AnimSection id="section-main-markets" className="space-y-6">
+
+          {/* 1. 1X2 Prediction */}
+          <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+            <SectionHeader
+              title="1X2 Prediction"
+              subtitle="Match Result Probability"
+              icon={<Trophy className="w-4 h-4" />}
+            />
+            <div className="flex gap-3">
+              <OutcomeCard
+                label={match.teamA}
+                probability={probA}
+                highlighted={probA === topProbability}
+              />
+              <OutcomeCard
+                label="Draw"
+                probability={probD}
+                highlighted={probD === topProbability}
+              />
+              <OutcomeCard
+                label={match.teamB}
+                probability={probB}
+                highlighted={probB === topProbability}
+              />
             </div>
           </div>
-        </section>
 
-        {/* Featured Prediction + Summary Cards */}
-        <section className="mb-8">
-          <div className="grid grid-cols-4 gap-4">
-            {/* Large Featured Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="col-span-2"
-              whileHover={{ y: -2 }}
-            >
-              <div className="bg-[#222933] rounded-xl p-6 shadow-[0_4px_18px_rgba(0,0,0,0.16)] h-full border-t-2 border-[#F5B301] hover:shadow-[0_6px_24px_rgba(0,0,0,0.2)] transition-shadow duration-250">
-                <div className="flex items-center gap-2 mb-5">
-                  <Trophy className="w-4 h-4 text-[#F5B301]" />
-                  <span className="text-xs font-semibold text-[#98A2B3] uppercase tracking-wider">Model Pick</span>
-                </div>
-                <div className="text-3xl font-bold text-[#F5F5F5] mb-3 tracking-tight">{match.prediction || 'N/A'}</div>
-                <div className="text-2xl font-semibold text-[#98A2B3] mb-4 tracking-tight">{Math.max(probA, probB, probD)}%</div>
-                <div className="flex items-center gap-2 mb-6">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-[#34D399]" />
-                  </span>
-                  <span className="text-xs text-[#98A2B3] font-normal">
-                    {match.confidence === 'High' ? 'Elite Confidence' : match.confidence === 'Medium' ? 'High Confidence' : 'Moderate Confidence'}
-                  </span>
-                </div>
-                <div className="mt-auto pt-4 border-t border-[#2A323E] flex items-center gap-2">
-                  <Trophy className="w-3 h-3 text-[#F5B301]" />
-                  <span className="text-[10px] text-[#98A2B3] font-normal">Updated just now</span>
-                </div>
+          {/* 2. To Qualify — knockout only */}
+          {isKnockout && (qualifyA !== null || qualifyB !== null) && (
+            <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+              <SectionHeader
+                title="To Qualify"
+                subtitle="Knockout Advancement Probability"
+                icon={<Award className="w-4 h-4" />}
+              />
+              <div className="flex gap-3">
+                <OutcomeCard
+                  label={match.teamA}
+                  probability={qualifyA}
+                  highlighted={(qualifyA ?? 0) >= (qualifyB ?? 0)}
+                />
+                <OutcomeCard
+                  label={match.teamB}
+                  probability={qualifyB}
+                  highlighted={(qualifyB ?? 0) > (qualifyA ?? 0)}
+                />
               </div>
-            </motion.div>
+            </div>
+          )}
 
-            {/* Smaller Cards */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-              className="col-span-1"
-            >
-              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] h-full hover:bg-[#232B36] transition-colors duration-250">
-                <div className="flex items-center gap-2 mb-2">
-                  <Goal className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">xG</span>
-                </div>
-                <div className="text-xl font-semibold text-[#F5F5F5]">{totalXG?.toFixed(2) || 'N/A'}</div>
+          {/* 3. Double Chance */}
+          {(dc1x !== null || dc12 !== null || dcX2 !== null) && (
+            <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+              <SectionHeader
+                title="Double Chance"
+                subtitle="Combined Match Result Probability"
+                icon={<Shield className="w-4 h-4" />}
+              />
+              <div className="flex gap-3">
+                <OutcomeCard
+                  label={`${match.teamA} or Draw`}
+                  probability={dc1x}
+                  highlighted={dc1x !== null && dc1x === Math.max(dc1x ?? 0, dc12 ?? 0, dcX2 ?? 0)}
+                />
+                <OutcomeCard
+                  label={`${match.teamA} or ${match.teamB}`}
+                  probability={dc12}
+                  highlighted={dc12 !== null && dc12 === Math.max(dc1x ?? 0, dc12 ?? 0, dcX2 ?? 0)}
+                />
+                <OutcomeCard
+                  label={`Draw or ${match.teamB}`}
+                  probability={dcX2}
+                  highlighted={dcX2 !== null && dcX2 === Math.max(dc1x ?? 0, dc12 ?? 0, dcX2 ?? 0)}
+                />
               </div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="col-span-1"
-            >
-              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] h-full hover:bg-[#232B36] transition-colors duration-250">
-                <div className="flex items-center gap-2 mb-2">
-                  <ChartColumn className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Prediction</span>
-                </div>
-                <div className="text-xl font-semibold text-[#F5F5F5]">{match.mostLikelyScore || 'N/A'}</div>
+            </div>
+          )}
+
+          {/* 4. Draw No Bet */}
+          {(dnbHome !== null || dnbAway !== null) && (
+            <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+              <SectionHeader
+                title="Draw No Bet"
+                subtitle="Win probability excluding draw scenarios"
+                icon={<Scale className="w-4 h-4" />}
+              />
+              <div className="flex gap-3">
+                <OutcomeCard
+                  label={match.teamA}
+                  probability={dnbHome}
+                  highlighted={(dnbHome ?? 0) >= (dnbAway ?? 0)}
+                />
+                <OutcomeCard
+                  label={match.teamB}
+                  probability={dnbAway}
+                  highlighted={(dnbAway ?? 0) > (dnbHome ?? 0)}
+                />
               </div>
-            </motion.div>
+            </div>
+          )}
+
+          {/* 5. Both Teams To Score */}
+          {(bttsYes !== null || bttsNo !== null) && (
+            <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+              <SectionHeader
+                title="Both Teams To Score"
+                subtitle="BTTS Market Probability"
+                icon={<Target className="w-4 h-4" />}
+              />
+              <div className="flex gap-3">
+                <OutcomeCard
+                  label="Yes"
+                  probability={bttsYes}
+                  highlighted={(bttsYes ?? 0) >= (bttsNo ?? 0)}
+                />
+                <OutcomeCard
+                  label="No"
+                  probability={bttsNo}
+                  highlighted={(bttsNo ?? 0) > (bttsYes ?? 0)}
+                />
+              </div>
+            </div>
+          )}
+
+        </AnimSection>
+
+        {/* ── GOALS ─────────────────────────────────────────────────────────── */}
+        <AnimSection id="section-goals" className="space-y-6">
+
+          {/* 6. Total Goals */}
+          <div className="bg-[#151A22] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
+            <div className="px-5 pt-5 pb-4">
+              <SectionHeader
+                title="Total Goals"
+                subtitle="Over / Under Probability"
+                icon={<Goal className="w-4 h-4" />}
+              />
+            </div>
+            <div className="border-t border-[#1C222C]">
+              {(['0.5', '1.5', '2.5', '3.5', '4.5'] as const).map((line, i, arr) => (
+                <React.Fragment key={line}>
+                  <OverUnderRowPair
+                    line={line}
+                    over={ouPct(line, 'over')}
+                    under={ouPct(line, 'under')}
+                    isLast={i === arr.length - 1}
+                  />
+                </React.Fragment>
+              ))}
+            </div>
           </div>
-        </section>
 
-        {/* Markets Section */}
-        <motion.section 
-          id="section-markets" 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <SectionHeader title="Betting Markets" subtitle="Probability-based market analysis" />
-          
-          <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[#1C222C] border-b border-[#232B36]">
-                  <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Market</th>
-                  <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Probability</th>
-                  <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Strength</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamACode} or Draw</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.doubleChanceMarket?.['1x'] ? Math.round(match.doubleChanceMarket['1x'] * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.doubleChanceMarket?.['1x'] ? Math.round(match.doubleChanceMarket['1x'] * 100) : 0}%` }}
-                        />
+          {/* Team Goals */}
+          {match.teamGoals && (
+            <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+              <SectionHeader
+                title="Team Goals"
+                subtitle="Individual team goal probability"
+                icon={<Goal className="w-4 h-4" />}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Home */}
+                <div className="bg-[#1C222C] rounded-lg p-4 space-y-3">
+                  <div className="text-xs font-semibold text-[#F5F5F5] mb-3">{match.teamA} Goals</div>
+                  {[
+                    { label: 'Over 0.5', val: match.teamGoals.home.over_0_5 },
+                    { label: 'Over 1.5', val: match.teamGoals.home.over_1_5 },
+                    { label: 'Over 2.5', val: match.teamGoals.home.over_2_5 },
+                  ].map(({ label, val }) => {
+                    const pct = val != null ? Math.round(val <= 1 ? val * 100 : val) : null;
+                    return (
+                      <div key={label} className="flex items-center gap-3">
+                        <span className="text-xs text-[#98A2B3] w-16 shrink-0">{label}</span>
+                        <div className="flex-1">
+                          <ProgressBar value={pct ?? 0} />
+                        </div>
+                        <span className="text-xs font-semibold text-[#F5F5F5] w-8 text-right">{pct !== null ? `${pct}%` : 'N/A'}</span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.doubleChanceMarket?.['1x'] || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.doubleChanceMarket?.['1x'] || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.doubleChanceMarket?.['1x'] || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.doubleChanceMarket?.['1x'] || 0) >= 75 ? 'Strong' : (match.doubleChanceMarket?.['1x'] || 0) >= 60 ? 'Good' : (match.doubleChanceMarket?.['1x'] || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamBCode} or Draw</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.doubleChanceMarket?.['x2'] ? Math.round(match.doubleChanceMarket['x2'] * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.doubleChanceMarket?.['x2'] ? Math.round(match.doubleChanceMarket['x2'] * 100) : 0}%` }}
-                        />
+                    );
+                  })}
+                </div>
+                {/* Away */}
+                <div className="bg-[#1C222C] rounded-lg p-4 space-y-3">
+                  <div className="text-xs font-semibold text-[#F5F5F5] mb-3">{match.teamB} Goals</div>
+                  {[
+                    { label: 'Over 0.5', val: match.teamGoals.away.over_0_5 },
+                    { label: 'Over 1.5', val: match.teamGoals.away.over_1_5 },
+                    { label: 'Over 2.5', val: match.teamGoals.away.over_2_5 },
+                  ].map(({ label, val }) => {
+                    const pct = val != null ? Math.round(val <= 1 ? val * 100 : val) : null;
+                    return (
+                      <div key={label} className="flex items-center gap-3">
+                        <span className="text-xs text-[#98A2B3] w-16 shrink-0">{label}</span>
+                        <div className="flex-1">
+                          <ProgressBar value={pct ?? 0} />
+                        </div>
+                        <span className="text-xs font-semibold text-[#F5F5F5] w-8 text-right">{pct !== null ? `${pct}%` : 'N/A'}</span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.doubleChanceMarket?.['x2'] || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.doubleChanceMarket?.['x2'] || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.doubleChanceMarket?.['x2'] || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.doubleChanceMarket?.['x2'] || 0) >= 75 ? 'Strong' : (match.doubleChanceMarket?.['x2'] || 0) >= 60 ? 'Good' : (match.doubleChanceMarket?.['x2'] || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamACode} or {match.teamBCode}</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.doubleChanceMarket?.['12'] ? Math.round(match.doubleChanceMarket['12'] * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.doubleChanceMarket?.['12'] ? Math.round(match.doubleChanceMarket['12'] * 100) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.doubleChanceMarket?.['12'] || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.doubleChanceMarket?.['12'] || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.doubleChanceMarket?.['12'] || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.doubleChanceMarket?.['12'] || 0) >= 75 ? 'Strong' : (match.doubleChanceMarket?.['12'] || 0) >= 60 ? 'Good' : (match.doubleChanceMarket?.['12'] || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamACode} DNB</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.drawNoBetMarket?.home ? Math.round(match.drawNoBetMarket.home * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.drawNoBetMarket?.home ? Math.round(match.drawNoBetMarket.home * 100) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.drawNoBetMarket?.home || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.drawNoBetMarket?.home || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.drawNoBetMarket?.home || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.drawNoBetMarket?.home || 0) >= 75 ? 'Strong' : (match.drawNoBetMarket?.home || 0) >= 60 ? 'Good' : (match.drawNoBetMarket?.home || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamBCode} DNB</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.drawNoBetMarket?.away ? Math.round(match.drawNoBetMarket.away * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.drawNoBetMarket?.away ? Math.round(match.drawNoBetMarket.away * 100) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.drawNoBetMarket?.away || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.drawNoBetMarket?.away || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.drawNoBetMarket?.away || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.drawNoBetMarket?.away || 0) >= 75 ? 'Strong' : (match.drawNoBetMarket?.away || 0) >= 60 ? 'Good' : (match.drawNoBetMarket?.away || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamACode} Win to Nil</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.winToNilMarket?.home ? Math.round(match.winToNilMarket.home * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.winToNilMarket?.home ? Math.round(match.winToNilMarket.home * 100) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.winToNilMarket?.home || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.winToNilMarket?.home || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.winToNilMarket?.home || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.winToNilMarket?.home || 0) >= 75 ? 'Strong' : (match.winToNilMarket?.home || 0) >= 60 ? 'Good' : (match.winToNilMarket?.home || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{match.teamBCode} Win to Nil</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.winToNilMarket?.away ? Math.round(match.winToNilMarket.away * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.winToNilMarket?.away ? Math.round(match.winToNilMarket.away * 100) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.winToNilMarket?.away || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.winToNilMarket?.away || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.winToNilMarket?.away || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.winToNilMarket?.away || 0) >= 75 ? 'Strong' : (match.winToNilMarket?.away || 0) >= 60 ? 'Good' : (match.winToNilMarket?.away || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* First Team To Score */}
+          <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+            <SectionHeader
+              title="First Team To Score"
+              subtitle="Which team scores first"
+              icon={<Zap className="w-4 h-4" />}
+            />
+            {(() => {
+              // Derive from xG proportionally
+              const totalXg = (match.xGA ?? 0) + (match.xGB ?? 0);
+              const noGoalProb = match.overUnder?.['0.5']?.under != null
+                ? Math.round((match.overUnder['0.5'].under <= 1 ? match.overUnder['0.5'].under * 100 : match.overUnder['0.5'].under))
+                : null;
+              const scoringProb = noGoalProb != null ? 100 - noGoalProb : 100;
+              const ftsA = totalXg > 0 ? Math.round(((match.xGA ?? 0) / totalXg) * scoringProb) : null;
+              const ftsB = totalXg > 0 ? Math.round(((match.xGB ?? 0) / totalXg) * scoringProb) : null;
+              return (
+                <div className="flex gap-3">
+                  <OutcomeCard label={match.teamA} probability={ftsA} highlighted={(ftsA ?? 0) >= (ftsB ?? 0)} />
+                  <OutcomeCard label="No Goal" probability={noGoalProb} highlighted={false} />
+                  <OutcomeCard label={match.teamB} probability={ftsB} highlighted={(ftsB ?? 0) > (ftsA ?? 0)} />
+                </div>
+              );
+            })()}
           </div>
-        </motion.section>
 
-        {/* Goals Section */}
-        <motion.section 
-          id="section-goals" 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <SectionHeader title="Goal Markets" subtitle="Over/Under and BTTS probabilities" />
-          
-          <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[#1C222C] border-b border-[#232B36]">
-                  <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Market</th>
-                  <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Probability</th>
-                  <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Strength</th>
-                </tr>
-              </thead>
-              <tbody>
-                {['0.5', '1.5', '2.5', '3.5', '4.5'].map((line) => (
+        </AnimSection>
+
+        {/* ── HANDICAP ──────────────────────────────────────────────────────── */}
+        <AnimSection id="section-handicap" className="space-y-6">
+
+          {/* Asian Handicap — collapsible */}
+          <CollapsibleSection
+            title="Asian Handicap"
+            subtitle="Handicap line probabilities — click to expand"
+            icon={<BarChart3 className="w-4 h-4" />}
+          >
+            {match.asianHandicap?.lines ? (
+              <div>
+                {/* Header row */}
+                <div className="flex items-center gap-4 px-4 py-2 bg-[#1C222C]">
+                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider w-28">Line</span>
+                  <span className="flex-1 text-[10px] text-[#98A2B3] uppercase tracking-wider">Probability</span>
+                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider w-10 text-right">%</span>
+                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider w-14 text-right">Rating</span>
+                </div>
+                {Object.entries(match.asianHandicap.lines)
+                  .map(([line, val]) => ({
+                    label: `${match.asianHandicap!.favored_team} ${line}`,
+                    prob: Math.round((val as number) <= 1 ? (val as number) * 100 : (val as number)),
+                    rawLine: parseFloat(line),
+                  }))
+                  .sort((a, b) => b.rawLine - a.rawLine)
+                  .map((item, idx, arr) => (
+                    <MarketRow
+                      key={item.label}
+                      label={item.label}
+                      probability={item.prob}
+                      borderBottom={idx < arr.length - 1}
+                    />
+                  ))}
+              </div>
+            ) : (
+              <div className="px-5 py-6 text-sm text-[#98A2B3] text-center">No handicap data available</div>
+            )}
+          </CollapsibleSection>
+
+          {/* Asian Total — collapsible */}
+          <CollapsibleSection
+            title="Asian Total"
+            subtitle="Quarter-ball over/under lines — click to expand"
+            icon={<TrendingUp className="w-4 h-4" />}
+          >
+            <div>
+              <div className="flex items-center gap-4 px-4 py-2 bg-[#1C222C]">
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider w-28">Line</span>
+                <span className="flex-1 text-[10px] text-[#98A2B3] uppercase tracking-wider">Probability</span>
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider w-10 text-right">%</span>
+                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider w-14 text-right">Rating</span>
+              </div>
+              {asianTotalLines.map((line, idx) => {
+                // Interpolate from surrounding integer/half lines
+                const lineNum = parseFloat(line);
+                const lower = Math.floor(lineNum * 2) / 2;
+                const upper = Math.ceil(lineNum * 2) / 2;
+                const lKey = lower === Math.floor(lower) ? lower.toFixed(1) : lower.toString();
+                const uKey = upper === Math.floor(upper) ? upper.toFixed(1) : upper.toString();
+                const lOver = match.overUnder?.[lKey as keyof typeof match.overUnder]?.over;
+                const uOver = match.overUnder?.[uKey as keyof typeof match.overUnder]?.over;
+                let overPct: number | null = null;
+                let underPct: number | null = null;
+                if (lOver != null && uOver != null && lower !== upper) {
+                  const t = (lineNum - lower) / (upper - lower);
+                  const raw = lOver + t * (uOver - lOver);
+                  overPct = Math.round(raw <= 1 ? raw * 100 : raw);
+                  underPct = 100 - overPct;
+                } else if (lOver != null) {
+                  overPct = Math.round(lOver <= 1 ? lOver * 100 : lOver);
+                  underPct = 100 - overPct;
+                }
+                const isLast = idx === asianTotalLines.length - 1;
+                return (
                   <React.Fragment key={line}>
-                    <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                      <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">Over {line}</td>
-                      <td className="px-4 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="text-[#F5F5F5] text-sm">{match.overUnder?.[line]?.over ? Math.round(match.overUnder[line].over * 100) : 'N/A'}%</span>
-                          <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-[#34D399] rounded-full"
-                              style={{ width: `${match.overUnder?.[line]?.over ? Math.round(match.overUnder[line].over * 100) : 0}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                          (match.overUnder?.[line]?.over || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                          (match.overUnder?.[line]?.over || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                          (match.overUnder?.[line]?.over || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                          'bg-[#232B36] text-[#98A2B3]'
-                        }`}>
-                          {(match.overUnder?.[line]?.over || 0) >= 75 ? 'Strong' : (match.overUnder?.[line]?.over || 0) >= 60 ? 'Good' : (match.overUnder?.[line]?.over || 0) >= 45 ? 'Lean' : 'Avoid'}
-                        </span>
-                      </td>
-                    </tr>
-                    <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                      <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">Under {line}</td>
-                      <td className="px-4 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="text-[#F5F5F5] text-sm">{match.overUnder?.[line]?.under ? Math.round(match.overUnder[line].under * 100) : 'N/A'}%</span>
-                          <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-[#34D399] rounded-full"
-                              style={{ width: `${match.overUnder?.[line]?.under ? Math.round(match.overUnder[line].under * 100) : 0}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                          (match.overUnder?.[line]?.under || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                          (match.overUnder?.[line]?.under || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                          (match.overUnder?.[line]?.under || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                          'bg-[#232B36] text-[#98A2B3]'
-                        }`}>
-                          {(match.overUnder?.[line]?.under || 0) >= 75 ? 'Strong' : (match.overUnder?.[line]?.under || 0) >= 60 ? 'Good' : (match.overUnder?.[line]?.under || 0) >= 45 ? 'Lean' : 'Avoid'}
-                        </span>
-                      </td>
-                    </tr>
+                    <MarketRow label={`Over ${line}`} probability={overPct} borderBottom />
+                    <MarketRow label={`Under ${line}`} probability={underPct} borderBottom={!isLast} />
+                    {!isLast && <div className="h-px bg-[#232B36] mx-4" />}
                   </React.Fragment>
-                ))}
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">BTTS Yes</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.bttsMarket?.yes ? Math.round(match.bttsMarket.yes * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.bttsMarket?.yes ? Math.round(match.bttsMarket.yes * 100) : 0}%` }}
-                        />
-                      </div>
+                );
+              })}
+            </div>
+          </CollapsibleSection>
+
+        </AnimSection>
+
+        {/* ── CORRECT SCORES ────────────────────────────────────────────────── */}
+        <AnimSection id="section-scores">
+          <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+            <SectionHeader
+              title="Correct Score"
+              subtitle="Top 5 most likely scorelines"
+              icon={<ChartColumn className="w-4 h-4" />}
+            />
+            <div className="space-y-3">
+              {match.top5Scorelines?.slice(0, 5).map((score, index) => {
+                const pct = score.probability != null ? Math.round(score.probability <= 1 ? score.probability * 100 : score.probability) : 0;
+                const medals = ['🥇', '🥈', '🥉'];
+                const medal = medals[index] || `${index + 1}.`;
+                return (
+                  <motion.div
+                    key={index}
+                    whileHover={{ x: 3 }}
+                    className="flex items-center gap-4 bg-[#1C222C] rounded-lg px-4 py-3 hover:bg-[#232B36] transition-colors duration-200"
+                  >
+                    <span className="text-xl w-8 shrink-0">{medal}</span>
+                    <span className="text-base font-bold text-[#F5F5F5] w-16">{score.score}</span>
+                    <div className="flex-1">
+                      <ProgressBar value={pct} />
                     </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.bttsMarket?.yes || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.bttsMarket?.yes || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.bttsMarket?.yes || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.bttsMarket?.yes || 0) >= 75 ? 'Strong' : (match.bttsMarket?.yes || 0) >= 60 ? 'Good' : (match.bttsMarket?.yes || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">BTTS No</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[#F5F5F5] text-sm">{match.bttsMarket?.no ? Math.round(match.bttsMarket.no * 100) : 'N/A'}%</span>
-                      <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#34D399] rounded-full"
-                          style={{ width: `${match.bttsMarket?.no ? Math.round(match.bttsMarket.no * 100) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                      (match.bttsMarket?.no || 0) >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                      (match.bttsMarket?.no || 0) >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                      (match.bttsMarket?.no || 0) >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                      'bg-[#232B36] text-[#98A2B3]'
-                    }`}>
-                      {(match.bttsMarket?.no || 0) >= 75 ? 'Strong' : (match.bttsMarket?.no || 0) >= 60 ? 'Good' : (match.bttsMarket?.no || 0) >= 45 ? 'Lean' : 'Avoid'}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    <span className="text-sm font-semibold text-[#F5F5F5] w-10 text-right">{pct}%</span>
+                    <ConfidenceBadge probability={pct} />
+                  </motion.div>
+                );
+              })}
+              {(!match.top5Scorelines || match.top5Scorelines.length === 0) && (
+                <div className="text-sm text-[#98A2B3] text-center py-6">No scoreline data available</div>
+              )}
+            </div>
           </div>
-        </motion.section>
+        </AnimSection>
 
-        {/* Handicap Section */}
-        <motion.section 
-          id="section-handicap" 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <SectionHeader title="Asian Handicap" subtitle="Handicap line probabilities" />
-          
-          {(() => {
-            if (!match.asianHandicap?.lines) return null;
-            
-            const lines = Object.entries(match.asianHandicap.lines).map(([line, val]) => ({
-              line: `${match.asianHandicap?.favored_team} ${line}`,
-              probability: Math.round((val as number) * 100),
-              rawLine: parseFloat(line)
-            }));
-            
-            const sortedLines = lines.sort((a, b) => b.rawLine - a.rawLine);
-            
-            return (
-              <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-[#1C222C] border-b border-[#232B36]">
-                      <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Line</th>
-                      <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Probability</th>
-                      <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Strength</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedLines.map((item, index) => (
-                      <tr key={item.line} className={index < sortedLines.length - 1 ? "border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250" : "hover:bg-[#1C222C]/50 transition-colors duration-250"}>
-                        <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{item.line}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-[#F5F5F5] text-sm">{item.probability}%</span>
-                            <div className="w-16 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-[#34D399] rounded-full"
-                                style={{ width: `${item.probability}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                            item.probability >= 75 ? 'bg-[#34D399]/10 text-[#34D399]' :
-                            item.probability >= 60 ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-                            item.probability >= 45 ? 'bg-[#F5B301]/10 text-[#F5B301]' :
-                            'bg-[#232B36] text-[#98A2B3]'
-                          }`}>
-                            {item.probability >= 75 ? 'Strong' : item.probability >= 60 ? 'Good' : item.probability >= 45 ? 'Lean' : 'Avoid'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })()}
-        </motion.section>
+        {/* ── STATISTICS / TEAM COMPARISON ──────────────────────────────────── */}
+        <AnimSection id="section-statistics">
+          <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+            <SectionHeader
+              title="Team Comparison"
+              subtitle="Head-to-head statistical breakdown"
+              icon={<BarChart3 className="w-4 h-4" />}
+            />
 
-        {/* Scores Section */}
-        <motion.section 
-          id="section-scores" 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <SectionHeader title="Correct Scores" subtitle="Most likely scorelines" />
-          
-          <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[#1C222C] border-b border-[#232B36]">
-                  <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Rank</th>
-                  <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Score</th>
-                  <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Probability</th>
-                </tr>
-              </thead>
-              <tbody>
-                {match.top5Scorelines?.map((score, index) => (
-                  <tr key={index} className={index < (match.top5Scorelines?.length || 0) - 1 ? "border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250" : "hover:bg-[#1C222C]/50 transition-colors duration-250"}>
-                    <td className="px-4 py-2.5 text-[#F5F5F5] font-normal">{index === 0 ? <Trophy className="w-4 h-4 text-[#F5B301]" /> : index === 1 ? <Trophy className="w-4 h-4 text-[#98A2B3]" /> : index === 2 ? <Trophy className="w-4 h-4 text-[#6B7280]" /> : `${index + 1}.`}</td>
-                    <td className="px-4 py-2.5 text-[#F5F5F5] font-semibold">{score.score}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-3">
-                        <span className="text-[#F5F5F5]">{score.probability ? Math.round(score.probability * 100) : 0}%</span>
-                        <div className="w-20 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-[#34D399] rounded-full"
-                            style={{ width: `${score.probability ? Math.round(score.probability * 100) : 0}%` }}
+            <div className="space-y-4">
+              {/* Comparison rows */}
+              {[
+                {
+                  label: 'FIFA Ranking',
+                  valA: match.fifaRankA ? `#${match.fifaRankA}` : 'N/A',
+                  valB: match.fifaRankB ? `#${match.fifaRankB}` : 'N/A',
+                  numA: match.fifaRankA ? (200 - match.fifaRankA) : 0,
+                  numB: match.fifaRankB ? (200 - match.fifaRankB) : 0,
+                },
+                {
+                  label: 'ELO Rating',
+                  valA: match.eloRankA ? `${match.eloRankA}` : 'N/A',
+                  valB: match.eloRankB ? `${match.eloRankB}` : 'N/A',
+                  numA: match.eloRankA ?? 0,
+                  numB: match.eloRankB ?? 0,
+                },
+                {
+                  label: 'Squad Value',
+                  valA: match.squadValueA || 'N/A',
+                  valB: match.squadValueB || 'N/A',
+                  numA: parseFloat((match.squadValueA || '0').replace(/[^0-9.]/g, '')),
+                  numB: parseFloat((match.squadValueB || '0').replace(/[^0-9.]/g, '')),
+                },
+                {
+                  label: 'Attack Rating',
+                  valA: `${match.attackA ?? 'N/A'}`,
+                  valB: `${match.attackB ?? 'N/A'}`,
+                  numA: match.attackA ?? 0,
+                  numB: match.attackB ?? 0,
+                },
+                {
+                  label: 'Defence Rating',
+                  valA: `${match.defenceA ?? 'N/A'}`,
+                  valB: `${match.defenceB ?? 'N/A'}`,
+                  numA: match.defenceA ?? 0,
+                  numB: match.defenceB ?? 0,
+                },
+                {
+                  label: 'Expected Goals (xG)',
+                  valA: xGA?.toFixed(2) ?? 'N/A',
+                  valB: xGB?.toFixed(2) ?? 'N/A',
+                  numA: xGA ?? 0,
+                  numB: xGB ?? 0,
+                },
+              ].map(({ label, valA, valB, numA, numB }) => {
+                const maxVal = Math.max(numA, numB, 1);
+                const wA = (numA / maxVal) * 100;
+                const wB = (numB / maxVal) * 100;
+                const aWins = numA >= numB;
+                return (
+                  <div key={label} className="bg-[#1C222C] rounded-lg px-4 py-3">
+                    <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">{label}</div>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-semibold w-20 shrink-0 ${aWins ? 'text-[#F5F5F5]' : 'text-[#98A2B3]'}`}>{match.teamACode}</span>
+                      <div className="flex-1 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-[#0E1117] rounded-full overflow-hidden flex justify-end">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            whileInView={{ width: `${wA}%` }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.7 }}
+                            className={`h-full rounded-full ${aWins ? 'bg-[#34D399]' : 'bg-[#4F8CFF]'}`}
+                            style={{ marginLeft: 'auto' }}
+                          />
+                        </div>
+                        <span className="text-xs text-[#98A2B3] w-16 text-center">{valA} – {valB}</span>
+                        <div className="flex-1 h-1.5 bg-[#0E1117] rounded-full overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            whileInView={{ width: `${wB}%` }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.7 }}
+                            className={`h-full rounded-full ${!aWins ? 'bg-[#34D399]' : 'bg-[#4F8CFF]'}`}
                           />
                         </div>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.section>
+                      <span className={`text-xs font-semibold w-20 shrink-0 text-right ${!aWins ? 'text-[#F5F5F5]' : 'text-[#98A2B3]'}`}>{match.teamBCode}</span>
+                    </div>
+                  </div>
+                );
+              })}
 
-        {/* Statistics Section */}
-        <motion.section 
-          id="section-statistics" 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <SectionHeader title="Team Statistics" subtitle="Comparative team metrics" />
-          
-          <div className="bg-[#171C24] rounded-xl shadow-[0_4px_18px_rgba(0,0,0,0.16)] overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[#1C222C] border-b border-[#232B36]">
-                  <th className="text-left text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">Metric</th>
-                  <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">{match.teamA}</th>
-                  <th className="text-center text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal px-4 py-3">{match.teamB}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#98A2B3] font-normal">FIFA Rank</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.fifaRankA || 'N/A'}</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.fifaRankB || 'N/A'}</td>
-                </tr>
-                <tr className="border-b border-[#1C222C] hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#98A2B3] font-normal">ELO Rating</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.eloRankA || 'N/A'}</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.eloRankB || 'N/A'}</td>
-                </tr>
-                <tr className="hover:bg-[#1C222C]/50 transition-colors duration-250">
-                  <td className="px-4 py-2.5 text-[#98A2B3] font-normal">Squad Value</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.squadValueA || 'N/A'}</td>
-                  <td className="px-4 py-2.5 text-center text-[#F5F5F5]">{match.squadValueB || 'N/A'}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </motion.section>
-
-        {/* Model Section */}
-        <motion.section 
-          id="section-model" 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <SectionHeader title="Model Confidence" subtitle="Prediction reliability metrics" />
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-              <div className="flex items-center gap-2 mb-2">
-                <Scale className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Calibration</span>
-              </div>
-              <div className="text-xl font-semibold text-[#F5F5F5]">{match.confidence || 'N/A'}</div>
-            </div>
-            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-              <div className="flex items-center gap-2 mb-2">
-                <BarChart3 className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Agreement</span>
-              </div>
-              <div className="text-xl font-semibold text-[#F5F5F5]">85%</div>
-            </div>
-            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-              <div className="flex items-center gap-2 mb-2">
-                <ChartColumn className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Variance</span>
-              </div>
-              <div className="text-xl font-semibold text-[#F5F5F5]">Low</div>
-            </div>
-            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock3 className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">Freshness</span>
-              </div>
-              <div className="text-xl font-semibold text-[#F5F5F5]">Recent</div>
-            </div>
-          </div>
-        </motion.section>
-
-        {/* History Section */}
-        <motion.section 
-          id="section-history" 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <SectionHeader title="Head to Head" subtitle="Historical match data" />
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-              <div className="flex items-center gap-2 mb-3">
-                <History className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamA} Form</span>
-              </div>
-              <div className="flex gap-2">
-                {match.recentFormA?.map((result, i) => (
-                  <FormBadge key={i} result={result} />
-                ))}
-              </div>
-            </div>
-            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-              <div className="flex items-center gap-2 mb-3">
-                <History className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamB} Form</span>
-              </div>
-              <div className="flex gap-2">
-                {match.recentFormB?.map((result, i) => (
-                  <FormBadge key={i} result={result} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </motion.section>
-
-        {/* Squad Health Section */}
-        <motion.section 
-          id="section-squad" 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <SectionHeader title="Squad Health" subtitle="Injuries and suspensions" />
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-              <div className="flex items-center gap-2 mb-3">
-                <Users className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamA}</span>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <span className="text-[#98A2B3] text-[10px] uppercase tracking-wider font-normal">Injured</span>
-                  <p className="text-[#F5F5F5] mt-1">{match.injuriesA?.join(', ') || 'None'}</p>
+              {/* Recent Form */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-[#1C222C] rounded-lg px-4 py-3">
+                  <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">Recent Form — {match.teamA}</div>
+                  <div className="flex gap-1.5">
+                    {match.recentFormA?.map((r, i) => <FormBadge key={i} result={r} />) ?? <span className="text-sm text-[#98A2B3]">N/A</span>}
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[#98A2B3] text-[10px] uppercase tracking-wider font-normal">Suspended</span>
-                  <p className="text-[#F5F5F5] mt-1">{match.suspensionsA?.join(', ') || 'None'}</p>
+                <div className="bg-[#1C222C] rounded-lg px-4 py-3">
+                  <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">Recent Form — {match.teamB}</div>
+                  <div className="flex gap-1.5">
+                    {match.recentFormB?.map((r, i) => <FormBadge key={i} result={r} />) ?? <span className="text-sm text-[#98A2B3]">N/A</span>}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-              <div className="flex items-center gap-2 mb-3">
-                <Users className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamB}</span>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <span className="text-[#98A2B3] text-[10px] uppercase tracking-wider font-normal">Injured</span>
-                  <p className="text-[#F5F5F5] mt-1">{match.injuriesB?.join(', ') || 'None'}</p>
+
+              {/* H2H */}
+              {match.h2hPreviousMeetings > 0 && (
+                <div className="bg-[#1C222C] rounded-lg px-4 py-3">
+                  <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-3">Head to Head — Last {match.h2hPreviousMeetings} Meetings</div>
+                  <div className="flex items-center justify-around text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-[#F5F5F5]">{match.h2hWinsA}</div>
+                      <div className="text-[10px] text-[#98A2B3] mt-1">{match.teamA} Wins</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-[#98A2B3]">{match.h2hDraws}</div>
+                      <div className="text-[10px] text-[#98A2B3] mt-1">Draws</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-[#F5F5F5]">{match.h2hWinsB}</div>
+                      <div className="text-[10px] text-[#98A2B3] mt-1">{match.teamB} Wins</div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[#98A2B3] text-[10px] uppercase tracking-wider font-normal">Suspended</span>
-                  <p className="text-[#F5F5F5] mt-1">{match.suspensionsB?.join(', ') || 'None'}</p>
-                </div>
-              </div>
+              )}
             </div>
           </div>
-        </motion.section>
+        </AnimSection>
 
-        {/* Team Goals Section */}
-        {match.teamGoals && (
-          <motion.section 
-            id="section-team-goals" 
-            className="mb-12"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.5 }}
-          >
-            <SectionHeader title="Team Goals" subtitle="Over/Under by team" />
-            
+        {/* ── TEAM NEWS ─────────────────────────────────────────────────────── */}
+        <AnimSection id="section-team-news">
+          <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+            <SectionHeader
+              title="Team News"
+              subtitle="Injuries and suspensions"
+              icon={<Users className="w-4 h-4" />}
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-                <div className="flex items-center gap-2 mb-3">
-                  <Goal className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamA}</span>
+              {/* Team A */}
+              <div className="bg-[#1C222C] rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">{flagA}</span>
+                  <span className="text-sm font-semibold text-[#F5F5F5]">{match.teamA}</span>
+                  <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded ${
+                    match.impactRatingA === 'Critical' ? 'bg-[#EF4444]/10 text-[#EF4444]' :
+                    match.impactRatingA === 'Moderate' ? 'bg-[#F5B301]/10 text-[#F5B301]' :
+                    'bg-[#34D399]/10 text-[#34D399]'
+                  }`}>{match.impactRatingA}</span>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-[#F5F5F5]">Over 0.5</span>
-                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.home.over_0_5 ? Math.round(match.teamGoals.home.over_0_5 * 100) : 'N/A'}%</span>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-[#EF4444]" />
+                      <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal">Injuries</span>
+                    </div>
+                    {match.injuriesA?.length ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {match.injuriesA.map((p, i) => (
+                          <span key={i} className="text-xs bg-[#EF4444]/10 text-[#EF4444] px-2 py-0.5 rounded">{p}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#98A2B3]">None reported</p>
+                    )}
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-[#F5F5F5]">Over 1.5</span>
-                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.home.over_1_5 ? Math.round(match.teamGoals.home.over_1_5 * 100) : 'N/A'}%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-[#F5F5F5]">Over 2.5</span>
-                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.home.over_2_5 ? Math.round(match.teamGoals.home.over_2_5 * 100) : 'N/A'}%</span>
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Ban className="w-3.5 h-3.5 text-[#F5B301]" />
+                      <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal">Suspensions</span>
+                    </div>
+                    {match.suspensionsA?.length ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {match.suspensionsA.map((p, i) => (
+                          <span key={i} className="text-xs bg-[#F5B301]/10 text-[#F5B301] px-2 py-0.5 rounded">{p}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#98A2B3]">None reported</p>
+                    )}
                   </div>
                 </div>
               </div>
-              <div className="bg-[#1C222C] rounded-lg p-4 shadow-[0_4px_18px_rgba(0,0,0,0.16)] hover:bg-[#232B36] transition-colors duration-250">
-                <div className="flex items-center gap-2 mb-3">
-                  <Goal className="w-[18px] h-[18px] text-[#98A2B3]" strokeWidth={1.8} />
-                  <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{match.teamB}</span>
+
+              {/* Team B */}
+              <div className="bg-[#1C222C] rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">{flagB}</span>
+                  <span className="text-sm font-semibold text-[#F5F5F5]">{match.teamB}</span>
+                  <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded ${
+                    match.impactRatingB === 'Critical' ? 'bg-[#EF4444]/10 text-[#EF4444]' :
+                    match.impactRatingB === 'Moderate' ? 'bg-[#F5B301]/10 text-[#F5B301]' :
+                    'bg-[#34D399]/10 text-[#34D399]'
+                  }`}>{match.impactRatingB}</span>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-[#F5F5F5]">Over 0.5</span>
-                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.away.over_0_5 ? Math.round(match.teamGoals.away.over_0_5 * 100) : 'N/A'}%</span>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-[#EF4444]" />
+                      <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal">Injuries</span>
+                    </div>
+                    {match.injuriesB?.length ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {match.injuriesB.map((p, i) => (
+                          <span key={i} className="text-xs bg-[#EF4444]/10 text-[#EF4444] px-2 py-0.5 rounded">{p}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#98A2B3]">None reported</p>
+                    )}
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-[#F5F5F5]">Over 1.5</span>
-                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.away.over_1_5 ? Math.round(match.teamGoals.away.over_1_5 * 100) : 'N/A'}%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-[#F5F5F5]">Over 2.5</span>
-                    <span className="text-xs text-[#F5F5F5]">{match.teamGoals.away.over_2_5 ? Math.round(match.teamGoals.away.over_2_5 * 100) : 'N/A'}%</span>
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Ban className="w-3.5 h-3.5 text-[#F5B301]" />
+                      <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider font-normal">Suspensions</span>
+                    </div>
+                    {match.suspensionsB?.length ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {match.suspensionsB.map((p, i) => (
+                          <span key={i} className="text-xs bg-[#F5B301]/10 text-[#F5B301] px-2 py-0.5 rounded">{p}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#98A2B3]">None reported</p>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
-          </motion.section>
-        )}
+          </div>
+        </AnimSection>
 
-        {/* Final Verdict */}
-        <motion.section 
-          className="mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="bg-[#171C24] rounded-xl p-6 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
-            <div className="flex items-center gap-2 mb-6">
-              <Trophy className="w-5 h-5 text-[#F5B301]" />
-              <h2 className="text-xl font-bold text-[#F5F5F5] tracking-tight">Match Verdict</h2>
+        {/* ── PREDICTION CONFIDENCE ─────────────────────────────────────────── */}
+        <AnimSection>
+          <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)]">
+            <SectionHeader
+              title="Prediction Confidence"
+              subtitle="Model reliability indicators"
+              icon={<Zap className="w-4 h-4" />}
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                {
+                  label: 'Calibration',
+                  value: match.confidence || 'N/A',
+                  icon: <Scale className="w-4 h-4 text-[#4F8CFF]" />,
+                  color: match.confidence === 'High' ? 'text-[#34D399]' : match.confidence === 'Medium' ? 'text-[#F5B301]' : 'text-[#98A2B3]',
+                },
+                {
+                  label: 'Agreement',
+                  value: match.modelConfidence ? `${Math.round(match.modelConfidence * 100)}%` : '85%',
+                  icon: <BarChart3 className="w-4 h-4 text-[#4F8CFF]" />,
+                  color: 'text-[#F5F5F5]',
+                },
+                {
+                  label: 'Variance',
+                  value: match.confidence === 'High' ? 'Low' : match.confidence === 'Medium' ? 'Medium' : 'High',
+                  icon: <ChartColumn className="w-4 h-4 text-[#4F8CFF]" />,
+                  color: match.confidence === 'High' ? 'text-[#34D399]' : match.confidence === 'Medium' ? 'text-[#F5B301]' : 'text-[#EF4444]',
+                },
+                {
+                  label: 'Freshness',
+                  value: 'Recent',
+                  icon: <Clock3 className="w-4 h-4 text-[#4F8CFF]" />,
+                  color: 'text-[#34D399]',
+                },
+              ].map(({ label, value, icon, color }) => (
+                <motion.div
+                  key={label}
+                  whileHover={{ y: -2 }}
+                  className="bg-[#1C222C] rounded-lg p-4 hover:bg-[#232B36] transition-colors duration-200"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    {icon}
+                    <span className="text-[10px] text-[#98A2B3] uppercase tracking-wider">{label}</span>
+                  </div>
+                  <div className={`text-xl font-bold ${color}`}>{value}</div>
+                </motion.div>
+              ))}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div>
-                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">Top Pick</div>
-                <div className="text-lg font-semibold text-[#F5F5F5]">{match.prediction || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">Prediction</div>
-                <div className="text-lg font-semibold text-[#F5F5F5]">{match.mostLikelyScore || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">Probability</div>
-                <div className="text-lg font-semibold text-[#F5F5F5]">{Math.max(probA, probB, probD)}%</div>
-              </div>
-              <div>
-                <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-2">xG</div>
-                <div className="text-lg font-semibold text-[#F5F5F5]">{totalXG?.toFixed(2) || 'N/A'}</div>
-              </div>
+          </div>
+        </AnimSection>
+
+        {/* ── AI MATCH SUMMARY ──────────────────────────────────────────────── */}
+        <AnimSection>
+          <div className="bg-[#151A22] rounded-xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.16)] border-t-2 border-[#4F8CFF]">
+            <div className="flex items-center gap-2 mb-5">
+              <Star className="w-4 h-4 text-[#F5B301]" />
+              <h2 className="text-base font-semibold text-[#F5F5F5] tracking-tight">AI Match Summary</h2>
             </div>
-            <p className="text-[#98A2B3] text-sm leading-relaxed max-w-3xl">
-              Based on comprehensive analysis, {match.prediction || 'the prediction'} shows {match.confidence?.toLowerCase() || 'moderate'} confidence. 
-              The model indicates {Math.max(probA, probB, probD)}% probability for this outcome, supported by expected goals of {totalXG?.toFixed(2) || 'N/A'}.
-            </p>
+
+            {/* Summary grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+              {[
+                { label: 'Top Pick', value: match.prediction || 'N/A', color: 'text-[#4F8CFF]' },
+                { label: 'Predicted Score', value: match.mostLikelyScore || 'N/A', color: 'text-[#F5F5F5]' },
+                { label: 'Win Probability', value: `${topProbability}%`, color: 'text-[#34D399]' },
+                {
+                  label: 'Expected Goals',
+                  value: totalXG ? `${totalXG.toFixed(2)} xG` : `${((xGA ?? 0) + (xGB ?? 0)).toFixed(2)} xG`,
+                  color: 'text-[#F5F5F5]',
+                },
+                {
+                  label: 'Best Goal Market',
+                  value: (() => {
+                    const ou25 = ouPct('2.5', 'over');
+                    const ou15 = ouPct('1.5', 'over');
+                    if (ou25 && ou25 >= 60) return `Over 2.5 (${ou25}%)`;
+                    if (ou15 && ou15 >= 70) return `Over 1.5 (${ou15}%)`;
+                    return 'N/A';
+                  })(),
+                  color: 'text-[#F5B301]',
+                },
+                {
+                  label: 'Safest Bet',
+                  value: (() => {
+                    const max1x2 = topProbability;
+                    if (dc1x && dc1x > max1x2 + 5) return `DC: ${match.teamACode} or Draw`;
+                    if (dcX2 && dcX2 > max1x2 + 5) return `DC: Draw or ${match.teamBCode}`;
+                    return match.prediction || 'N/A';
+                  })(),
+                  color: 'text-[#34D399]',
+                },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-[#1C222C] rounded-lg px-3 py-2.5">
+                  <div className="text-[10px] text-[#98A2B3] uppercase tracking-wider mb-1">{label}</div>
+                  <div className={`text-sm font-semibold ${color}`}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* AI text summary */}
+            <div className="bg-[#1C222C] rounded-lg p-4">
+              <p className="text-sm text-[#98A2B3] leading-relaxed">
+                {match.aiSummary ||
+                  `Based on comprehensive analysis, ${match.prediction || 'the prediction'} shows ${match.confidence?.toLowerCase() || 'moderate'} confidence. ` +
+                  `The model projects ${match.teamA} with ${probA}% probability vs ${match.teamB} at ${probB}% (Draw ${probD}%). ` +
+                  `Expected goals: ${xGA?.toFixed(2) || '—'} (${match.teamA}) — ${xGB?.toFixed(2) || '—'} (${match.teamB}), ` +
+                  `with a predicted scoreline of ${match.mostLikelyScore || 'TBD'}.`}
+              </p>
+            </div>
           </div>
-        </motion.section>
+        </AnimSection>
+
+        {/* Bottom spacing */}
+        <div className="h-8" />
       </div>
     </motion.div>
-  );
-}
-
-// Sub-components
-function SummaryCard({ title, value, probability, confidence, icon, isRecommended = false }: { 
-  title: string; 
-  value: string; 
-  probability: number | null; 
-  confidence: string | null;
-  icon: React.ReactNode;
-  isRecommended?: boolean;
-}) {
-  return (
-    <motion.div
-      whileHover={{ y: -4 }}
-      className={`bg-[#181C22] rounded-2xl p-8 shadow-[0_8px_30px_rgba(0,0,0,0.18)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.24)] transition-all duration-300 ${
-        isRecommended ? 'bg-[#1D222A]' : ''
-      }`}
-    >
-      <div className="flex items-center gap-2 text-[#98A2B3] mb-4">
-        {icon}
-        <span className="text-xs font-normal uppercase tracking-wider">{title}</span>
-        {isRecommended && (
-          <span className="ml-auto text-[10px] font-semibold text-[#34D399] bg-[#34D399]/10 px-2 py-0.5 rounded-full">
-            TOP PICK
-          </span>
-        )}
-      </div>
-      <div className="text-3xl font-bold text-[#F5F5F5] mb-2 tracking-tight">{value}</div>
-      {probability !== null && (
-        <div className="text-sm text-[#98A2B3] font-normal">{probability}%</div>
-      )}
-      {confidence && (
-        <div className={`text-xs font-normal mt-3 ${
-          confidence === 'High' ? 'text-[#34D399]' : 
-          confidence === 'Medium' ? 'text-[#D8A31A]' : 'text-[#98A2B3]'
-        }`}>
-          {confidence === 'High' ? 'Elite' : confidence === 'Medium' ? 'High' : 'Moderate'} Confidence
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
-function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="mb-12">
-      <h2 className="text-3xl font-bold text-[#F5F5F5] tracking-tight mb-2">{title}</h2>
-      <p className="text-sm text-[#98A2B3] font-normal">{subtitle}</p>
-    </div>
-  );
-}
-
-function PremiumCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-[#181C22] rounded-2xl p-8 shadow-[0_8px_30px_rgba(0,0,0,0.18)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.24)] transition-all duration-300">
-      {children}
-    </div>
-  );
-}
-
-function MarketRow({ label, probability }: { label: string; probability: number | null }) {
-  const getStrength = (prob: number | null) => {
-    if (prob === null) return { label: 'N/A', color: 'text-[#98A2B3]', barColor: 'bg-[#1D222A]' };
-    if (prob >= 75) return { label: 'Strong', color: 'text-[#34D399]', barColor: 'bg-[#34D399]' };
-    if (prob >= 60) return { label: 'Good', color: 'text-[#34D399]/80', barColor: 'bg-[#34D399]/80' };
-    if (prob >= 45) return { label: 'Lean', color: 'text-[#D8A31A]', barColor: 'bg-[#D8A31A]' };
-    return { label: 'Avoid', color: 'text-[#98A2B3]', barColor: 'bg-[#1D222A]' };
-  };
-
-  const strength = getStrength(probability);
-
-  return (
-    <div className="flex items-center justify-between py-3">
-      <span className="text-sm text-[#98A2B3] font-normal">{label}</span>
-      <div className="flex items-center gap-4">
-        {probability !== null && (
-          <div className="w-32 h-2 bg-[#13171D] rounded-full overflow-hidden">
-            <div 
-              className={`h-full ${strength.barColor} rounded-full transition-all duration-500`}
-              style={{ width: `${probability}%` }}
-            />
-          </div>
-        )}
-        <span className="text-sm font-semibold text-[#F5F5F5] w-12 text-right">{probability !== null ? `${probability}%` : 'N/A'}</span>
-        <span className={`text-xs font-semibold px-2 py-1 rounded ${
-          strength.label === 'Strong' ? 'bg-[#34D399]/10 text-[#34D399]' :
-          strength.label === 'Good' ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-          strength.label === 'Lean' ? 'bg-[#D8A31A]/10 text-[#D8A31A]' :
-          'bg-[#1D222A] text-[#98A2B3]'
-        }`}>{strength.label}</span>
-      </div>
-    </div>
-  );
-}
-
-function HandicapCard({ line, probability }: { line: string; probability: number }) {
-  const getStrength = (prob: number) => {
-    if (prob >= 75) return { bg: 'bg-[#1D222A]', textColor: 'text-[#34D399]' };
-    if (prob >= 60) return { bg: 'bg-[#181C22]', textColor: 'text-[#34D399]/80' };
-    if (prob >= 45) return { bg: 'bg-[#181C22]', textColor: 'text-[#D8A31A]' };
-    return { bg: 'bg-[#181C22]', textColor: 'text-[#98A2B3]' };
-  };
-
-  const strength = getStrength(probability);
-
-  return (
-    <motion.div
-      whileHover={{ y: -4 }}
-      className={`bg-[#181C22] rounded-2xl p-6 shadow-[0_8px_30px_rgba(0,0,0,0.18)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.24)] transition-all duration-300 ${
-        probability >= 75 ? 'bg-[#1D222A]' : ''
-      }`}
-    >
-      <div className="text-xs text-[#98A2B3] mb-3 font-normal uppercase tracking-wider">{line}</div>
-      <div className="text-3xl font-bold text-[#F5F5F5] mb-3 tracking-tight">{probability}%</div>
-      <div className={`text-xs font-semibold px-3 py-1.5 rounded-full inline-block ${
-        strength.textColor === 'text-[#34D399]' ? 'bg-[#34D399]/10 text-[#34D399]' :
-        strength.textColor === 'text-[#34D399]/80' ? 'bg-[#34D399]/5 text-[#34D399]/80' :
-        strength.textColor === 'text-[#D8A31A]' ? 'bg-[#D8A31A]/10 text-[#D8A31A]' :
-        'bg-[#1D222A] text-[#98A2B3]'
-      }`}>
-        {probability >= 75 ? 'Strong' : probability >= 60 ? 'Good' : probability >= 45 ? 'Lean' : 'Avoid'}
-      </div>
-    </motion.div>
-  );
-}
-
-function ScoreRankingCard({ rank, score, probability }: { rank: number; score: string; probability: number }) {
-  const medals = ['🥇', '🥈', '🥉'];
-  const medal = medals[rank - 1] || `${rank}.`;
-
-  return (
-    <motion.div
-      whileHover={{ x: 4 }}
-      className="bg-[#181C22] rounded-2xl p-6 flex items-center gap-6 shadow-[0_8px_30px_rgba(0,0,0,0.18)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.24)] transition-all duration-300"
-    >
-      <span className="text-3xl">{medal}</span>
-      <div className="flex-1">
-        <div className="text-xl font-bold text-[#F5F5F5] tracking-tight">{score}</div>
-        <div className="text-sm text-[#98A2B3] font-normal mt-1">{probability}%</div>
-      </div>
-      <div className="w-32 h-2.5 bg-[#13171D] rounded-full overflow-hidden">
-        <motion.div 
-          initial={{ width: 0 }}
-          whileInView={{ width: `${probability}%` }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8, delay: 0.1 }}
-          className="h-full bg-[#34D399] rounded-full"
-        />
-      </div>
-    </motion.div>
-  );
-}
-
-function ComparisonRow({ labelA, labelB, valueA, valueB, label, invert = false }: {
-  labelA: string;
-  labelB: string;
-  valueA: string | number;
-  valueB: string | number;
-  label: string;
-  invert?: boolean;
-}) {
-  const parseValue = (val: string | number) => {
-    if (typeof val === 'number') return val;
-    if (val === 'N/A') return 0;
-    const num = parseFloat(val.replace(/[^0-9.]/g, ''));
-    return isNaN(num) ? 0 : num;
-  };
-
-  const numA = parseValue(valueA);
-  const numB = parseValue(valueB);
-  const maxVal = Math.max(numA, numB, 1);
-  
-  const widthA = (numA / maxVal) * 100;
-  const widthB = (numB / maxVal) * 100;
-
-  return (
-    <div className="bg-[#181C22] rounded-2xl p-8 shadow-[0_8px_30px_rgba(0,0,0,0.18)]">
-      <div className="text-xs text-[#98A2B3] mb-5 uppercase tracking-wider font-normal">{label}</div>
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-[#F5F5F5] font-normal w-32 truncate">{labelA}</span>
-          <div className="flex-1 h-2.5 bg-[#13171D] rounded-full overflow-hidden">
-            <motion.div 
-              initial={{ width: 0 }}
-              whileInView={{ width: `${widthA}%` }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-              className="h-full bg-[#34D399] rounded-full"
-            />
-          </div>
-          <span className="text-sm text-[#98A2B3] w-24 text-right font-normal">{valueA}</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-[#F5F5F5] font-normal w-32 truncate">{labelB}</span>
-          <div className="flex-1 h-2.5 bg-[#13171D] rounded-full overflow-hidden">
-            <motion.div 
-              initial={{ width: 0 }}
-              whileInView={{ width: `${widthB}%` }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-              className="h-full bg-[#1D222A] rounded-full"
-            />
-          </div>
-          <span className="text-sm text-[#98A2B3] w-24 text-right font-normal">{valueB}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MetricCard({ label, value, status }: { label: string; value: string; status: 'good' | 'warning' | 'bad' }) {
-  const statusColors = {
-    good: 'text-[#34D399]',
-    warning: 'text-[#D8A31A]',
-    bad: 'text-[#EF4444]'
-  };
-
-  return (
-    <motion.div
-      whileHover={{ y: -4 }}
-      className="bg-[#181C22] rounded-2xl p-8 shadow-[0_8px_30px_rgba(0,0,0,0.18)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.24)] transition-all duration-300"
-    >
-      <div className="text-xs text-[#98A2B3] mb-4 uppercase tracking-wider font-normal">{label}</div>
-      <div className={`text-2xl font-bold ${statusColors[status]}`}>{value}</div>
-    </motion.div>
-  );
-}
-
-function FormBadge({ result }: { result: string }) {
-  const colors = {
-    W: 'bg-[#34D399]/10 text-[#34D399]',
-    D: 'bg-[#1D222A] text-[#98A2B3]',
-    L: 'bg-[#EF4444]/10 text-[#EF4444]'
-  };
-
-  const labels = {
-    W: 'Win',
-    D: 'Draw',
-    L: 'Loss'
-  };
-
-  return (
-    <span className={`px-4 py-2 rounded-lg text-sm font-semibold ${colors[result as keyof typeof colors]}`} title={labels[result as keyof typeof labels]}>
-      {result}
-    </span>
   );
 }
