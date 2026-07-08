@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Star, TrendingUp, Shield, Target, Zap, Award, Trophy, Goal, ChartColumn, Clock3, Users, Scale, BarChart3, ChevronDown, ChevronUp, AlertCircle, Ban, HelpCircle } from 'lucide-react';
 import { MatchPrediction } from '../types';
@@ -99,20 +99,24 @@ function SectionHeader({ title, subtitle, icon }: { title: string; subtitle?: st
 }
 
 // ── Editorial Block ──────────────────────────────────────────────────────────
-function EditorialBlock({ id, children }: { id?: string; children: React.ReactNode }) {
-  return (
-    <motion.div
-      id={id}
-      className="bg-[#1b1a14] border border-[rgba(237,232,222,0.10)] rounded-[4px] p-5 shadow-none"
-      initial={{ opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-40px' }}
-      transition={{ duration: 0.4 }}
-    >
-      {children}
-    </motion.div>
-  );
-}
+const EditorialBlock = React.forwardRef<HTMLDivElement, { id?: string; children: React.ReactNode }>(
+  ({ id, children }, ref) => {
+    return (
+      <motion.div
+        ref={ref}
+        id={id}
+        className="bg-[#1b1a14] border border-[rgba(237,232,222,0.10)] rounded-[4px] p-5 shadow-none"
+        initial={{ opacity: 0, y: 10 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-40px' }}
+        transition={{ duration: 0.4 }}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+);
+EditorialBlock.displayName = 'EditorialBlock';
 
 // ── Outcome Option Card (within a structured block) ─────────────────────────
 function OutcomeCard({
@@ -240,6 +244,113 @@ export default function MatchAnalysis({
   drawerTeamLoading = false,
 }: MatchAnalysisProps) {
   const [activeSection, setActiveSection] = useState('overview');
+  const [isCompressed, setIsCompressed] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const sectionRefs = {
+    overview: useRef<HTMLDivElement>(null),
+    'match-markets': useRef<HTMLDivElement>(null),
+    'goal-markets': useRef<HTMLDivElement>(null),
+    'asian-markets': useRef<HTMLDivElement>(null),
+    'correct-score': useRef<HTMLDivElement>(null),
+    'team-news': useRef<HTMLDivElement>(null),
+    'model-insights': useRef<HTMLDivElement>(null),
+  };
+
+  const activeSectionRef = useRef(activeSection);
+  useEffect(() => {
+    activeSectionRef.current = activeSection;
+  }, [activeSection]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (container.scrollTop > 180) {
+        setIsCompressed(true);
+      } else {
+        setIsCompressed(false);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    const activeBtn = document.getElementById(`nav-btn-${activeSection}`);
+    if (activeBtn) {
+      activeBtn.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest'
+      });
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const visibilityMap = new Map<string, number>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const id = entry.target.id.replace('section-', '');
+          visibilityMap.set(id, entry.intersectionRatio);
+        });
+
+        const sectionIds = [
+          'overview',
+          'match-markets',
+          'goal-markets',
+          'asian-markets',
+          'correct-score',
+          'team-news',
+          'model-insights'
+        ];
+
+        let maxRatio = -1;
+        let bestId = activeSectionRef.current;
+
+        sectionIds.forEach((id) => {
+          const ratio = visibilityMap.get(id) || 0;
+          if (ratio > maxRatio && ratio > 0.05) {
+            maxRatio = ratio;
+            bestId = id;
+          }
+        });
+
+        if (bestId && bestId !== activeSectionRef.current) {
+          setActiveSection(bestId);
+        }
+      },
+      {
+        root: container,
+        rootMargin: '-20% 0px -40% 0px',
+        threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+      }
+    );
+
+    // Wait a brief tick to ensure refs are populated after first paint
+    const timer = setTimeout(() => {
+      Object.values(sectionRefs).forEach((ref) => {
+        if (ref.current) {
+          observer.observe(ref.current);
+        }
+      });
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, []);
 
   const getFlag = (teamName: string) => {
     const flagMap: { [key: string]: string } = {
@@ -342,21 +453,22 @@ export default function MatchAnalysis({
 
   const scrollToSection = (sectionId: string) => {
     setActiveSection(sectionId);
-    const element = document.getElementById(`section-${sectionId}`);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const ref = sectionRefs[sectionId as keyof typeof sectionRefs];
+    if (ref && ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
   return (
     <motion.div
+      ref={containerRef}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 bg-[#15140f] z-50 overflow-y-auto selection:bg-[#c1703b] selection:text-[#15140f]"
     >
       {/* Top bar — Back button only */}
-      <div className="sticky top-0 bg-[#15140f]/95 backdrop-none border-b border-[rgba(237,232,222,0.10)] z-50">
+      <div className="sticky top-0 bg-[#15140f] border-b border-[rgba(237,232,222,0.10)] z-50">
         <div className="max-w-[1080px] mx-auto px-6 py-3 flex items-center">
           {onBack && (
             <button
@@ -370,19 +482,38 @@ export default function MatchAnalysis({
         </div>
       </div>
 
-      {/* Sticky Navigation */}
-      <div className="sticky top-[45px] bg-[#15140f]/95 backdrop-none border-b border-[rgba(237,232,222,0.10)] z-40">
-        <div className="max-w-[1080px] mx-auto px-6">
-          <nav className="flex gap-6 overflow-x-auto py-2.5 scrollbar-none">
+      {/* Sticky Navigation with scroll-based compression */}
+      <div
+        className={`sticky top-[45px] bg-[#15140f] border-b border-[rgba(237,232,222,0.10)] z-40 transition-all duration-200 ${
+          isCompressed ? 'h-11 py-1' : 'h-14 py-3'
+        }`}
+      >
+        <div className="max-w-[1080px] mx-auto px-6 h-full flex items-center">
+          <nav className="flex gap-6 overflow-x-auto scrollbar-none w-full">
             {navItems.map((item) => (
               <button
+                id={`nav-btn-${item.id}`}
                 key={item.id}
                 onClick={() => scrollToSection(item.id)}
-                className={`relative text-xs font-sans uppercase font-bold tracking-wider transition-colors whitespace-nowrap py-1 ${
-                  activeSection === item.id ? 'text-[#c1703b]' : 'text-[#a39c8a] hover:text-[#ece7da]'
+                className={`relative font-sans uppercase tracking-wider transition-all duration-200 whitespace-nowrap ${
+                  activeSection === item.id
+                    ? 'text-[#c1703b] opacity-100 font-semibold'
+                    : 'text-[#a39c8a] opacity-80 hover:text-[#ece7da] font-medium'
+                } ${
+                  isCompressed ? 'text-[10px] py-1' : 'text-xs py-1.5'
                 }`}
               >
                 {item.label}
+                {activeSection === item.id && (
+                  <motion.div
+                    layoutId="active-tab"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#c1703b]"
+                    transition={{
+                      duration: 0.2,
+                      ease: 'easeOut',
+                    }}
+                  />
+                )}
               </button>
             ))}
           </nav>
@@ -392,7 +523,7 @@ export default function MatchAnalysis({
       <div className="max-w-[1080px] mx-auto px-6 py-8 space-y-6">
 
         {/* ── HERO SECTION ─────────────────────────────────────────────────── */}
-        <EditorialBlock id="section-overview">
+        <EditorialBlock id="section-overview" ref={sectionRefs.overview}>
           <div className="flex flex-col gap-6">
             {/* Header info / Meta */}
             <div className="flex items-center justify-between text-[10px] font-mono text-[#6b6656] uppercase tracking-wider border-b border-[rgba(237,232,222,0.10)] pb-2">
@@ -504,7 +635,7 @@ export default function MatchAnalysis({
         </EditorialBlock>
 
         {/* ── MATCH MARKETS ─────────────────────────────────────────────────── */}
-        <EditorialBlock id="section-match-markets">
+        <EditorialBlock id="section-match-markets" ref={sectionRefs['match-markets']}>
           <SectionHeader
             title="Match Markets"
             subtitle="1X2, Qualification, Double Chance, DNB, BTTS"
@@ -624,7 +755,7 @@ export default function MatchAnalysis({
         </EditorialBlock>
 
         {/* ── GOAL MARKETS ─────────────────────────────────────────────────── */}
-        <EditorialBlock id="section-goal-markets">
+        <EditorialBlock id="section-goal-markets" ref={sectionRefs['goal-markets']}>
           <SectionHeader
             title="Goal Markets"
             subtitle="Totals, Team Goals, First Goalscorer"
@@ -740,7 +871,7 @@ export default function MatchAnalysis({
         </EditorialBlock>
 
         {/* ── ASIAN MARKETS ────────────────────────────────────────────────── */}
-        <div id="section-asian-markets" className="space-y-4">
+        <div id="section-asian-markets" ref={sectionRefs['asian-markets']} className="space-y-4">
           {/* Asian Handicap */}
           <CollapsibleEditorialBlock
             title="Asian Handicap"
@@ -827,7 +958,7 @@ export default function MatchAnalysis({
         </div>
 
         {/* ── CORRECT SCORES ────────────────────────────────────────────────── */}
-        <EditorialBlock id="section-correct-score">
+        <EditorialBlock id="section-correct-score" ref={sectionRefs['correct-score']}>
           <SectionHeader
             title="Correct Score"
             subtitle="Top 5 most likely scorelines"
@@ -863,7 +994,7 @@ export default function MatchAnalysis({
         </EditorialBlock>
 
         {/* ── TEAM NEWS ─────────────────────────────────────────────────────── */}
-        <EditorialBlock id="section-team-news">
+        <EditorialBlock id="section-team-news" ref={sectionRefs['team-news']}>
           <SectionHeader
             title="Team News"
             subtitle="Injuries and Suspensions report"
@@ -973,7 +1104,7 @@ export default function MatchAnalysis({
         </EditorialBlock>
 
         {/* ── MODEL INSIGHTS & AI SUMMARY ────────────────────────────────────── */}
-        <EditorialBlock id="section-model-insights">
+        <EditorialBlock id="section-model-insights" ref={sectionRefs['model-insights']}>
           <SectionHeader
             title="Model Insights"
             subtitle="Calibration, variance & AI summary"
