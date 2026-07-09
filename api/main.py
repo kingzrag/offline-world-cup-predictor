@@ -167,6 +167,11 @@ from api.routes.analytics import router as analytics_router
 
 app.include_router(analytics_router)
 
+# ── AI Chat endpoints (OpenRouter integration) ───────────────────────────────
+from api.routes.ai import router as ai_router
+
+app.include_router(ai_router)
+
 
 async def run_live_match_sync():
     """
@@ -237,6 +242,55 @@ async def run_live_match_sync():
             logger.error(f"Live sync unexpected error: {e}", exc_info=True)
 
         await asyncio.sleep(30)
+
+
+async def run_odds_sync():
+    """
+    Fetch bookmaker odds from The Odds API every 5 minutes.
+    This ensures odds are kept current for value betting analysis.
+    """
+    from utils.config import settings
+    
+    if not settings.ODDS_API_KEY:
+        logger.warning("Odds sync task disabled: ODDS_API_KEY not configured")
+        return
+    
+    logger.info("Odds sync background task initialized (5-minute interval).")
+    await asyncio.sleep(10)  # let startup finish before first sync
+
+    while True:
+        started_at = datetime.now(timezone.utc)
+        logger.info("Odds sync started")
+
+        try:
+            from database.connection import SessionLocal
+            from services.odds_service import OddsService
+
+            db = SessionLocal()
+            try:
+                odds_service = OddsService()
+                raw_odds = odds_service.fetch_upcoming_odds()
+                
+                if not raw_odds:
+                    logger.warning("No odds data retrieved from The Odds API")
+                else:
+                    odds_service.store_odds(db, raw_odds)
+                    duration = (datetime.now(timezone.utc) - started_at).total_seconds()
+                    logger.info(
+                        f"Odds sync completed successfully - "
+                        f"fetched {len(raw_odds)} odds entries in {duration:.2f}s"
+                    )
+            except Exception as e:
+                logger.error(f"Odds sync failed: {e}", exc_info=True)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            logger.info("Odds sync task cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"Odds sync unexpected error: {e}", exc_info=True)
+
+        await asyncio.sleep(300)  # 5 minutes
 
 
 SCHEDULED_INTERNATIONAL_COMPETITIONS = [
@@ -475,3 +529,4 @@ async def startup_event():
     logger.info("Starting background scheduler task...")
     asyncio.create_task(run_daily_scheduler())
     asyncio.create_task(run_live_match_sync())
+    asyncio.create_task(run_odds_sync())

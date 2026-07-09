@@ -46,6 +46,8 @@ import stadiumBg from './assets/images/football2.png';
 import { BestPredictionsCarousel } from './components/BestPredictionsCarousel';
 import { CursorFX } from './components/CustomCursor';
 import AIAssistant from './components/AIAssistant';
+import AIAssistantNew from './components/AIAssistantNew';
+import AIHealthDashboard from './components/AIHealthDashboard';
 import MatchAnalysis from './components/MatchAnalysis';
 import { checkHealth } from './api';
 import {
@@ -238,6 +240,15 @@ export default function App() {
       // if (path === '/tournament') return 'tournament'; // HIDE TOURNAMENT ROUTE
     }
     return 'home';
+  });
+
+  // Health Dashboard - developer-only diagnostics page
+  const [showHealthDashboard, setShowHealthDashboard] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      return path === '/admin/health' || path === '/diagnostics';
+    }
+    return false;
   });
 
   // Predictions State populated from live FastAPI server
@@ -1616,14 +1627,23 @@ export default function App() {
     >
       {/* Cursor FX */}
       <CursorFX theme={cursorTheme} />
-      {/* AI Assistant */}
-      <AIAssistant 
-        matches={sourceMatches} 
-        onAskAboutMatch={(matchId) => {
-          // This will be handled by the AIAssistant component internally
-          console.log('AI asked about match:', matchId);
-        }}
-      />
+      {/* AI Assistant - Use new OpenRouter integration if enabled */}
+      {import.meta.env.VITE_USE_OPENROUTER_AI === 'true' ? (
+        <AIAssistantNew 
+          matches={sourceMatches} 
+          onAskAboutMatch={(matchId) => {
+            console.log('AI asked about match:', matchId);
+          }}
+        />
+      ) : (
+        <AIAssistant 
+          matches={sourceMatches} 
+          onAskAboutMatch={(matchId) => {
+            // This will be handled by the AIAssistant component internally
+            console.log('AI asked about match:', matchId);
+          }}
+        />
+      )}
       {/* Top Premium Editorial Header */}
       <header id="app-header" className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full">
         
@@ -5608,4 +5628,9 @@ export default function App() {
 
     </motion.div>
   );
+
+  // Health Dashboard - developer-only diagnostics page
+  if (showHealthDashboard) {
+    return <AIHealthDashboard />;
+  }
 }

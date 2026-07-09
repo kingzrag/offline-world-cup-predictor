@@ -65,3 +65,6 @@ python-jose==3.5.0
 pysofascore==0.3.0
 understat==0.1.14
 kaggle==1.6.17
+
+# AI Integration (OpenRouter)
+httpx==0.28.1
