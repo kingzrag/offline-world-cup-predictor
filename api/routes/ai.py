@@ -19,7 +19,6 @@ from database.connection import get_db
 from services.ai_service import ai_service
 from services.model_service import model_service
 from api.routes.predict import (
-    _find_team,
     get_team_profile as get_team_profile_impl,
     get_h2h as get_h2h_impl,
     get_fixtures as get_fixtures_impl
