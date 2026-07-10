@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import football2 from './assets/images/football2.png';
 // @ts-ignore
 import background from './assets/images/background.png';
+import CompetitionSelector from './components/CompetitionSelector';
 import { 
   getPredictions, 
   loadFixturesInstant,
@@ -573,10 +574,14 @@ export default function App() {
 
   // Page Scroll State for Apple-like Premium Transitions
   const [scrollY, setScrollY] = useState(0);
+  const [isCompetitionFloating, setIsCompetitionFloating] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
       setScrollY(window.scrollY);
+      
+      // Cinematic floating transition: selector floats during hero scroll
+      setIsCompetitionFloating(window.scrollY > 50 && window.scrollY < 300);
       
       // Infinite scroll detection
       const scrollHeight = document.documentElement.scrollHeight;
@@ -2047,144 +2052,17 @@ export default function App() {
               >
                 <div className="max-w-7xl mx-auto px-6 md:px-12 py-6 mb-8">
                   
-                  {/* Premium Competitions Bar */}
-                  <div className="bg-[rgba(12,12,12,0.16)] backdrop-blur-md border border-[rgba(255,255,255,0.06)] rounded-[20px] shadow-lg overflow-hidden">
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 divide-x divide-white/6">
-                      
-                      {/* FIFA World Cup */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1, duration: 0.5 }}
-                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
-                        whileHover={{ y: -2 }}
-                      >
-                        <img 
-                          src="/leagues/world-cup.svg" 
-                          alt="FIFA World Cup" 
-                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
-                          loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/world-cup.svg', e)}
-                        />
-                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">FIFA World Cup</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
-                      </motion.div>
-
-                      {/* Premier League */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.15, duration: 0.5 }}
-                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
-                        whileHover={{ y: -2 }}
-                      >
-                        <img 
-                          src="/leagues/premier-league.svg" 
-                          alt="Premier League" 
-                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
-                          loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/premier-league.svg', e)}
-                        />
-                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Premier League</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
-                      </motion.div>
-
-                      {/* La Liga */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2, duration: 0.5 }}
-                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
-                        whileHover={{ y: -2 }}
-                      >
-                        <img 
-                          src="/leagues/la-liga-seeklogo.png" 
-                          alt="La Liga" 
-                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
-                          loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/la-liga-seeklogo.png', e)}
-                        />
-                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">La Liga</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
-                      </motion.div>
-
-                      {/* Bundesliga */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.25, duration: 0.5 }}
-                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
-                        whileHover={{ y: -2 }}
-                      >
-                        <img 
-                          src="/leagues/bundesliga.png" 
-                          alt="Bundesliga" 
-                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
-                          loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/bundesliga.png', e)}
-                        />
-                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Bundesliga</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
-                      </motion.div>
-
-                      {/* UEFA Champions League */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3, duration: 0.5 }}
-                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
-                        whileHover={{ y: -2 }}
-                      >
-                        <img 
-                          src="/leagues/champions-league.svg" 
-                          alt="Champions League" 
-                          className="w-16 h-16 object-contain group-hover:scale-[1.08] transition-transform duration-250"
-                          loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/champions-league.svg', e)}
-                        />
-                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Champions League</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
-                      </motion.div>
-
-                      {/* UEFA Europa League */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.35, duration: 0.5 }}
-                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
-                        whileHover={{ y: -2 }}
-                      >
-                        <img 
-                          src="/leagues/europa-league.png" 
-                          alt="Europa League" 
-                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
-                          loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/europa-league.png', e)}
-                        />
-                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Europa League</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
-                      </motion.div>
-
-                      {/* Serie A */}
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4, duration: 0.5 }}
-                        className="relative group px-4 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/3 transition-all duration-250"
-                        whileHover={{ y: -2 }}
-                      >
-                        <img 
-                          src="/leagues/serie-a.png" 
-                          alt="Serie A" 
-                          className="w-10 h-10 object-contain group-hover:scale-[1.08] transition-transform duration-250"
-                          loading="lazy"
-                          onError={(e) => console.error('Failed to load logo: /leagues/serie-a.png', e)}
-                        />
-                        <span className="text-[11px] font-medium text-white uppercase tracking-wide">Serie A</span>
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#22C55E] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-250 origin-center opacity-0 group-hover:opacity-100" />
-                      </motion.div>
-
-                    </div>
+                  {/* Premium Competitions Bar - Cinematic Floating Transition */}
+                  <div 
+                    className="relative"
+                    style={{
+                      transform: isCompetitionFloating 
+                        ? `translateY(${Math.min(50, scrollY - 50) * 0.3}px) scale(${Math.max(0.95, 1 - (scrollY - 150) / 2000)})` 
+                        : 'none',
+                      transition: 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)'
+                    }}
+                  >
+                    <CompetitionSelector isFloating={isCompetitionFloating} />
                   </div>
 
                   {/* SCROLL TO EXPLORE Indicator with animated chevron */}
@@ -2215,7 +2093,6 @@ export default function App() {
                       <ChevronDown className="w-4 h-4" strokeWidth={1.5} />
                     </motion.div>
                   </motion.div>
-
                 </div>
               </motion.div>
             </div>
