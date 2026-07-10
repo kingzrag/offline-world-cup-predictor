@@ -1731,11 +1731,12 @@ export default function App() {
             {/* Fully Responsive & Cinematic 100% Width editorial-hero */}
             <div 
               id="editorial-hero" 
-              className="relative w-full h-[calc(100dvh-80px)] min-h-[560px] flex flex-col justify-between bg-black overflow-hidden border-b border-zinc-900"
+              className="relative w-full h-[calc(100dvh-80px)] min-h-[560px] flex flex-col justify-between bg-black overflow-hidden"
               style={{
-                transform: `translateY(${scrollY * -0.15}px)`,
-                opacity: Math.max(0, 1 - scrollY / 600),
-                transition: 'transform 0.05s ease-out, opacity 0.05s ease-out'
+                transform: `translateY(${scrollY * -0.15}px) scale(${Math.max(0.94, 1 - scrollY / 2000)})`,
+                opacity: Math.max(0.82, 1 - scrollY / 800),
+                filter: `blur(${Math.min(8, scrollY / 100)}px)`,
+                transition: 'transform 0.05s ease-out, opacity 0.05s ease-out, filter 0.05s ease-out'
               }}
             >
               {/* Cinematic premium stadium background */}
@@ -1812,6 +1813,10 @@ export default function App() {
                   background: 'linear-gradient(to top, rgba(26, 77, 26, 0.12) 0%, rgba(10, 10, 10, 0.08) 50%, transparent 100%)'
                 }} />
                 
+                {/* Large gradient fade overlay at bottom - smooth transition to page background */}
+                <div className="absolute bottom-0 left-0 right-0 h-[300px]" style={{
+                  background: 'linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 40%, rgba(0, 0, 0, 0.4) 70%, transparent 100%)'
+                }} />
                 
                 {/* Enhanced floodlights with radial glow */}
                 <div className="absolute inset-0 z-5 pointer-events-none" style={{
@@ -2223,17 +2228,25 @@ export default function App() {
         {activeTab === 'home' && (
           <div className="w-full flex flex-col animate-fade-in">
             
-            {/* TODAY'S BEST PREDICTIONS CAROUSEL SECTION */}
-            <BestPredictionsCarousel
-              matches={sourceMatches.slice(0, 9)}
-              isLoading={isLoadingMatches}
-              error={matchError}
-              apiBase={API_BASE}
-              onViewAnalysis={openMatchAnalysis}
-              onViewAll={() => navigateTo('predictions')}
-              onRetry={() => setRetryTrigger(prev => prev + 1)}
-              isModalOpen={!!selectedMatch || showSearchModal}
-            />
+            {/* TODAY'S BEST PREDICTIONS CAROUSEL SECTION - Floating overlap with hero */}
+            <div 
+              id="todays-best-predictions"
+              className="relative z-20 -mt-24 sm:-mt-28 md:-mt-32 lg:-mt-36 px-4 sm:px-6 md:px-12"
+              style={{
+                boxShadow: '0 0 150px rgba(76,138,131,0.15)'
+              }}
+            >
+              <BestPredictionsCarousel
+                matches={sourceMatches.slice(0, 9)}
+                isLoading={isLoadingMatches}
+                error={matchError}
+                apiBase={API_BASE}
+                onViewAnalysis={openMatchAnalysis}
+                onViewAll={() => navigateTo('predictions')}
+                onRetry={() => setRetryTrigger(prev => prev + 1)}
+                isModalOpen={!!selectedMatch || showSearchModal}
+              />
+            </div>
 
             {/* THE MODEL section (Full-Width editorial block at bottom of Home) */}
             <div className="w-full bg-black border-t border-zinc-900 py-20 mt-10">

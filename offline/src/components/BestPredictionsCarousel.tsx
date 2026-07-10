@@ -101,7 +101,10 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
   const flagB = getFlag(match.teamB);
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.7, ease: [0.32, 0.72, 0, 1] }}
       className={`bg-zinc-950 border rounded-lg px-7 py-6 flex flex-col justify-between min-h-[400px] h-full transition-colors duration-300 ${
         isActive
           ? "border-zinc-700 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(16,185,129,0.15)]"
@@ -285,7 +288,7 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 });
 
