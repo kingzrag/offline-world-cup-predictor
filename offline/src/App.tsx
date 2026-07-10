@@ -1650,7 +1650,9 @@ export default function App() {
         />
       )}
       {/* Top Premium Editorial Header */}
-      <header id="app-header" className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full">
+      <header id="app-header" className="bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full" style={{
+        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.3)'
+      }}>
         
         {/* Tactical Editorial Sections Navigation (Col 1 on desktop) */}
         <nav id="header-nav" className="flex items-center space-x-3 sm:space-x-4 md:space-x-5 lg:space-x-8 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase text-zinc-400 justify-center md:justify-start order-2 md:order-1 select-none overflow-x-auto scrollbar-none">
