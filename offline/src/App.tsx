@@ -575,13 +575,25 @@ export default function App() {
   // Page Scroll State for Apple-like Premium Transitions
   const [scrollY, setScrollY] = useState(0);
   const [isCompetitionFloating, setIsCompetitionFloating] = useState(false);
+  const [heroTransitionComplete, setHeroTransitionComplete] = useState(false);
+  const [heroEdgeVisible, setHeroEdgeVisible] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrollY(window.scrollY);
+      const currentScrollY = window.scrollY;
+      setScrollY(currentScrollY);
+      
+      // Mark hero transition as complete after scrolling past hero
+      if (currentScrollY > window.innerHeight * 0.8) {
+        setHeroTransitionComplete(true);
+        setHeroEdgeVisible(true);
+      } else {
+        setHeroTransitionComplete(false);
+        setHeroEdgeVisible(false);
+      }
       
       // Cinematic floating transition: selector floats during hero scroll
-      setIsCompetitionFloating(window.scrollY > 50 && window.scrollY < 300);
+      setIsCompetitionFloating(currentScrollY > 50 && currentScrollY < 300);
       
       // Infinite scroll detection
       const scrollHeight = document.documentElement.scrollHeight;
@@ -1738,12 +1750,21 @@ export default function App() {
             {/* Fully Responsive & Cinematic 100% Width editorial-hero */}
             <div 
               id="editorial-hero" 
-              className="relative w-full h-[calc(100dvh-80px)] min-h-[560px] flex flex-col justify-between bg-black overflow-hidden"
+              className="relative w-full h-[115dvh] flex flex-col justify-between bg-black overflow-hidden"
               style={{
-                transform: `translateY(${scrollY * -0.15}px) scale(${Math.max(0.94, 1 - scrollY / 2000)})`,
-                opacity: Math.max(0.82, 1 - scrollY / 800),
-                filter: `blur(${Math.min(8, scrollY / 100)}px)`,
-                transition: 'transform 0.05s ease-out, opacity 0.05s ease-out, filter 0.05s ease-out'
+                // Phase 1 (0-25px): Preparation - stadium zoom, content slight movement
+                // Phase 2 (25px+): Magazine cover lift
+                transform: !heroTransitionComplete 
+                  ? `perspective(2500px) ${scrollY > 25 
+                      ? `rotateX(${Math.min(6, (scrollY - 25) / 120)}deg) translateY(${Math.min(-120, (scrollY - 25) * -0.8)}px) scale(${Math.max(0.98, 1 - (scrollY - 25) / 5000)})`
+                      : `scale(${1 + Math.min(0.03, scrollY / 833)}) translateY(${Math.min(-10, scrollY * -0.4)}px)`
+                    }`
+                  : 'none',
+                transformOrigin: 'top center',
+                boxShadow: !heroTransitionComplete && scrollY > 0 
+                  ? `0 ${Math.min(250, scrollY * 4)}px ${Math.min(500, scrollY * 8)}px rgba(0, 0, 0, ${Math.min(0.7, scrollY / 250)})` 
+                  : 'none',
+                transition: 'transform 0.05s ease-out, box-shadow 0.05s ease-out'
               }}
             >
               {/* Cinematic premium stadium background */}
@@ -1770,7 +1791,7 @@ export default function App() {
                   className="absolute inset-0 w-full h-full object-cover"
                   style={{
                     backgroundSize: 'cover',
-                    backgroundPosition: 'center 60%',
+                    backgroundPosition: 'center 50%',
                     backgroundRepeat: 'no-repeat'
                   }}
                   referrerPolicy="no-referrer"
@@ -2069,8 +2090,8 @@ export default function App() {
 
                   {/* SCROLL TO EXPLORE Indicator with animated chevron */}
                   <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 0.5 }}
                     className="flex flex-col items-center mt-6 cursor-pointer group"
                     onClick={() => {
@@ -2078,17 +2099,18 @@ export default function App() {
                       if (el) el.scrollIntoView({ behavior: 'smooth' });
                     }}
                     style={{
-                      opacity: Math.max(0, 1 - scrollY / 100),
-                      pointerEvents: scrollY > 100 ? 'none' : 'auto',
-                      transition: 'opacity 0.3s ease-out'
+                      opacity: Math.max(0, 1 - scrollY / 40),
+                      pointerEvents: scrollY > 40 ? 'none' : 'auto',
+                      transform: `translateY(${Math.min(8, scrollY * 0.2)}px)`,
+                      transition: 'opacity 0.2s ease-out, transform 0.2s ease-out'
                     }}
                   >
                     <span className="text-[10px] uppercase tracking-[0.25em] text-white/70 group-hover:text-white/90 transition-colors duration-300 font-mono">Scroll to Explore</span>
                     <motion.div 
-                      animate={{ y: [0, 6, 0], opacity: [0.5, 1, 0.5] }}
+                      animate={{ y: [0, 8, 0], opacity: [0.4, 1, 0.4] }}
                       transition={{ 
-                        y: { repeat: Infinity, duration: 2, ease: "easeInOut" },
-                        opacity: { repeat: Infinity, duration: 2, ease: "easeInOut" }
+                        y: { repeat: Infinity, duration: 2.5, ease: "easeInOut" },
+                        opacity: { repeat: Infinity, duration: 2.5, ease: "easeInOut" }
                       }}
                       className="text-white/70 group-hover:text-white/90 transition-colors duration-300 mt-2"
                     >
@@ -2098,6 +2120,20 @@ export default function App() {
                 </div>
               </motion.div>
             </div>
+
+            {/* Thin Hero Edge - Magazine Spine Effect */}
+            {heroEdgeVisible && (
+              <div 
+                className="fixed top-20 left-0 right-0 z-30 h-10 overflow-hidden pointer-events-none"
+                style={{
+                  background: `url(${background}) center 50% / cover no-repeat`,
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+                  transition: 'opacity 0.3s ease-out'
+                }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60" />
+              </div>
+            )}
           </>
         )}
 
@@ -2112,7 +2148,14 @@ export default function App() {
               id="todays-best-predictions"
               className="relative z-20 -mt-24 sm:-mt-28 md:-mt-32 lg:-mt-36 px-4 sm:px-6 md:px-12"
               style={{
-                boxShadow: '0 0 150px rgba(76,138,131,0.15)'
+                boxShadow: '0 0 150px rgba(76,138,131,0.15)',
+                transform: !heroTransitionComplete 
+                  ? `translateY(${Math.max(0, 30 - scrollY * 0.25)}px) scale(${Math.min(1, 0.995 + scrollY / 20000)})` 
+                  : 'none',
+                opacity: !heroTransitionComplete 
+                  ? Math.min(1, 0.92 + scrollY / 1250) 
+                  : 1,
+                transition: 'transform 0.05s ease-out, opacity 0.05s ease-out'
               }}
             >
               <BestPredictionsCarousel
