@@ -375,6 +375,7 @@ export function BestPredictionsCarousel({
 
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
+  const [sectionSettled, setSectionSettled] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -454,7 +455,7 @@ export function BestPredictionsCarousel({
   return (
     <section
       id="todays-best-predictions"
-      className="relative w-full min-h-screen lg:h-[100dvh] flex flex-col justify-center bg-[#070707] text-zinc-150 overflow-hidden select-none py-12 lg:py-0 scroll-mt-24"
+      className="relative w-full min-h-screen lg:h-[100dvh] flex flex-col justify-start lg:justify-center pt-[95px] lg:pt-[110px] pb-12 lg:pb-0 bg-[#070707] text-zinc-150 overflow-hidden select-none scroll-mt-24"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -466,12 +467,18 @@ export function BestPredictionsCarousel({
 
       <motion.div 
         className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col justify-center h-full py-8 lg:py-12"
-        initial="hidden"
-        whileInView="show"
+        initial={{ opacity: 0, y: 80 }}
+        whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.15 }}
+        transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+        onAnimationComplete={() => setSectionSettled(true)}
       >
         <div className="flex flex-col md:flex-row md:items-end justify-between pb-6 mb-8 gap-6 relative">
-          <motion.div variants={titleVariants}>
+          <motion.div 
+            variants={titleVariants}
+            initial="hidden"
+            animate={sectionSettled ? "show" : "hidden"}
+          >
             <span className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold mb-2">
               CURATED SELECTIONS
             </span>
@@ -487,6 +494,8 @@ export function BestPredictionsCarousel({
             <motion.div 
               className="flex items-center space-x-3 shrink-0 self-end md:self-auto"
               variants={fadeVariants}
+              initial="hidden"
+              animate={sectionSettled ? "show" : "hidden"}
             >
               <motion.button
                 onClick={goPrev}
@@ -515,6 +524,8 @@ export function BestPredictionsCarousel({
           <motion.div 
             className="w-full h-[1px] bg-zinc-800 origin-left"
             variants={dividerVariants}
+            initial="hidden"
+            animate={sectionSettled ? "show" : "hidden"}
           />
         </div>
 
@@ -580,8 +591,9 @@ export function BestPredictionsCarousel({
                 // Opacity logic matching: center 100%, left/right 75%, mobile hidden
                 const cardOpacity = isActive ? 1 : isMobile ? 0 : 0.75;
                 
-                // Sequence delay calculations for staggered entrance
-                const seqDelay = 0.3 + (offset + 1) * 0.15;
+                // Sequence delay calculations for staggered entrance after section settles
+                // Left gets 0, Center gets 0.15s, Right gets 0.3s
+                const seqDelay = (offset + 1) * 0.15;
 
                 return (
                   <motion.div
@@ -599,13 +611,19 @@ export function BestPredictionsCarousel({
                   >
                     {/* Inner wrapper for Entrance slide + Hover elevation */}
                     <motion.div
-                      initial={{ opacity: 0, y: 40 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{
-                        duration: 1.0,
-                        ease: [0.16, 1, 0.3, 1],
-                        delay: seqDelay
+                      initial="hidden"
+                      animate={sectionSettled ? "show" : "hidden"}
+                      variants={{
+                        hidden: { opacity: 0, y: 30 },
+                        show: {
+                          opacity: 1,
+                          y: 0,
+                          transition: {
+                            duration: 0.85,
+                            ease: [0.16, 1, 0.3, 1] as const,
+                            delay: seqDelay
+                          }
+                        }
                       }}
                       whileHover={{
                         y: -6,

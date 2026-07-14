@@ -166,3 +166,13 @@ body {
   transform-origin: bottom left;
 }
 
+/* Editorial Scroll Snapping (Active specifically on Home) */
+html.editorial-snap-active {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+.editorial-snap-section {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+

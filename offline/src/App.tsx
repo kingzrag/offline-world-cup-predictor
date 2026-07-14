@@ -45,7 +45,7 @@ import {
   isKickoffTomorrow,
 } from './dateTimeUtils';
 import { formatXG } from './xgUtils';
-import { motion } from 'motion/react';
+import { motion, useScroll, useTransform } from 'motion/react';
 import { Canvas } from '@react-three/fiber';
 import { Football3D } from './components/Football3D';
 // @ts-ignore
@@ -251,6 +251,28 @@ export default function App() {
   });
 
   const [isScrolled, setIsScrolled] = useState(false);
+
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress: heroScrollProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"]
+  });
+  const heroOpacity = useTransform(heroScrollProgress, [0, 0.75, 1], [1, 1, 0.9]);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (activeTab === 'home') {
+        document.documentElement.classList.add('editorial-snap-active');
+      } else {
+        document.documentElement.classList.remove('editorial-snap-active');
+      }
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('editorial-snap-active');
+      }
+    };
+  }, [activeTab]);
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -1651,23 +1673,20 @@ export default function App() {
     >
       {/* Cursor FX */}
       <CursorFX theme={cursorTheme} />
-      {/* AI Assistant - Use new OpenRouter integration if enabled */}
+      {/* AI Assistant - floating launcher temporarily hidden during homepage redesign */}
+      {/* Re-enable after homepage is complete:
       {import.meta.env.VITE_USE_OPENROUTER_AI === 'true' ? (
-        <AIAssistantNew 
-          matches={sourceMatches} 
-          onAskAboutMatch={(matchId) => {
-            console.log('AI asked about match:', matchId);
-          }}
+        <AIAssistantNew
+          matches={sourceMatches}
+          onAskAboutMatch={(matchId) => { console.log('AI asked about match:', matchId); }}
         />
       ) : (
-        <AIAssistant 
-          matches={sourceMatches} 
-          onAskAboutMatch={(matchId) => {
-            // This will be handled by the AIAssistant component internally
-            console.log('AI asked about match:', matchId);
-          }}
+        <AIAssistant
+          matches={sourceMatches}
+          onAskAboutMatch={(matchId) => { console.log('AI asked about match:', matchId); }}
         />
       )}
+      */}
       {/* Top Premium Editorial Header */}
       <header
         id="app-header"
@@ -1812,9 +1831,11 @@ export default function App() {
         {activeTab === 'home' && (
           <>
             {/* Fully Responsive & Cinematic 100% Width editorial-hero */}
-            <div 
+            <motion.div 
+              ref={heroRef}
               id="editorial-hero" 
-              className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark"
+              className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark editorial-snap-section"
+              style={{ opacity: heroOpacity }}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
             >
@@ -1989,10 +2010,7 @@ export default function App() {
               >
                 <div className="max-w-7xl mx-auto px-6 md:px-12 pb-6 pt-4 mb-4">
                   
-                  {/* Premium Competitions Bar */}
-                  <div className="relative">
-                    <CompetitionSelector />
-                  </div>
+                  {/* Premium Competitions Bar — moved to CompetitionArchive section below the predictions carousel */}
 
                   {/* SCROLL TO EXPLORE Indicator with animated chevron */}
                   <motion.div 
@@ -2020,7 +2038,7 @@ export default function App() {
                   </motion.div>
                 </div>
               </motion.div>
-            </div>
+            </motion.div>
           </>
         )}
 
@@ -2033,7 +2051,7 @@ export default function App() {
             {/* TODAY'S BEST PREDICTIONS CAROUSEL SECTION */}
             <div 
               id="todays-best-predictions"
-              className="relative z-20 px-4 sm:px-6 md:px-12 py-16"
+              className="relative z-20 px-4 sm:px-6 md:px-12 py-16 editorial-snap-section"
             >
               <BestPredictionsCarousel
                 matches={sourceMatches.slice(0, 9)}
