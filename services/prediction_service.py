@@ -111,14 +111,17 @@ class PredictionService:
         matches = query.all()
         logger.info(f"Enrichment pipeline: {len(matches)} fixtures to process.")
 
+        # Pre-load competition id → code mapping to avoid an N+1 query inside the loop
+        comp_code_map: Dict[int, str] = {
+            c.id: c.code
+            for c in db.query(Competition).all()
+            if c.code
+        }
+
         updated = 0
         for match in matches:
             try:
-                comp_code = "WC"
-                if match.competition_id:
-                    comp = db.query(Competition).filter_by(id=match.competition_id).first()
-                    if comp and comp.code:
-                        comp_code = comp.code
+                comp_code = comp_code_map.get(match.competition_id, "WC") if match.competition_id else "WC"
 
                 goals = model_service.predict_goals(
                     db=db,

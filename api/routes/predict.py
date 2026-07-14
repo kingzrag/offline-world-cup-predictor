@@ -124,6 +124,24 @@ _cache_stats = {
 _team_stats_cache = {}
 _team_stats_cache_ttl = 600  # 10 minutes
 
+# ── /fixtures-enriched response-level cache ───────────────────────────────────
+# Key: "competition_code|limit|year|show_historical"  Value: (response_dict, expiry_ts)
+# TTL: 5 minutes — predictions are pre-computed and change at most once per sync cycle.
+FIXTURES_ENRICHED_CACHE_TTL: int = 5 * 60  # 5 minutes
+_fixtures_enriched_cache: Dict[str, Tuple[Any, float]] = {}
+
+# ── Poisson result LRU cache ──────────────────────────────────────────────────
+# Many fixtures share identical (h_xg, a_xg) rounded to 2 dp (e.g. 1.0-0.0 for 1-0
+# finished matches, 1.0-1.0 for draws).  Caching saves re-running 14 market
+# calculations across the 121-entry probability matrix for duplicate xG pairs.
+from functools import lru_cache as _lru_cache
+
+@_lru_cache(maxsize=256)
+def _cached_evaluate_poisson(h_xg_r: float, a_xg_r: float) -> Dict[str, Any]:
+    """Memoised wrapper around evaluate_poisson_engine keyed on 2-dp rounded xG."""
+    from services.poisson_engine import evaluate_poisson_engine
+    return evaluate_poisson_engine(max(h_xg_r, 0.01), max(a_xg_r, 0.01))
+
 
 def _transform_asian_handicap(poisson_handicap: Dict[str, Any]) -> Dict[str, Any]:
     """Transform Poisson engine's asian handicap structure to match frontend expectations."""
@@ -140,15 +158,21 @@ def _build_enrichment_from_xg(
     *,
     most_likely_score: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build response enrichment from stored xG using fast Poisson math (no ML)."""
-    from services.poisson_engine import evaluate_poisson_engine
+    """Build response enrichment from stored xG using fast Poisson math (no ML).
 
-    poisson = evaluate_poisson_engine(max(h_xg, 0.01), max(a_xg, 0.01))
-    
+    Uses an LRU cache keyed on (round(h_xg,2), round(a_xg,2)) so that duplicate
+    scorelines (e.g. the same 1-0 score across many finished matches) only
+    compute the full probability matrix once per process lifetime.
+    """
+    # Round to 2 dp for cache key — granularity well within prediction accuracy
+    h_r = round(max(h_xg, 0.01), 2)
+    a_r = round(max(a_xg, 0.01), 2)
+    poisson = _cached_evaluate_poisson(h_r, a_r)
+
     # Transform Poisson handicap structure to match frontend expectations
     asian_handicap = _transform_asian_handicap(poisson["asian_handicap"])
-    logger.info(f"[API_ENRICHMENT_XG] Transformed Poisson handicap: {asian_handicap}")
-    
+    logger.debug(f"[API_ENRICHMENT_XG] Transformed Poisson handicap: {asian_handicap}")
+
     return {
         "goals": {
             "home_xg":  h_xg,
@@ -1108,12 +1132,35 @@ def get_fixtures_enriched(
 
     Enrichment is read from pre-computed Prediction rows (expected goals) or the
     in-memory cache populated by /predict-batch. ML inference is never run here.
+
+    Response-level cache (TTL=5 min) keyed on (competition_code, limit, year,
+    show_historical) ensures that repeated homepage loads never re-run the
+    Poisson engine loop — they get a pre-built dict in microseconds.
+
+    Live matches (IN_PLAY / PAUSED) bypass the response cache so the live
+    Poisson state is always fresh.
     """
     from models import Match, Competition
     from sqlalchemy import extract
     from sqlalchemy.orm import joinedload, selectinload
 
     t_start = time.perf_counter()
+
+    # ── Response-level cache check ────────────────────────────────────────────
+    _cache_key = f"{competition_code.upper()}|{limit}|{year}|{show_historical}"
+    _now_ts = time.time()
+    if _cache_key in _fixtures_enriched_cache:
+        _cached_resp, _expiry = _fixtures_enriched_cache[_cache_key]
+        if _now_ts < _expiry:
+            # Return cached response — avoid all DB + Poisson work
+            _cache_ms = round((time.perf_counter() - t_start) * 1000, 2)
+            logger.info(
+                f"GET /fixtures-enriched CACHE HIT {competition_code.upper()} "
+                f"{_cached_resp.get('count', '?')} fixtures in {_cache_ms}ms"
+            )
+            return _cached_resp
+    # Stale or missing — evict and rebuild
+    _fixtures_enriched_cache.pop(_cache_key, None)
 
     comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
     if not comp:
@@ -1230,12 +1277,9 @@ def get_fixtures_enriched(
                         most_likely_score=f"{m.home_score}-{m.away_score}",
                     )
                     enrichment_source_counts["finished_score"] += 1
-                    ah = enrichment.get("markets", {}).get("asian_handicap")
-                    logger.info(
+                    logger.debug(
                         f"[fixtures-enriched] match_id={m.id} source=finished_score "
-                        f"{home_t.name} vs {away_t.name} "
-                        f"xg=({h_xg:.4f}, {a_xg:.4f}) "
-                        f"asian_handicap={ah}"
+                        f"{home_t.name} vs {away_t.name} xg=({h_xg:.2f},{a_xg:.2f})"
                     )
                 elif (
                     stored_pred
@@ -1284,12 +1328,10 @@ def get_fixtures_enriched(
                                 "live_metadata": live_pred["metadata"],
                             }
                             enrichment_source_counts["live_prediction"] += 1
-                            logger.info(
+                            logger.debug(
                                 f"[fixtures-enriched] match_id={m.id} source=live_prediction "
                                 f"{home_t.name} vs {away_t.name} "
-                                f"live_score=({m.current_home_score}-{m.current_away_score}) "
-                                f"minute={m.current_minute} "
-                                f"xg=({live_pred['expected_goals']['home']:.4f}, {live_pred['expected_goals']['away']:.4f})"
+                                f"minute={m.current_minute}"
                             )
                         except Exception as live_exc:
                             logger.warning(f"[fixtures-enriched] Live prediction failed for match {m.id}: {live_exc}, falling back to stored prediction")
@@ -1307,12 +1349,9 @@ def get_fixtures_enriched(
                             a_xg,
                         )
                         enrichment_source_counts["stored_prediction"] += 1
-                        ah = enrichment.get("markets", {}).get("asian_handicap")
-                        logger.info(
+                        logger.debug(
                             f"[fixtures-enriched] match_id={m.id} source=stored_prediction "
-                            f"{home_t.name} vs {away_t.name} "
-                            f"xg=({h_xg:.4f}, {a_xg:.4f}) "
-                            f"asian_handicap={ah}"
+                            f"{home_t.name} vs {away_t.name} xg=({h_xg:.2f},{a_xg:.2f})"
                         )
                 else:
                     enrichment = _lookup_cached_enrichment(
@@ -1323,19 +1362,11 @@ def get_fixtures_enriched(
                         cache_now,
                     )
                     if enrichment is not None:
-                        goals = enrichment.get("goals", {})
                         enrichment_source_counts["cache"] += 1
-                        logger.info(
-                            f"[fixtures-enriched] match_id={m.id} source=cache "
-                            f"{home_t.name} vs {away_t.name} "
-                            f"xg=({float(goals.get('home_xg', 0.0)):.4f}, {float(goals.get('away_xg', 0.0)):.4f})"
-                        )
+                        logger.debug(f"[fixtures-enriched] match_id={m.id} source=cache")
                     else:
                         enrichment_source_counts["missing"] += 1
-                        logger.info(
-                            f"[fixtures-enriched] match_id={m.id} source=missing "
-                            f"{home_t.name} vs {away_t.name}"
-                        )
+                        logger.debug(f"[fixtures-enriched] match_id={m.id} source=missing")
             except Exception as exc:
                 logger.warning(f"[fixtures-enriched] enrichment failed for match {m.id}: {exc}")
                 errors += 1
@@ -1362,23 +1393,28 @@ def get_fixtures_enriched(
     enrichment_time_ms = round((t_end - t_query) * 1000, 2)
     total_time_ms = round((t_end - t_start) * 1000, 2)
 
+    has_live = enrichment_source_counts["live_prediction"] > 0
+
     logger.info(
-        f"GET /fixtures-enriched  {len(fixtures_out)} fixtures in {total_time_ms}ms "
-        f"(Query={query_time_ms}ms, Enrichment={enrichment_time_ms}ms, Errors={errors})"
-    )
-    logger.info(
-        "[fixtures-enriched] source summary: "
-        f"finished_score={enrichment_source_counts['finished_score']} "
-        f"stored_prediction={enrichment_source_counts['stored_prediction']} "
-        f"live_prediction={enrichment_source_counts['live_prediction']} "
-        f"cache={enrichment_source_counts['cache']} "
-        f"missing={enrichment_source_counts['missing']}"
+        f"GET /fixtures-enriched {competition_code.upper()} {len(fixtures_out)} fixtures "
+        f"in {total_time_ms}ms (Q={query_time_ms}ms E={enrichment_time_ms}ms Err={errors} "
+        f"fs={enrichment_source_counts['finished_score']} sp={enrichment_source_counts['stored_prediction']} "
+        f"live={enrichment_source_counts['live_prediction']} "
+        f"cache={enrichment_source_counts['cache']} miss={enrichment_source_counts['missing']})"
     )
 
-    return {
+    response = {
         "status":      "success",
         "competition": comp.name,
         "count":       len(fixtures_out),
         "elapsed_ms":  int(total_time_ms),
         "fixtures":    fixtures_out,
     }
+
+    # Cache response unless there are live matches (live state changes every minute)
+    if not has_live:
+        _fixtures_enriched_cache[_cache_key] = (response, _now_ts + FIXTURES_ENRICHED_CACHE_TTL)
+    else:
+        logger.info(f"[fixtures-enriched] {enrichment_source_counts['live_prediction']} live match(es) — skipping response cache")
+
+    return response
