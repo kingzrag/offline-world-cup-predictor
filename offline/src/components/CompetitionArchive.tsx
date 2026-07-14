@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { motion, useScroll, useTransform } from 'motion/react';
 
 // ─── Competition data (matches CompetitionSelector exactly) ──────────────────
@@ -128,6 +128,7 @@ interface CompetitionArchiveProps {
 
 export default function CompetitionArchive({ onNavigate }: CompetitionArchiveProps) {
   const sectionRef = useRef<HTMLElement>(null);
+  const [settled, setSettled] = useState(false);
 
   // Subtle scroll parallax — shelves drift upward slower than page
   const { scrollYProgress } = useScroll({
@@ -136,12 +137,26 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
   });
   const shelvesY = useTransform(scrollYProgress, [0, 1], [0, -40]);
 
+  // Scroll-driven exit — section gently dims and compresses as it scrolls away
+  const { scrollYProgress: exitProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start start', 'end start'],
+  });
+  const exitOpacity = useTransform(exitProgress, [0, 0.75, 1], [1, 1, 0.85]);
+  const exitScale   = useTransform(exitProgress, [0, 1], [1, 0.985]);
+
   return (
-    <section
+    <motion.section
       ref={sectionRef}
       id="competition-archive"
-      className="relative w-full bg-editorial-white overflow-hidden py-24 md:py-32"
+      className="relative w-full h-[100dvh] bg-editorial-white overflow-hidden snap-start origin-center"
       aria-label="Explore Every Competition"
+      style={{ opacity: exitOpacity, scale: exitScale }}
+      initial={{ opacity: 0, y: 40, scale: 0.98 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, amount: 0.12 }}
+      transition={{ duration: 0.7, ease: [0.215, 0.61, 0.355, 1] }}
+      onAnimationComplete={() => setSettled(true)}
     >
       {/* Very subtle grain layer */}
       <div className="absolute inset-0 bg-paper-grain opacity-20 pointer-events-none" />
@@ -149,8 +164,7 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
       <motion.div
         className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12"
         initial="hidden"
-        whileInView="show"
-        viewport={{ once: true, amount: 0.1 }}
+        animate={settled ? 'show' : 'hidden'}
       >
         {/* ── Heading block ─────────────────────────────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-7">
@@ -218,6 +232,6 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
 
         </motion.div>
       </motion.div>
-    </section>
+    </motion.section>
   );
 }

@@ -45,7 +45,7 @@ import {
   isKickoffTomorrow,
 } from './dateTimeUtils';
 import { formatXG } from './xgUtils';
-import { motion, useScroll, useTransform } from 'motion/react';
+import { motion, useScroll, useTransform, type MotionValue } from 'motion/react';
 import { Canvas } from '@react-three/fiber';
 import { Football3D } from './components/Football3D';
 // @ts-ignore
@@ -257,7 +257,40 @@ export default function App() {
     target: heroRef,
     offset: ["start start", "end start"]
   });
-  const heroOpacity = useTransform(heroScrollProgress, [0, 0.75, 1], [1, 1, 0.9]);
+  const heroOpacity = useTransform(heroScrollProgress, [0, 0.75, 1], [1, 1, 0.85]);
+  const heroScale = useTransform(heroScrollProgress, [0, 1], [1, 0.985]);
+
+  // ── Scroll-aware nav theming (snap-scroll compatible) ────────────────────────
+  // Strategy: observe #todays-best-predictions with IntersectionObserver.
+  // When it enters the viewport → animate to dark nav.
+  // When it leaves → animate back to white nav.
+  // CSS transition: 400ms ease-in-out on the header handles the crossfade,
+  // making it completely independent of scroll speed (works with snap too).
+  const [navIsDark, setNavIsDark] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'home') return;
+    const target = document.getElementById('todays-best-predictions');
+    if (!target) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // intersecting = dark section is visible → go dark
+        // not intersecting = back to hero → go white
+        setNavIsDark(entry.isIntersecting);
+      },
+      // threshold=0: fires the moment even 1px of the section enters the viewport
+      { threshold: 0, rootMargin: '0px 0px 0px 0px' }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [activeTab]);
+
+  // When not on home tab, always dark
+  const darkNav = activeTab !== 'home';
+  const navDark = darkNav || navIsDark;
+
+  // Helper: pick light or dark value
+  const nv = (light: string, dark: string) => navDark ? dark : light;
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -544,6 +577,14 @@ export default function App() {
       .then(updated => setSourceMatches(sortSourceMatches(updated)))
       .catch(err => console.warn("[App] Live transition refresh failed:", err));
   }, [liveMatchCount, isLoadingMatches, matchError]);
+
+  // Enable smooth scroll behavior for snap transitions
+  useEffect(() => {
+    document.documentElement.style.scrollBehavior = 'smooth';
+    return () => {
+      document.documentElement.style.scrollBehavior = '';
+    };
+  }, []);
 
   // Safe navigation function ensuring a uniform, instant scroll reset to top
   const navigateTo = (tab: 'home' | 'predictions' | 'favorites' | 'intelligence' | 'model' | 'tournament') => {
@@ -1687,75 +1728,66 @@ export default function App() {
         />
       )}
       */}
-      {/* Top Premium Editorial Header */}
+      {/* Top Premium Editorial Header — IntersectionObserver-driven, 400ms CSS crossfade */}
       <header
         id="app-header"
-        className={`sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full transition-all duration-300 ${
-          activeTab === 'home' && !isScrolled
-            ? 'bg-[#F6F4EF]/90 backdrop-blur-md border-b border-editorial-muted text-[#1C1B17]'
-            : 'bg-black/90 backdrop-blur-md text-zinc-100 border-b border-transparent shadow-[0_4px_30px_rgba(0,0,0,0.3)]'
-        }`}
+        className="sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full backdrop-blur-md"
+        style={{
+          backgroundColor: nv('rgba(247,246,242,0.96)', 'rgba(9,9,9,0.97)'),
+          borderBottom: `1px solid ${nv('rgba(28,27,23,0.12)', 'rgba(255,255,255,0.08)')}`,
+          transition: 'background-color 400ms ease-in-out, border-color 400ms ease-in-out',
+          ['--nav-hover-color' as any]: nv('#1C1B17', '#FFFFFF'),
+        }}
       >
-        
         {/* Tactical Editorial Sections Navigation (Col 1 on desktop) */}
         <nav
           id="header-nav"
-          className={`flex items-center space-x-3 sm:space-x-4 md:space-x-5 lg:space-x-8 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase justify-center md:justify-start order-2 md:order-1 select-none overflow-x-auto scrollbar-none transition-colors duration-300 ${
-            activeTab === 'home' && !isScrolled ? 'text-[#1C1B17]/60' : 'text-zinc-400'
-          }`}
+          className="flex items-center space-x-3 sm:space-x-4 md:space-x-5 lg:space-x-8 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase justify-center md:justify-start order-2 md:order-1 select-none overflow-x-auto scrollbar-none"
+          style={{
+            color: nv('rgba(28,27,23,0.60)', 'rgba(161,161,170,1)'),
+            transition: 'color 400ms ease-in-out',
+          }}
         >
           <button
             onClick={() => navigateTo('predictions')}
-            className={`transition-all py-1 border-b-2 whitespace-nowrap ${
-              activeTab === 'home' && !isScrolled
-                ? 'hover:text-[#1C1B17] border-transparent'
-                : activeTab === 'predictions'
+            className={`py-1 border-b-2 whitespace-nowrap transition-all duration-[400ms] ease-in-out hover:text-[var(--nav-hover-color)] ${
+              activeTab === 'predictions'
                 ? 'text-white border-green-accent'
-                : 'hover:text-white border-transparent'
+                : 'border-transparent'
             }`}
           >
             Predictions
           </button>
           <button
             onClick={() => navigateTo('favorites')}
-            className={`transition-all py-1 border-b-2 whitespace-nowrap ${
-              activeTab === 'home' && !isScrolled
-                ? 'hover:text-[#1C1B17] border-transparent'
-                : activeTab === 'favorites'
+            className={`py-1 border-b-2 whitespace-nowrap transition-all duration-[400ms] ease-in-out hover:text-[var(--nav-hover-color)] ${
+              activeTab === 'favorites'
                 ? 'text-white border-green-accent'
-                : 'hover:text-white border-transparent'
+                : 'border-transparent'
             }`}
           >
             Favorites {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length > 0 && (
-              <span className={`ml-1 border text-[8px] sm:text-[9px] px-1 py-0.5 font-mono rounded transition-colors duration-300 ${
-                activeTab === 'home' && !isScrolled
-                  ? 'bg-[#1C1B17]/5 border-[#1C1B17]/20 text-[#1C1B17]'
-                  : 'bg-green-accent/10 border-green-accent/30 text-green-accent'
-              }`}>
+              <span className="ml-1 border text-[8px] sm:text-[9px] px-1 py-0.5 font-mono rounded bg-green-accent/10 border-green-accent/30 text-green-accent">
                 {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length}
               </span>
             )}
           </button>
           <button
             onClick={() => navigateTo('intelligence')}
-            className={`transition-all py-1 border-b-2 whitespace-nowrap ${
-              activeTab === 'home' && !isScrolled
-                ? 'hover:text-[#1C1B17] border-transparent'
-                : activeTab === 'intelligence'
+            className={`py-1 border-b-2 whitespace-nowrap transition-all duration-[400ms] ease-in-out hover:text-[var(--nav-hover-color)] ${
+              activeTab === 'intelligence'
                 ? 'text-white border-green-accent'
-                : 'hover:text-white border-transparent'
+                : 'border-transparent'
             }`}
           >
             Intelligence
           </button>
           <button
             onClick={() => navigateTo('model')}
-            className={`transition-all py-1 border-b-2 whitespace-nowrap ${
-              activeTab === 'home' && !isScrolled
-                ? 'hover:text-[#1C1B17] border-transparent'
-                : activeTab === 'model'
+            className={`py-1 border-b-2 whitespace-nowrap transition-all duration-[400ms] ease-in-out hover:text-[var(--nav-hover-color)] ${
+              activeTab === 'model'
                 ? 'text-white border-green-accent'
-                : 'hover:text-white border-transparent'
+                : 'border-transparent'
             }`}
           >
             The Model
@@ -1768,18 +1800,22 @@ export default function App() {
           className="flex flex-col items-center justify-center cursor-pointer group select-none text-center order-1 md:order-2 animate-fade-in py-1"
           id="offline-logo-container"
         >
-          <span className={`text-lg sm:text-xl md:text-2xl font-serif tracking-[0.35em] font-light leading-none transition-colors duration-300 pl-[0.35em] uppercase ${
-            activeTab === 'home' && !isScrolled
-              ? 'text-[#1C1B17] group-hover:text-green-800'
-              : 'text-white group-hover:text-green-accent'
-          }`}>
+          <span
+            className="text-lg sm:text-xl md:text-2xl font-serif tracking-[0.35em] font-light leading-none pl-[0.35em] uppercase group-hover:opacity-70"
+            style={{
+              color: nv('rgb(28,27,23)', 'rgb(255,255,255)'),
+              transition: 'color 400ms ease-in-out, opacity 150ms ease-in-out',
+            }}
+          >
             OFFLINE
           </span>
-          <span className={`text-[7px] sm:text-[7.5px] font-mono tracking-[0.45em] uppercase mt-1.5 sm:mt-2 transition-colors duration-300 pl-[0.45em] ${
-            activeTab === 'home' && !isScrolled
-              ? 'text-[#1C1B17]/50 group-hover:text-[#1C1B17]/75'
-              : 'text-zinc-550 group-hover:text-zinc-400'
-          }`}>
+          <span
+            className="text-[7px] sm:text-[7.5px] font-mono tracking-[0.45em] uppercase mt-1.5 sm:mt-2 pl-[0.45em]"
+            style={{
+              color: nv('rgba(28,27,23,0.50)', 'rgba(161,161,170,0.70)'),
+              transition: 'color 400ms ease-in-out',
+            }}
+          >
             FOOTBALL INTELLIGENCE
           </span>
         </div>
@@ -1788,39 +1824,66 @@ export default function App() {
         <div id="header-actions" className="flex items-center justify-center md:justify-end space-x-3 sm:space-x-4 md:space-x-6 order-3">
           <button
             onClick={() => setShowSearchModal(true)}
-            className={`flex items-center space-x-1.5 sm:space-x-2 border px-2.5 sm:px-3 py-1.5 rounded transition-all duration-300 group ${
-              activeTab === 'home' && !isScrolled
-                ? 'text-[#1C1B17] bg-transparent border-editorial-strong hover:bg-[#1C1B17]/5'
-                : 'text-zinc-400 hover:text-white bg-zinc-950 hover:bg-zinc-900 border-zinc-900'
-            }`}
+            className="flex items-center space-x-1.5 sm:space-x-2 border px-2.5 sm:px-3 py-1.5 rounded group"
+            style={{
+              backgroundColor: nv('rgba(28,27,23,0.0)', 'rgba(9,9,9,0.90)'),
+              borderColor: nv('rgba(28,27,23,0.28)', 'rgba(63,63,70,1)'),
+              color: nv('rgba(28,27,23,0.70)', 'rgba(161,161,170,1)'),
+              transition: 'background-color 400ms ease-in-out, border-color 400ms ease-in-out, color 400ms ease-in-out',
+              ['--search-hover-text' as any]: nv('#1C1B17', '#FFFFFF'),
+            }}
           >
-            <Search className={`w-3.5 h-3.5 transition-colors duration-300 ${
-              activeTab === 'home' && !isScrolled ? 'group-hover:text-green-800' : 'group-hover:text-green-accent'
-            }`} />
-            <span className={`hidden sm:inline-block text-[10px] tracking-widest uppercase font-mono transition-colors duration-300 ${
-              activeTab === 'home' && !isScrolled ? 'text-[#1C1B17]/70 group-hover:text-[#1C1B17]' : 'text-zinc-550 group-hover:text-zinc-300'
-            }`}>Search</span>
-            <kbd className={`hidden md:inline-block font-mono text-[9px] px-1 py-0.5 rounded border transition-colors duration-300 ${
-              activeTab === 'home' && !isScrolled
-                ? 'bg-[#1C1B17]/5 text-[#1C1B17]/50 border-editorial-muted'
-                : 'bg-zinc-900 text-zinc-600 border-zinc-800'
-            }`}>/</kbd>
+            <Search className="w-3.5 h-3.5 group-hover:text-green-accent transition-colors duration-150" />
+            <span
+              className="hidden sm:inline-block text-[10px] tracking-widest uppercase font-mono group-hover:text-[var(--search-hover-text)]"
+              style={{ transition: 'color 150ms ease-in-out' }}
+            >
+              Search
+            </span>
+            <kbd
+              className="hidden md:inline-block font-mono text-[9px] px-1 py-0.5 rounded border"
+              style={{
+                backgroundColor: nv('rgba(28,27,23,0.05)', 'rgba(24,24,27,1)'),
+                color: nv('rgba(28,27,23,0.50)', 'rgba(82,82,91,1)'),
+                borderColor: nv('rgba(28,27,23,0.15)', 'rgba(39,39,42,1)'),
+                transition: 'background-color 400ms ease-in-out, border-color 400ms ease-in-out, color 400ms ease-in-out',
+              }}
+            >
+              /
+            </kbd>
           </button>
 
-          <div className={`flex flex-col items-end md:border-l leading-tight transition-colors duration-300 ${
-            activeTab === 'home' && !isScrolled ? 'border-editorial-muted' : 'border-zinc-900'
-          } md:pl-4 sm:md:pl-6`}>
-            <span className={`text-[8px] sm:text-[9px] uppercase tracking-widest font-mono truncate max-w-[120px] sm:max-w-[180px] transition-colors duration-300 ${
-              activeTab === 'home' && !isScrolled ? 'text-[#1C1B17]/60' : 'text-zinc-550'
-            }`} title={countdownLabel}>
+
+          <div
+            className="flex flex-col items-end md:border-l leading-tight md:pl-4 sm:md:pl-6"
+            style={{
+              borderColor: nv('rgba(28,27,23,0.15)', 'rgba(24,24,27,1)'),
+              transition: 'border-color 400ms ease-in-out',
+            }}
+          >
+            <span
+              className="text-[8px] sm:text-[9px] uppercase tracking-widest font-mono truncate max-w-[120px] sm:max-w-[180px]"
+              style={{
+                color: nv('rgba(28,27,23,0.60)', 'rgba(82,82,91,1)'),
+                transition: 'color 400ms ease-in-out',
+              }}
+              title={countdownLabel}
+            >
               {countdownLabel}
             </span>
-            <span className={`text-base sm:text-lg font-mono tracking-wider font-semibold tabular-nums transition-colors duration-300 ${
-              activeTab === 'home' && !isScrolled ? 'text-[#3a5c2d]' : 'text-green-accent'
-            }`}>{countdown}</span>
+            <span
+              className="text-base sm:text-lg font-mono tracking-wider font-semibold tabular-nums"
+              style={{
+                color: nv('rgb(58,92,45)', 'rgb(74,222,128)'),
+                transition: 'color 400ms ease-in-out',
+              }}
+            >
+              {countdown}
+            </span>
           </div>
         </div>
       </header>
+
 
       {/* Main Container */}
       <main id="app-main-content" className="flex-1 w-full flex flex-col min-h-0 relative bg-black">
@@ -1834,8 +1897,8 @@ export default function App() {
             <motion.div 
               ref={heroRef}
               id="editorial-hero" 
-              className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark editorial-snap-section"
-              style={{ opacity: heroOpacity }}
+              className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark snap-start"
+              style={{ opacity: heroOpacity, scale: heroScale }}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
             >
@@ -2049,37 +2112,36 @@ export default function App() {
           <div className="w-full flex flex-col animate-fade-in">
             
             {/* TODAY'S BEST PREDICTIONS CAROUSEL SECTION */}
-            <div 
-              id="todays-best-predictions"
-              className="relative z-20 px-4 sm:px-6 md:px-12 py-16 editorial-snap-section"
-            >
-              <BestPredictionsCarousel
-                matches={sourceMatches.slice(0, 9)}
-                isLoading={isLoadingMatches}
-                error={matchError}
-                apiBase={API_BASE}
-                onViewAnalysis={openMatchAnalysis}
-                onViewAll={() => navigateTo('predictions')}
-                onRetry={() => setRetryTrigger(prev => prev + 1)}
-                isModalOpen={!!selectedMatch || showSearchModal}
-              />
-            </div>
+            <BestPredictionsCarousel
+              matches={sourceMatches.slice(0, 9)}
+              isLoading={isLoadingMatches}
+              error={matchError}
+              apiBase={API_BASE}
+              onViewAnalysis={openMatchAnalysis}
+              onViewAll={() => navigateTo('predictions')}
+              onRetry={() => setRetryTrigger(prev => prev + 1)}
+              isModalOpen={!!selectedMatch || showSearchModal}
+            />
 
             {/* ── COMPETITION ARCHIVE SECTION ──────────────────────────────── */}
             <CompetitionArchive onNavigate={() => navigateTo('predictions')} />
 
             {/* ── THE MODEL section — Apple keynote editorial dark block ───── */}
             <motion.section
-              className="w-full bg-[#0A0A0A] py-28 md:py-36"
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, amount: 0.15 }}
-              variants={{
-                hidden: {},
-                show: { transition: { staggerChildren: 0.12 } },
-              }}
+              className="w-full h-[100dvh] bg-[#0A0A0A] snap-start origin-center flex items-center"
+              initial={{ opacity: 0, y: 40, scale: 0.98 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, amount: 0.12 }}
+              transition={{ duration: 0.7, ease: [0.215, 0.61, 0.355, 1] }}
             >
-              <div className="max-w-7xl mx-auto px-6 md:px-12">
+              {/* Single inner orchestrator — stagger children after section fades in */}
+              <motion.div
+                className="w-full max-w-7xl mx-auto px-6 md:px-12"
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.1 }}
+                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }}
+              >
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 md:gap-16 items-center">
 
                   {/* Left Column — label + headline + body */}
@@ -2139,8 +2201,9 @@ export default function App() {
                   </motion.div>
 
                 </div>
-              </div>
+              </motion.div>
             </motion.section>
+
 
           </div>
         )}
@@ -4665,7 +4728,7 @@ export default function App() {
       {/* FOOTER AREA (Designed by Anurag Saikia based on branding guidelines) */}
       <motion.footer
         id="app-footer"
-        className="bg-[#0A0A0A] border-t border-zinc-900/50 px-6 md:px-12 pt-16 pb-10 text-xs"
+        className="bg-[#0A0A0A] border-t border-zinc-900/50 h-[100dvh] px-6 md:px-12 pt-16 pb-10 text-xs snap-start"
         initial={{ opacity: 0, y: 24 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.1 }}

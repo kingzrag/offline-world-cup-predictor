@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo, type RefObject } from "react";
-import { motion, type PanInfo } from "motion/react";
+import { motion, useScroll, useTransform, type PanInfo } from "motion/react";
 import { AlertCircle, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import type { MatchPrediction } from "../types";
 import { getFlag } from "../flagUtils";
@@ -12,7 +12,7 @@ const VELOCITY_THRESHOLD = 400;
 // Skeleton loader for match cards
 function MatchCardSkeleton() {
   return (
-    <div className="bg-zinc-950 border border-zinc-900 rounded-lg px-7 py-6 flex flex-col justify-between min-h-[400px] h-full">
+    <div className="bg-zinc-950 border border-zinc-900 rounded-lg px-7 py-6 flex flex-col justify-between min-h-[340px] h-full">
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 mb-1">
         <div className="flex flex-col items-start gap-1.5 min-w-0 flex-1">
           <div className="h-3 w-20 bg-zinc-900 rounded animate-pulse" />
@@ -105,7 +105,7 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.32, 0.72, 0, 1] }}
-      className={`bg-zinc-950 border rounded-lg px-7 py-6 flex flex-col justify-between min-h-[400px] h-full transition-colors duration-300 ${
+      className={`bg-zinc-950 border rounded-lg px-7 py-6 flex flex-col justify-between min-h-[340px] h-full transition-colors duration-300 ${
         isActive
           ? "border-zinc-700 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(16,185,129,0.15)]"
           : "border-zinc-900 hover:border-zinc-800"
@@ -452,12 +452,31 @@ export function BestPredictionsCarousel({
   const isSystemPaused = isHovered || isDragging || isModalOpen;
   const shouldAutoSlide = !prefersReducedMotion && !isSystemPaused && total > 0;
 
+  // ── Section-level scroll-driven exit transform ────────────────────────────
+  // As the section scrolls out of view upward, it subtly dims and compresses.
+  // Incoming: opacity 0→1, translateY 40→0, scale 0.98→1 over 700ms power3.out.
+  // Outgoing: opacity 1→0.85, scale 1→0.985 (driven by scroll position).
+  const sectionRef = useRef<HTMLElement>(null);
+  const { scrollYProgress: sectionScrollProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start start", "end start"],
+  });
+  const exitOpacity = useTransform(sectionScrollProgress, [0, 0.75, 1], [1, 1, 0.85]);
+  const exitScale  = useTransform(sectionScrollProgress, [0, 1], [1, 0.985]);
+
   return (
-    <section
+    <motion.section
+      ref={sectionRef}
       id="todays-best-predictions"
-      className="relative w-full min-h-screen lg:h-[100dvh] flex flex-col justify-start lg:justify-center pt-[95px] lg:pt-[110px] pb-12 lg:pb-0 bg-[#070707] text-zinc-150 overflow-hidden select-none scroll-mt-24"
+      className="relative w-full h-[100dvh] flex flex-col justify-center pt-[70px] lg:pt-[80px] pb-8 lg:pb-0 bg-[#070707] text-zinc-150 select-none snap-start z-20 origin-center"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      style={{ opacity: exitOpacity, scale: exitScale }}
+      initial={{ opacity: 0, y: 40, scale: 0.98 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, amount: 0.12 }}
+      transition={{ duration: 0.7, ease: [0.215, 0.61, 0.355, 1] }}
+      onAnimationComplete={() => setSectionSettled(true)}
     >
       {/* Subtle vignette and ambient background glow behind featured card */}
       <div className="absolute inset-0 z-0 pointer-events-none">
@@ -465,15 +484,8 @@ export function BestPredictionsCarousel({
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-green-accent/5 filter blur-[120px] opacity-40" />
       </div>
 
-      <motion.div 
-        className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col justify-center h-full py-8 lg:py-12"
-        initial={{ opacity: 0, y: 80 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.15 }}
-        transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
-        onAnimationComplete={() => setSectionSettled(true)}
-      >
-        <div className="flex flex-col md:flex-row md:items-end justify-between pb-6 mb-8 gap-6 relative">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col justify-center h-full py-4 lg:py-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between pb-4 mb-6 gap-6 relative">
           <motion.div 
             variants={titleVariants}
             initial="hidden"
@@ -520,7 +532,7 @@ export function BestPredictionsCarousel({
         </div>
 
         {/* Thin divider with left-to-right drawing animation */}
-        <div className="relative w-full mb-8">
+        <div className="relative w-full mb-6">
           <motion.div 
             className="w-full h-[1px] bg-zinc-800 origin-left"
             variants={dividerVariants}
@@ -570,7 +582,7 @@ export function BestPredictionsCarousel({
 
             <motion.div
               ref={containerRef}
-              className="relative h-[480px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y pt-8"
+              className="relative h-[420px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y pt-6"
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.12}
@@ -687,7 +699,7 @@ export function BestPredictionsCarousel({
             </motion.button>
           </div>
         )}
-      </motion.div>
-    </section>
+      </div>
+    </motion.section>
   );
 }
