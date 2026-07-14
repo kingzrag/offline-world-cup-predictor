@@ -3,6 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import football2 from './assets/images/football2.png';
 // @ts-ignore
 import background from './assets/images/background.png';
+// @ts-ignore
+import heroLeft from './assets/images/hero_left.png';
+// @ts-ignore
+import heroCenter from './assets/images/hero_center.png';
+// @ts-ignore
+import heroRight from './assets/images/hero_right.png';
 import CompetitionSelector from './components/CompetitionSelector';
 import { 
   getPredictions, 
@@ -50,6 +56,7 @@ import AIAssistant from './components/AIAssistant';
 import AIAssistantNew from './components/AIAssistantNew';
 import AIHealthDashboard from './components/AIHealthDashboard';
 import MatchAnalysis from './components/MatchAnalysis';
+import CompetitionArchive from './components/CompetitionArchive';
 import { checkHealth } from './api';
 import {
   Search,
@@ -242,6 +249,19 @@ export default function App() {
     }
     return 'home';
   });
+
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 2; // scale to -1 to 1
+    const y = ((e.clientY - rect.top) / rect.height - 0.5) * 2; // scale to -1 to 1
+    setMousePos({ x, y });
+  };
+  const handleMouseLeave = () => {
+    setMousePos({ x: 0, y: 0 });
+  };
 
   // Health Dashboard - developer-only diagnostics page
   const [showHealthDashboard, setShowHealthDashboard] = useState(() => {
@@ -577,11 +597,13 @@ export default function App() {
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrollY(window.scrollY);
+      const y = window.scrollY;
+      setScrollY(y);
+      setIsScrolled(y > 80);
       
       // Infinite scroll detection
       const scrollHeight = document.documentElement.scrollHeight;
-      const scrollTop = window.scrollY;
+      const scrollTop = y;
       const clientHeight = window.innerHeight;
       
       // Load more when user is 200px from bottom
@@ -590,6 +612,7 @@ export default function App() {
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // Set initial state
     return () => window.removeEventListener('scroll', handleScroll);
   }, [hasMore, isLoadingMore, activeTab]);
 
@@ -1646,44 +1669,75 @@ export default function App() {
         />
       )}
       {/* Top Premium Editorial Header */}
-      <header id="app-header" className="bg-black/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full" style={{
-        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.3)'
-      }}>
+      <header
+        id="app-header"
+        className={`sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full transition-all duration-300 ${
+          activeTab === 'home' && !isScrolled
+            ? 'bg-[#F6F4EF]/90 backdrop-blur-md border-b border-editorial-muted text-[#1C1B17]'
+            : 'bg-black/90 backdrop-blur-md text-zinc-100 border-b border-transparent shadow-[0_4px_30px_rgba(0,0,0,0.3)]'
+        }`}
+      >
         
         {/* Tactical Editorial Sections Navigation (Col 1 on desktop) */}
-        <nav id="header-nav" className="flex items-center space-x-3 sm:space-x-4 md:space-x-5 lg:space-x-8 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase text-zinc-400 justify-center md:justify-start order-2 md:order-1 select-none overflow-x-auto scrollbar-none">
+        <nav
+          id="header-nav"
+          className={`flex items-center space-x-3 sm:space-x-4 md:space-x-5 lg:space-x-8 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase justify-center md:justify-start order-2 md:order-1 select-none overflow-x-auto scrollbar-none transition-colors duration-300 ${
+            activeTab === 'home' && !isScrolled ? 'text-[#1C1B17]/60' : 'text-zinc-400'
+          }`}
+        >
           <button
             onClick={() => navigateTo('predictions')}
-            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'predictions' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`transition-all py-1 border-b-2 whitespace-nowrap ${
+              activeTab === 'home' && !isScrolled
+                ? 'hover:text-[#1C1B17] border-transparent'
+                : activeTab === 'predictions'
+                ? 'text-white border-green-accent'
+                : 'hover:text-white border-transparent'
+            }`}
           >
             Predictions
           </button>
           <button
             onClick={() => navigateTo('favorites')}
-            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'favorites' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`transition-all py-1 border-b-2 whitespace-nowrap ${
+              activeTab === 'home' && !isScrolled
+                ? 'hover:text-[#1C1B17] border-transparent'
+                : activeTab === 'favorites'
+                ? 'text-white border-green-accent'
+                : 'hover:text-white border-transparent'
+            }`}
           >
             Favorites {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length > 0 && (
-              <span className="ml-1 bg-green-accent/10 border border-green-accent/30 text-green-accent text-[8px] sm:text-[9px] px-1 py-0.5 font-mono rounded">
+              <span className={`ml-1 border text-[8px] sm:text-[9px] px-1 py-0.5 font-mono rounded transition-colors duration-300 ${
+                activeTab === 'home' && !isScrolled
+                  ? 'bg-[#1C1B17]/5 border-[#1C1B17]/20 text-[#1C1B17]'
+                  : 'bg-green-accent/10 border-green-accent/30 text-green-accent'
+              }`}>
                 {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length}
               </span>
             )}
           </button>
           <button
             onClick={() => navigateTo('intelligence')}
-            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'intelligence' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`transition-all py-1 border-b-2 whitespace-nowrap ${
+              activeTab === 'home' && !isScrolled
+                ? 'hover:text-[#1C1B17] border-transparent'
+                : activeTab === 'intelligence'
+                ? 'text-white border-green-accent'
+                : 'hover:text-white border-transparent'
+            }`}
           >
             Intelligence
           </button>
-          {/* Tournament tab temporarily hidden - can be re-enabled when tab is restored */}
-          {/* <button
-            onClick={() => navigateTo('tournament')}
-            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'tournament' ? 'text-white border-green-accent' : 'border-transparent'}`}
-          >
-            Tournament
-          </button> */}
           <button
             onClick={() => navigateTo('model')}
-            className={`hover:text-white transition-all py-1 border-b-2 whitespace-nowrap ${activeTab === 'model' ? 'text-white border-green-accent' : 'border-transparent'}`}
+            className={`transition-all py-1 border-b-2 whitespace-nowrap ${
+              activeTab === 'home' && !isScrolled
+                ? 'hover:text-[#1C1B17] border-transparent'
+                : activeTab === 'model'
+                ? 'text-white border-green-accent'
+                : 'hover:text-white border-transparent'
+            }`}
           >
             The Model
           </button>
@@ -1695,10 +1749,18 @@ export default function App() {
           className="flex flex-col items-center justify-center cursor-pointer group select-none text-center order-1 md:order-2 animate-fade-in py-1"
           id="offline-logo-container"
         >
-          <span className="text-lg sm:text-xl md:text-2xl font-serif text-white tracking-[0.35em] font-light leading-none group-hover:text-green-accent transition-colors duration-300 pl-[0.35em] uppercase">
+          <span className={`text-lg sm:text-xl md:text-2xl font-serif tracking-[0.35em] font-light leading-none transition-colors duration-300 pl-[0.35em] uppercase ${
+            activeTab === 'home' && !isScrolled
+              ? 'text-[#1C1B17] group-hover:text-green-800'
+              : 'text-white group-hover:text-green-accent'
+          }`}>
             OFFLINE
           </span>
-          <span className="text-[7px] sm:text-[7.5px] font-mono tracking-[0.45em] text-zinc-550 uppercase mt-1.5 sm:mt-2 group-hover:text-zinc-400 transition-colors duration-300 pl-[0.45em]">
+          <span className={`text-[7px] sm:text-[7.5px] font-mono tracking-[0.45em] uppercase mt-1.5 sm:mt-2 transition-colors duration-300 pl-[0.45em] ${
+            activeTab === 'home' && !isScrolled
+              ? 'text-[#1C1B17]/50 group-hover:text-[#1C1B17]/75'
+              : 'text-zinc-550 group-hover:text-zinc-400'
+          }`}>
             FOOTBALL INTELLIGENCE
           </span>
         </div>
@@ -1707,18 +1769,36 @@ export default function App() {
         <div id="header-actions" className="flex items-center justify-center md:justify-end space-x-3 sm:space-x-4 md:space-x-6 order-3">
           <button
             onClick={() => setShowSearchModal(true)}
-            className="flex items-center space-x-1.5 sm:space-x-2 text-zinc-400 hover:text-white bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 px-2.5 sm:px-3 py-1.5 rounded transition-all group"
+            className={`flex items-center space-x-1.5 sm:space-x-2 border px-2.5 sm:px-3 py-1.5 rounded transition-all duration-300 group ${
+              activeTab === 'home' && !isScrolled
+                ? 'text-[#1C1B17] bg-transparent border-editorial-strong hover:bg-[#1C1B17]/5'
+                : 'text-zinc-400 hover:text-white bg-zinc-950 hover:bg-zinc-900 border-zinc-900'
+            }`}
           >
-            <Search className="w-3.5 h-3.5 group-hover:text-green-accent transition-colors" />
-            <span className="hidden sm:inline-block text-[10px] tracking-widest uppercase font-mono text-zinc-500 group-hover:text-zinc-300">Search</span>
-            <kbd className="hidden md:inline-block font-mono text-[9px] bg-zinc-900 text-zinc-600 px-1 py-0.5 rounded border border-zinc-800">/</kbd>
+            <Search className={`w-3.5 h-3.5 transition-colors duration-300 ${
+              activeTab === 'home' && !isScrolled ? 'group-hover:text-green-800' : 'group-hover:text-green-accent'
+            }`} />
+            <span className={`hidden sm:inline-block text-[10px] tracking-widest uppercase font-mono transition-colors duration-300 ${
+              activeTab === 'home' && !isScrolled ? 'text-[#1C1B17]/70 group-hover:text-[#1C1B17]' : 'text-zinc-550 group-hover:text-zinc-300'
+            }`}>Search</span>
+            <kbd className={`hidden md:inline-block font-mono text-[9px] px-1 py-0.5 rounded border transition-colors duration-300 ${
+              activeTab === 'home' && !isScrolled
+                ? 'bg-[#1C1B17]/5 text-[#1C1B17]/50 border-editorial-muted'
+                : 'bg-zinc-900 text-zinc-600 border-zinc-800'
+            }`}>/</kbd>
           </button>
 
-          <div className="flex flex-col items-end md:border-l border-zinc-900 md:pl-4 sm:md:pl-6 leading-tight">
-            <span className="text-[8px] sm:text-[9px] text-zinc-500 uppercase tracking-widest font-mono truncate max-w-[120px] sm:max-w-[180px]" title={countdownLabel}>
+          <div className={`flex flex-col items-end md:border-l leading-tight transition-colors duration-300 ${
+            activeTab === 'home' && !isScrolled ? 'border-editorial-muted' : 'border-zinc-900'
+          } md:pl-4 sm:md:pl-6`}>
+            <span className={`text-[8px] sm:text-[9px] uppercase tracking-widest font-mono truncate max-w-[120px] sm:max-w-[180px] transition-colors duration-300 ${
+              activeTab === 'home' && !isScrolled ? 'text-[#1C1B17]/60' : 'text-zinc-550'
+            }`} title={countdownLabel}>
               {countdownLabel}
             </span>
-            <span className="text-base sm:text-lg font-mono tracking-wider text-green-accent font-semibold tabular-nums">{countdown}</span>
+            <span className={`text-base sm:text-lg font-mono tracking-wider font-semibold tabular-nums transition-colors duration-300 ${
+              activeTab === 'home' && !isScrolled ? 'text-[#3a5c2d]' : 'text-green-accent'
+            }`}>{countdown}</span>
           </div>
         </div>
       </header>
@@ -1734,311 +1814,180 @@ export default function App() {
             {/* Fully Responsive & Cinematic 100% Width editorial-hero */}
             <div 
               id="editorial-hero" 
-              className="relative w-full h-[100dvh] flex flex-col justify-between bg-black overflow-hidden"
+              className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
             >
-              {/* Cinematic premium stadium background */}
-              <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-                <style>{`
-                  @keyframes fogDrift {
-                    0%, 100% { opacity: 1; transform: translateX(0); }
-                    50% { opacity: 0.8; transform: translateX(20px); }
-                  }
-                  @keyframes particlesFloat {
-                    0%, 100% { opacity: 1; transform: translateY(0); }
-                    50% { opacity: 0.6; transform: translateY(-10px); }
-                  }
-                  @keyframes lightsPulse {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.85; }
-                  }
-                `}</style>
+              {/* Main Content Layout */}
+              <div className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 pt-6 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
                 
-                {/* High-resolution stadium background - sharp and crisp, cinematic view */}
-                <img 
-                  src={background}
-                  alt="Premium Stadium Background"
-                  className="absolute inset-0 w-full h-full object-cover"
-                  style={{
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center 45%',
-                    backgroundRepeat: 'no-repeat'
-                  }}
-                  referrerPolicy="no-referrer"
-                />
-                
-                {/* Subtle atmospheric fog - no blur */}
-                <div className="absolute inset-0" style={{
-                  background: 'linear-gradient(to bottom, transparent 40%, rgba(200, 210, 230, 0.05) 60%, rgba(200, 210, 230, 0.08) 80%, transparent 100%)',
-                  animation: 'fogDrift 20s ease-in-out infinite'
-                }} />
-                
-                {/* Floating dust particles - no blur */}
-                <div className="absolute inset-0" style={{
-                  background: `
-                    radial-gradient(circle 1px at 20% 60%, rgba(255, 255, 255, 0.3) 0%, transparent 100%),
-                    radial-gradient(circle 1px at 40% 70%, rgba(255, 255, 255, 0.2) 0%, transparent 100%),
-                    radial-gradient(circle 1px at 60% 55%, rgba(255, 255, 255, 0.25) 0%, transparent 100%),
-                    radial-gradient(circle 1px at 80% 65%, rgba(255, 255, 255, 0.2) 0%, transparent 100%),
-                    radial-gradient(circle 1px at 30% 80%, rgba(255, 255, 255, 0.15) 0%, transparent 100%),
-                    radial-gradient(circle 1px at 70% 75%, rgba(255, 255, 255, 0.2) 0%, transparent 100%)
-                  `,
-                  animation: 'particlesFloat 15s ease-in-out infinite'
-                }} />
-                
-                {/* Pulsing stadium lights - no blur */}
-                <div className="absolute inset-0" style={{
-                  background: `
-                    radial-gradient(circle 4% at 15% 25%, rgba(255, 255, 240, 0.15) 0%, transparent 70%),
-                    radial-gradient(circle 4% at 85% 25%, rgba(255, 255, 240, 0.15) 0%, transparent 70%)
-                  `,
-                  animation: 'lightsPulse 9s ease-in-out infinite'
-                }} />
-                
-                {/* Subtle vignette - avoid completely black corners */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_40%,rgba(0,0,0,0.55)_100%)]" />
-                
-                {/* Lateral depth - left darker for text, right brighter for stats */}
-                <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/10 to-black/30" />
-                
-                {/* Premium gradient overlay - reduced darkness for stadium visibility */}
-                <div className="absolute inset-0" style={{
-                  background: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 50%, rgba(0,0,0,0.65) 100%)'
-                }} />
-                
-                {/* Subtle green pitch lighting - improved depth gradient */}
-                <div className="absolute bottom-0 left-0 right-0 h-[30%]" style={{
-                  background: 'linear-gradient(to top, rgba(26, 77, 26, 0.12) 0%, rgba(10, 10, 10, 0.08) 50%, transparent 100%)'
-                }} />
-                
-                {/* Large gradient fade overlay at bottom - smooth transition to page background */}
-                <div className="absolute bottom-0 left-0 right-0 h-[300px]" style={{
-                  background: 'linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.7) 40%, rgba(0, 0, 0, 0.4) 70%, transparent 100%)'
-                }} />
-                
-                {/* Enhanced floodlights with radial glow */}
-                <div className="absolute inset-0 z-5 pointer-events-none" style={{
-                  background: `
-                    radial-gradient(circle 12% at 15% 15%, rgba(255, 255, 240, 0.25) 0%, transparent 70%),
-                    radial-gradient(circle 12% at 85% 15%, rgba(255, 255, 240, 0.25) 0%, transparent 70%),
-                    radial-gradient(circle 8% at 50% 10%, rgba(255, 255, 240, 0.15) 0%, transparent 55%)
-                  `
-                }} />
-              </div>
-
-              {/* Floating content wrapped in standard content grid alignment */}
-              <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-12 pt-6 lg:pt-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center">
-
-                {/* Left Column (60%): Editorial layout */}
-                <div className="lg:col-span-7 flex flex-col justify-center animate-fade-in text-left">
-                  <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-[76px] font-serif tracking-tight leading-[0.95] text-white mb-3 sm:mb-4">
-                    Football <br />
-                    <span className="italic font-normal">Intelligence<span className="text-green-accent">.</span></span>
-                  </h1>
-                  <p className="text-zinc-300 text-[11px] sm:text-xs md:text-sm lg:text-base max-w-xl font-light leading-relaxed mb-4 sm:mb-5">
-                    A quantitative simulation index and elite football intelligence publication built for analysts, experts, and readers who understand the game.
-                    <span className="block mt-2 text-zinc-400 text-[10px] sm:text-xs md:text-sm">Dynamic expected value curves free of noise, promotional slop, or gambling bias.</span>
-                  </p>
-
-                  <div className="flex flex-wrap gap-3 sm:gap-4">
-                    <button
-                      onClick={() => navigateTo('predictions')}
-                      className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#0B0B0B] text-[#22C55E] font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 flex items-center gap-1.5 border border-[#22C55E]/30 shadow-lg hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:shadow-[0_0_40px_rgba(34,197,94,0.15)] hover:border-[#22C55E] hover:-translate-y-0.5 hover:scale-[1.02] cursor-pointer group relative overflow-hidden"
-                      style={{
-                        backdropFilter: 'blur(10px)',
-                        WebkitBackdropFilter: 'blur(10px)'
-                      }}
-                    >
-                      <span className="relative z-10 flex items-center gap-1.5 group-hover:gap-2 transition-all duration-300">
-                        VIEW PREDICTIONS
-                        <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
-                      </span>
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#22C55E]/5 via-[#22C55E]/10 to-[#22C55E]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Right Column (40%): Floating Premium Glass Cards in ultra-compact unified grid with staggered entry */}
+                {/* Left Column (Col 2): Editorial metadata */}
                 <motion.div 
-                  className="lg:col-span-5 flex flex-col space-y-3 w-full"
+                  className="hidden lg:flex flex-col justify-between h-[50vh] text-[9px] tracking-[0.3em] font-mono uppercase text-editorial-dim border-r border-editorial-muted pr-8"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                >
+                  <div className="space-y-4">
+                    <div>GLOBAL EDITION</div>
+                    <div>ISSUE 002</div>
+                    <div>UPDATED DAILY</div>
+                  </div>
+                  {/* Large empty whitespace underneath */}
+                  <div className="flex-1"></div>
+                </motion.div>
+
+                {/* Center Column (Col 6): Overlapping magazine cover football cards */}
+                <motion.div 
+                  className="lg:col-span-6 flex items-center justify-center relative w-full"
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                >
+                  <div className="relative flex items-center justify-center w-full h-[320px] sm:h-[380px] md:h-[450px]">
+                    {/* Left Card */}
+                    <motion.div
+                      className="absolute rounded border border-[#1C1B17]/10 bg-[#F6F4EF] overflow-hidden"
+                      style={{
+                        width: isMobile ? 120 : 200,
+                        height: isMobile ? 170 : 280,
+                        y: scrollY * 0.1,
+                        rotate: -8 + mousePos.x * 2.0,
+                        x: isMobile ? -40 + mousePos.x * 5 : -80 + mousePos.x * 8,
+                        zIndex: 10,
+                        transformOrigin: "bottom right",
+                        boxShadow: "0 10px 25px rgba(28, 27, 23, 0.08)"
+                      }}
+                      initial={{ x: 0, rotate: 0, opacity: 0 }}
+                      animate={{ 
+                        x: isMobile ? -40 : -80, 
+                        rotate: -8, 
+                        opacity: 1 
+                      }}
+                      transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+                    >
+                      <img src={heroLeft} alt="Cover Left" className="w-full h-full object-cover" />
+                    </motion.div>
+
+                    {/* Right Card */}
+                    <motion.div
+                      className="absolute rounded border border-[#1C1B17]/10 bg-[#F6F4EF] overflow-hidden"
+                      style={{
+                        width: isMobile ? 120 : 200,
+                        height: isMobile ? 170 : 280,
+                        y: scrollY * 0.1,
+                        rotate: 8 + mousePos.x * 2.0,
+                        x: isMobile ? 40 + mousePos.x * 5 : 80 + mousePos.x * 8,
+                        zIndex: 10,
+                        transformOrigin: "bottom left",
+                        boxShadow: "0 10px 25px rgba(28, 27, 23, 0.08)"
+                      }}
+                      initial={{ x: 0, rotate: 0, opacity: 0 }}
+                      animate={{ 
+                        x: isMobile ? 40 : 80, 
+                        rotate: 8, 
+                        opacity: 1 
+                      }}
+                      transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+                    >
+                      <img src={heroRight} alt="Cover Right" className="w-full h-full object-cover" />
+                    </motion.div>
+
+                    {/* Center Card */}
+                    <motion.div
+                      className="absolute rounded border border-[#1C1B17]/15 bg-[#F6F4EF] overflow-hidden"
+                      style={{
+                        width: isMobile ? 140 : 230,
+                        height: isMobile ? 200 : 320,
+                        y: scrollY * 0.16,
+                        rotate: mousePos.x * 2.5,
+                        x: mousePos.x * 12,
+                        zIndex: 20,
+                        boxShadow: "0 25px 45px rgba(28, 27, 23, 0.14)"
+                      }}
+                      initial={{ scale: 0.92, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
+                    >
+                      <img src={heroCenter} alt="Cover Center" className="w-full h-full object-cover" />
+                    </motion.div>
+                  </div>
+                </motion.div>
+
+                {/* Right Column (Col 4): Editorial Content */}
+                <motion.div 
+                  className="lg:col-span-4 flex flex-col justify-center text-left py-6 lg:py-0"
                   initial="hidden"
                   animate="show"
                   variants={{
-                    hidden: { opacity: 0 },
+                    hidden: {},
                     show: {
-                      opacity: 1,
                       transition: {
-                        staggerChildren: 0.08,
-                        delayChildren: 0.15
+                        staggerChildren: 0.15,
+                        delayChildren: 0.25
                       }
                     }
                   }}
                 >
-                  
-                  {/* Featured live / upcoming match tracker */}
-                  {(() => {
-                    const featured = pickFeaturedMatch(sourceMatches);
-                    
-                    // Error state
-                    if (matchError) {
-                      return (
-                        <motion.div
-                          variants={{
-                            hidden: { opacity: 0, y: 15 },
-                            show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
-                          }}
-                          className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl text-left"
-                        >
-                          <div className="text-center py-4">
-                            <div className="text-[9px] uppercase font-mono tracking-widest text-red-400 font-bold mb-2">
-                              Unable to load live football data
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    }
-                    
-                    // Loading state
-                    if (isLoadingMatches) {
-                      return (
-                        <motion.div
-                          variants={{
-                            hidden: { opacity: 0, y: 15 },
-                            show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
-                          }}
-                          className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl text-left"
-                        >
-                          <div className="animate-pulse space-y-3">
-                            <div className="h-3 bg-zinc-800 rounded w-1/3" />
-                            <div className="space-y-2">
-                              <div className="h-4 bg-zinc-800 rounded w-1/2" />
-                              <div className="h-8 bg-zinc-800 rounded w-3/4" />
-                              <div className="h-4 bg-zinc-800 rounded w-1/2" />
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    }
-                    
-                    // No matches available
-                    if (!featured) {
-                      return (
-                        <motion.div
-                          variants={{
-                            hidden: { opacity: 0, y: 15 },
-                            show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
-                          }}
-                          className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl text-left"
-                        >
-                          <div className="text-center py-4">
-                            <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 font-bold mb-2">
-                              No scheduled matches
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    }
-                    
-                    const flagA = getFlag(featured.teamA);
-                    const flagB = getFlag(featured.teamB);
-                    return (
-                      <motion.div
-                        variants={{
-                          hidden: { opacity: 0, y: 15 },
-                          show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
-                        }}
-                        className="bg-zinc-950/55 backdrop-blur-md border border-zinc-900/65 p-4 rounded shadow-xl hover:border-green-accent/40 hover:shadow-[0_0_20px_rgba(34,197,94,0.15)] hover:scale-[1.02] transition-all duration-300 text-left group"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-[9px] uppercase font-mono tracking-widest text-green-accent font-bold">
-                            {featured.status === 'LIVE' ? 'Live Now' : featured.status === 'UPCOMING' ? 'Next Up' : 'Featured Match'}
-                          </span>
-                          <MatchTimeDisplay match={featured} />
-                        </div>
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-2 text-sm font-bold text-white uppercase">
-                              <span className="text-lg">{flagA}</span>
-                              <span>{featured.teamA}</span>
-                            </div>
-                            {featured.status === 'LIVE' || featured.status === 'COMPLETED' ? (
-                              <div className="flex items-center gap-3 text-2xl font-black text-white font-mono pl-7">
-                                <motion.span
-                                  key={`featured-home-${featured.liveScore?.home ?? 0}`}
-                                  initial={{ scale: 1.2, color: "#22C55E" }}
-                                  animate={{ scale: 1, color: "#ffffff" }}
-                                  transition={{ duration: 0.5, ease: "easeOut" }}
-                                >
-                                  {featured.liveScore?.home ?? 0}
-                                </motion.span>
-                                <span className="text-zinc-600 font-light text-lg">—</span>
-                                <motion.span
-                                  key={`featured-away-${featured.liveScore?.away ?? 0}`}
-                                  initial={{ scale: 1.2, color: "#22C55E" }}
-                                  animate={{ scale: 1, color: "#ffffff" }}
-                                  transition={{ duration: 0.5, ease: "easeOut" }}
-                                >
-                                  {featured.liveScore?.away ?? 0}
-                                </motion.span>
-                              </div>
-                            ) : (
-                              <div className="text-zinc-500 text-[10px] font-mono uppercase pl-7">vs</div>
-                            )}
-                            <div className="flex items-center gap-2 text-sm font-bold text-white uppercase">
-                              <span className="text-lg">{flagB}</span>
-                              <span>{featured.teamB}</span>
-                            </div>
-                          </div>
-                          {featured.status === 'UPCOMING' && (
-                            <div className="flex flex-col items-start md:items-end gap-2">
-                              <div className="text-[10px] font-mono text-zinc-400">
-                                Kickoff: <span className="text-white font-semibold">{formatKickoffTimeLocal(featured.kickoffTime)}</span>
-                              </div>
-                              <button
-                                onClick={() => openMatchAnalysis(featured)}
-                                className="h-[42px] px-5 bg-zinc-900/60 backdrop-blur-md border border-green-accent/30 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-900/80 hover:border-green-accent hover:shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:-translate-y-0.5 transition-all duration-300 group-hover:translate-x-1"
-                              >
-                                <span>Watch Preview</span>
-                                <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    );
-                  })()}
-
-                  {/* Calibration Operational Status block */}
-                  <motion.div 
+                  <motion.span 
+                    className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[0.25em] text-editorial-dim mb-3 sm:mb-4 block"
                     variants={{
                       hidden: { opacity: 0, y: 15 },
-                      show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 14 } }
+                      show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
                     }}
-                    className="bg-zinc-950/50 backdrop-blur-md border border-zinc-900/65 p-3.5 rounded shadow-xl hover:border-green-accent/20 transition-all duration-300 text-left flex items-start space-x-3"
                   >
-                    <div className="relative flex h-2 w-2 mt-1 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-accent opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-accent"></span>
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="text-[9px] uppercase font-mono tracking-widest text-green-accent font-bold">Model calibration optimal</div>
-                      <p className="text-[10px] text-zinc-400 leading-normal line-clamp-2">
-                        High correlation in final warm-up matches. ELO matrices updated.
-                      </p>
-                    </div>
-                  </motion.div>
+                    SUMMER 2026
+                  </motion.span>
+                  
+                  <motion.h1 
+                    className="editorial-title text-3xl sm:text-4xl md:text-5xl lg:text-[40px] xl:text-[46px] font-light text-editorial-dark mb-4 sm:mb-5 leading-[1.08] tracking-tight"
+                    style={{ y: scrollY * 0.06 }}
+                    variants={{
+                      hidden: { opacity: 0, y: 20 },
+                      show: { opacity: 1, y: 0, transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] } }
+                    }}
+                  >
+                    Football belongs <br />
+                    to those who <br />
+                    <span className="italic font-normal">see the game</span> <br />
+                    differently.
+                  </motion.h1>
 
+                  <motion.p 
+                    className="text-xs sm:text-sm text-editorial-muted font-light leading-relaxed max-w-md mb-6 sm:mb-8"
+                    variants={{
+                      hidden: { opacity: 0 },
+                      show: { opacity: 1, transition: { duration: 1.0, ease: [0.16, 1, 0.3, 1] } }
+                    }}
+                  >
+                    A quantitative expected value simulation index and elite football intelligence publication built for analysts, experts, and readers who demand mathematical clarity over gambling noise.
+                  </motion.p>
+
+                  <motion.div
+                    variants={{
+                      hidden: { opacity: 0, y: 10 },
+                      show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
+                    }}
+                  >
+                    <button
+                      onClick={() => navigateTo('predictions')}
+                      className="editorial-underline-hover inline-flex items-center text-xs font-mono uppercase tracking-[0.2em] font-bold text-editorial-dark transition-all duration-300 gap-2 hover:opacity-80 pb-1 cursor-pointer"
+                    >
+                      DISCOVER PREDICTIONS <span className="text-sm">→</span>
+                    </button>
+                  </motion.div>
                 </motion.div>
 
               </div>
 
-              {/* Bottom Panel: Statistics Strip & Scroll indicator (Contained inside viewport boundaries) */}
+              {/* Bottom Panel: Statistics Strip & Scroll indicator */}
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
+                transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
                 className="relative z-10 w-full"
               >
-                <div className="max-w-7xl mx-auto px-6 md:px-12 py-6 mb-8">
+                <div className="max-w-7xl mx-auto px-6 md:px-12 pb-6 pt-4 mb-4">
                   
                   {/* Premium Competitions Bar */}
                   <div className="relative">
@@ -2047,25 +1996,26 @@ export default function App() {
 
                   {/* SCROLL TO EXPLORE Indicator with animated chevron */}
                   <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5, duration: 0.5 }}
-                    className="flex flex-col items-center mt-6 cursor-pointer group"
+                    transition={{ delay: 0.7, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex flex-col items-center mt-5 cursor-pointer group"
                     onClick={() => {
                       const el = document.getElementById('todays-best-predictions');
                       if (el) el.scrollIntoView({ behavior: 'smooth' });
                     }}
                   >
-                    <span className="text-[10px] uppercase tracking-[0.25em] text-white/70 group-hover:text-white/90 transition-colors duration-300 font-mono">Scroll to Explore</span>
+                    <span className="text-[9px] uppercase tracking-[0.3em] text-[#1C1B17]/60 group-hover:text-[#1C1B17]/85 transition-colors duration-300 font-mono">Scroll to Explore</span>
                     <motion.div 
-                      animate={{ y: [0, 8, 0], opacity: [0.4, 1, 0.4] }}
+                      animate={{ y: [0, 6, 0] }}
                       transition={{ 
-                        y: { repeat: Infinity, duration: 2.5, ease: "easeInOut" },
-                        opacity: { repeat: Infinity, duration: 2.5, ease: "easeInOut" }
+                        repeat: Infinity, 
+                        duration: 2.2, 
+                        ease: "easeInOut"
                       }}
-                      className="text-white/70 group-hover:text-white/90 transition-colors duration-300 mt-2"
+                      className="text-[#1C1B17]/60 group-hover:text-[#1C1B17]/85 transition-colors duration-300 mt-1.5"
                     >
-                      <ChevronDown className="w-4 h-4" strokeWidth={1.5} />
+                      <ChevronDown className="w-4 h-4" strokeWidth={1.2} />
                     </motion.div>
                   </motion.div>
                 </div>
@@ -2097,37 +2047,82 @@ export default function App() {
               />
             </div>
 
-            {/* THE MODEL section (Full-Width editorial block at bottom of Home) */}
-            <div className="w-full bg-black border-t border-zinc-900 py-20 mt-10">
+            {/* ── COMPETITION ARCHIVE SECTION ──────────────────────────────── */}
+            <CompetitionArchive onNavigate={() => navigateTo('predictions')} />
+
+            {/* ── THE MODEL section — Apple keynote editorial dark block ───── */}
+            <motion.section
+              className="w-full bg-[#0A0A0A] py-28 md:py-36"
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.15 }}
+              variants={{
+                hidden: {},
+                show: { transition: { staggerChildren: 0.12 } },
+              }}
+            >
               <div className="max-w-7xl mx-auto px-6 md:px-12">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                  
-                  {/* Left Column (8/12) - THE MODEL, Headline, Description */}
-                  <div className="lg:col-span-8 space-y-4">
-                    <span className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 md:gap-16 items-center">
+
+                  {/* Left Column — label + headline + body */}
+                  <div className="lg:col-span-8 space-y-6">
+                    <motion.span
+                      className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold"
+                      variants={{
+                        hidden: { opacity: 0, y: 20 },
+                        show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] as const } },
+                      }}
+                    >
                       THE MODEL
-                    </span>
-                    <h2 className="text-4xl md:text-5xl font-serif text-white tracking-tight leading-tight">
-                      Transparent intelligence. <span className="text-zinc-500">No black boxes.</span>
-                    </h2>
-                    <p className="text-zinc-400 text-sm md:text-base font-light leading-relaxed max-w-2xl pt-2">
-                      Twelve weighted signals — from ELO and squad value to injuries, momentum and schedule difficulty — feed 50,051 simulations per match. <span className="text-zinc-650 font-serif italic text-zinc-500 block mt-2">The output is a probability, not a prophecy.</span>
-                    </p>
+                    </motion.span>
+
+                    <motion.h2
+                      className="text-5xl md:text-6xl lg:text-[72px] font-serif text-white tracking-tight leading-[1.05]"
+                      variants={{
+                        hidden: { opacity: 0, y: 30 },
+                        show: { opacity: 1, y: 0, transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] as const } },
+                      }}
+                    >
+                      Transparent intelligence.{' '}
+                      <span className="text-zinc-500">No black boxes.</span>
+                    </motion.h2>
+
+                    <motion.p
+                      className="text-zinc-400 text-base md:text-lg font-light leading-[1.75] max-w-2xl"
+                      variants={{
+                        hidden: { opacity: 0, y: 20 },
+                        show: { opacity: 1, y: 0, transition: { duration: 0.85, ease: [0.16, 1, 0.3, 1] as const } },
+                      }}
+                    >
+                      Twelve weighted signals — from ELO and squad value to injuries, momentum and schedule difficulty — feed 50,051 simulations per match.{' '}
+                      <span className="font-serif italic text-zinc-500 block mt-3">
+                        The output is a probability, not a prophecy.
+                      </span>
+                    </motion.p>
                   </div>
 
-                  {/* Right Column (4/12) - Premium Link */}
-                  <div className="lg:col-span-4 flex lg:justify-end lg:items-center h-full pt-4 lg:pt-0">
+                  {/* Right Column — CTA */}
+                  <motion.div
+                    className="lg:col-span-4 flex lg:justify-end lg:items-center"
+                    variants={{
+                      hidden: { opacity: 0, y: 16 },
+                      show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] as const } },
+                    }}
+                  >
                     <button
                       onClick={() => navigateTo('model')}
-                      className="group inline-flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-zinc-350 hover:text-green-accent transition-colors duration-300 border-b border-zinc-800 hover:border-green-accent pb-2 uppercase cursor-pointer text-left"
+                      className="group relative inline-flex items-center gap-2.5 text-[11px] font-mono font-bold tracking-[0.2em] text-zinc-300 hover:text-white uppercase cursor-pointer transition-colors duration-300 pb-2"
                     >
-                      LEARN HOW OFFLINE WORKS <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1.5 transition-transform duration-300" />
+                      LEARN HOW OFFLINE WORKS
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1.5 transition-transform duration-300 shrink-0" />
+                      {/* Underline that extends on hover */}
+                      <span className="absolute bottom-0 left-0 right-0 h-[1px] bg-zinc-700 group-hover:bg-green-accent transition-colors duration-300" />
                     </button>
-                  </div>
+                  </motion.div>
 
                 </div>
               </div>
-            </div>
+            </motion.section>
 
           </div>
         )}
@@ -4650,96 +4645,105 @@ export default function App() {
       </main>
 
       {/* FOOTER AREA (Designed by Anurag Saikia based on branding guidelines) */}
-      <footer id="app-footer" className="border-t border-zinc-900 bg-black py-6 md:py-8 px-6 md:px-12 mt-6 text-xs">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-start">
-          
-          {/* Left branding component column */}
-          <div className="md:col-span-5 space-y-3">
-            <div 
-              onClick={() => navigateTo('home')} 
-              className="flex flex-col items-start cursor-pointer group select-none"
-            >
-              <span className="text-base font-serif text-white tracking-[0.3em] font-light leading-none group-hover:text-green-accent transition-colors duration-300 uppercase">
-                OFFLINE
-              </span>
-              <span className="text-[7px] font-mono tracking-[0.4em] text-zinc-550 uppercase mt-1.5 group-hover:text-zinc-400 transition-colors duration-300">
-                FOOTBALL INTELLIGENCE
-              </span>
-            </div>
-            
-            <p className="text-zinc-400 font-serif italic text-[11px] pt-0.5">
-              "Believe In Your Guts."
-            </p>
-            <p className="text-zinc-550 text-[10.5px] leading-relaxed max-w-sm">
-              Football intelligence for readers, analysts and strategists.
-            </p>
+      <motion.footer
+        id="app-footer"
+        className="bg-[#0A0A0A] border-t border-zinc-900/50 px-6 md:px-12 pt-16 pb-10 text-xs"
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.1 }}
+        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] as const }}
+      >
+        <div className="max-w-7xl mx-auto">
 
-            {/* Simulated Specs Metric Matrix */}
-            <div className="pt-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500 space-y-1">
-              <div className="flex items-center gap-1.5"><span className="text-white font-bold">50,051</span><span>simulations per match.</span></div>
-              <div className="flex items-center gap-1.5"><span className="text-white font-bold">104</span><span>World Cup fixtures.</span></div>
-              <div className="flex items-center gap-1.5"><span className="text-white font-bold">48</span><span>national teams.</span></div>
-              <div className="flex items-center gap-1.5"><span className="text-white font-bold">12</span><span>weighted model signals.</span></div>
+          {/* Top rule */}
+          <div className="w-full h-[1px] bg-zinc-800/60 mb-12" />
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8 items-start">
+
+            {/* ── Branding column ──────────────────────────────────────── */}
+            <div className="md:col-span-5 space-y-5">
+              <div
+                onClick={() => navigateTo('home')}
+                className="flex flex-col items-start cursor-pointer group select-none"
+              >
+                <span className="text-xl font-serif text-white tracking-[0.35em] font-light leading-none group-hover:text-green-accent transition-colors duration-300 uppercase">
+                  OFFLINE
+                </span>
+                <span className="text-[7px] font-mono tracking-[0.45em] text-zinc-600 uppercase mt-2 group-hover:text-zinc-400 transition-colors duration-300">
+                  FOOTBALL INTELLIGENCE
+                </span>
+              </div>
+
+              <p className="text-zinc-500 font-serif italic text-[12px] leading-relaxed">
+                &ldquo;Believe In Your Guts.&rdquo;
+              </p>
+              <p className="text-zinc-600 text-[11px] leading-relaxed max-w-sm font-light">
+                Football intelligence for readers, analysts and strategists.
+              </p>
+
+              {/* Simulated Specs Metric Matrix */}
+              <div className="pt-2 text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-600 space-y-1.5">
+                <div className="flex items-center gap-2"><span className="text-zinc-200 font-bold tabular-nums">50,051</span><span>simulations per match.</span></div>
+                <div className="flex items-center gap-2"><span className="text-zinc-200 font-bold tabular-nums">104</span><span>World Cup fixtures.</span></div>
+                <div className="flex items-center gap-2"><span className="text-zinc-200 font-bold tabular-nums">48</span><span>national teams.</span></div>
+                <div className="flex items-center gap-2"><span className="text-zinc-200 font-bold tabular-nums">12</span><span>weighted model signals.</span></div>
+              </div>
             </div>
+
+            {/* ── Navigation column ────────────────────────────────────── */}
+            <div className="md:col-span-3 space-y-4">
+              <h4 className="text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-600 font-bold">
+                Index Navigation
+              </h4>
+              <div className="flex flex-col space-y-2.5 text-zinc-500 text-[10.5px] font-mono uppercase tracking-wider">
+                <span onClick={() => navigateTo('home')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Home</span>
+                <span onClick={() => navigateTo('predictions')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Predictions</span>
+                <span onClick={() => navigateTo('favorites')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Favorites</span>
+                <span onClick={() => navigateTo('intelligence')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Intelligence Hub</span>
+                {/* <span onClick={() => navigateTo('tournament')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Tournament</span> */}
+                <span onClick={() => navigateTo('model')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">The Model</span>
+              </div>
+            </div>
+
+            {/* ── System Matrix column ──────────────────────────────────── */}
+            <div className="md:col-span-4 space-y-4">
+              <h4 className="text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-600 font-bold">
+                System Matrix
+              </h4>
+              <div className="text-[10.5px] font-mono text-zinc-500 bg-zinc-950/60 border border-zinc-800/60 rounded-sm overflow-hidden">
+                {[
+                  { label: 'Data Refresh', value: 'Daily', color: 'text-zinc-100 font-bold' },
+                  { label: 'Engine', value: 'poisson_v4.2', color: 'text-zinc-300' },
+                  { label: 'Simulation', value: '50,051/fixt.', color: 'text-zinc-300' },
+                  { label: 'Confidence Threshold', value: '72%', color: 'text-zinc-300' },
+                  { label: 'Risk Index', value: 'active', color: 'text-green-accent' },
+                  { label: 'API Latency', value: '~14ms', color: 'text-zinc-400' },
+                ].map(({ label, value, color }, i, arr) => (
+                  <div
+                    key={label}
+                    className={`flex justify-between px-4 py-2 ${i < arr.length - 1 ? 'border-b border-zinc-900/50' : ''}`}
+                  >
+                    <span>{label}:</span>
+                    <span className={color}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
-          {/* Center tactical Navigation link column */}
-          <div className="md:col-span-3 space-y-2.5">
-            <h4 className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold">Index Navigation</h4>
-            <div className="flex flex-col space-y-2 text-zinc-500 text-[10.5px] font-mono uppercase tracking-wider">
-              <span onClick={() => navigateTo('home')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Home</span>
-              <span onClick={() => navigateTo('predictions')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Predictions</span>
-              <span onClick={() => navigateTo('favorites')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Favorites</span>
-              <span onClick={() => navigateTo('intelligence')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Intelligence Hub</span>
-              {/* <span onClick={() => navigateTo('tournament')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Tournament</span> */}
-              <span onClick={() => navigateTo('model')} className="hover:text-green-accent hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">The Model</span>
+          {/* ── Copyright bar ──────────────────────────────────────────── */}
+          <div className="mt-14 pt-6 border-t border-zinc-900/40 flex flex-col sm:flex-row justify-between items-center gap-3 text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-700">
+            <div>
+              © 2026 OFFLINE. All rights reserved. No black boxes.
             </div>
-          </div>
-
-          {/* Right author credits metadata column */}
-          <div className="md:col-span-4 space-y-3 text-left">
-            <h4 className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold font-mono">System Matrix</h4>
-            
-            <div className="text-[10.5px] font-mono text-zinc-500 space-y-1 bg-zinc-950 px-4 py-3 border border-zinc-900 rounded">
-              <div className="flex justify-between border-b border-zinc-900/40 pb-1">
-                <span>Data Refresh:</span> 
-                <span className="text-white font-bold">Daily</span>
-              </div>
-              <div className="flex justify-between border-b border-zinc-900/40 pb-1">
-                <span>Engine:</span> 
-                <span className="text-zinc-300">poisson_v4.2</span>
-              </div>
-              <div className="flex justify-between border-b border-zinc-900/40 pb-1">
-                <span>Simulation:</span> 
-                <span className="text-zinc-300">50,051/fixt.</span>
-              </div>
-              <div className="flex justify-between border-b border-zinc-900/40 pb-1">
-                <span>Confidence Threshold:</span> 
-                <span className="text-zinc-300">72%</span>
-              </div>
-              <div className="flex justify-between border-b border-zinc-900/40 pb-1">
-                <span>Risk Index:</span> 
-                <span className="text-green-accent">active</span>
-              </div>
-              <div className="flex justify-between">
-                <span>API Latency:</span> 
-                <span className="text-zinc-400">~14ms</span>
-              </div>
+            <div className="text-center sm:text-right">
+              Made with passion. Built for football.
             </div>
           </div>
 
         </div>
-
-        {/* Copyright bar line */}
-        <div className="max-w-7xl mx-auto mt-6 pt-4 border-t border-zinc-900/60 flex flex-col sm:flex-row justify-between items-center gap-3 text-[9px] font-mono uppercase tracking-wider text-zinc-550">
-          <div>
-            © 2026 OFFLINE. All rights reserved. No black boxes.
-          </div>
-          <div className="text-center sm:text-right text-[10px] text-zinc-550">
-            Made with passion. Built for football.
-          </div>
-        </div>
-      </footer>
+      </motion.footer>
 
       {/* MATCH ANALYSIS DETAILED RIGHT SIDE SLIDE-OVER DRAWER */}
       {selectedMatch && (() => {

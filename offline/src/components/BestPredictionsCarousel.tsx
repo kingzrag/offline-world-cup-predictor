@@ -322,6 +322,31 @@ function useCarouselMetrics(containerRef: RefObject<HTMLDivElement | null>) {
   return metrics;
 }
 
+const titleVariants = {
+  hidden: { opacity: 0, y: 25 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] as const }
+  }
+};
+
+const dividerVariants = {
+  hidden: { scaleX: 0 },
+  show: {
+    scaleX: 1,
+    transition: { duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.25 }
+  }
+};
+
+const fadeVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] as const, delay: 0.35 }
+  }
+};
+
 export interface BestPredictionsCarouselProps {
   matches: MatchPrediction[];
   isLoading?: boolean;
@@ -347,6 +372,19 @@ export function BestPredictionsCarousel({
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+      setIsTablet(window.innerWidth >= 640 && window.innerWidth < 1024);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const { cardWidth, stride } = useCarouselMetrics(containerRef);
@@ -414,173 +452,224 @@ export function BestPredictionsCarousel({
   const shouldAutoSlide = !prefersReducedMotion && !isSystemPaused && total > 0;
 
   return (
-    <div
+    <section
       id="todays-best-predictions"
-      className="max-w-7xl mx-auto px-6 md:px-12 w-full py-16 scroll-mt-24"
+      className="relative w-full min-h-screen lg:h-[100dvh] flex flex-col justify-center bg-[#070707] text-zinc-150 overflow-hidden select-none py-12 lg:py-0 scroll-mt-24"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-zinc-900 pb-6 mb-10 gap-6">
-        <div>
-          <span className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold mb-1.5 animate-pulse">
-            CURATED SELECTIONS
-          </span>
-          <span className="text-3xl font-serif text-white tracking-tight block">
-            Today&apos;s Best Predictions
-          </span>
-          <p className="text-zinc-550 text-xs mt-2 max-w-xl font-sans">
-            The highest confidence distributions, prominent fixtures, and decisive matchups simulated
-            50,051 times by the OFFLINE quantitative intelligence model.
-          </p>
-        </div>
-
-        {!isLoading && !error && total > 0 && (
-          <div className="flex items-center space-x-3 shrink-0">
-            <button
-              onClick={goPrev}
-              className="p-3 rounded-full border border-zinc-900 hover:border-zinc-550 bg-zinc-950 text-zinc-455 hover:text-white transition-all cursor-pointer group"
-              aria-label="Previous prediction"
-            >
-              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-            </button>
-            <button
-              onClick={goNext}
-              className="p-3 rounded-full border border-zinc-900 hover:border-zinc-550 bg-zinc-950 text-zinc-455 hover:text-white transition-all cursor-pointer group"
-              aria-label="Next prediction"
-            >
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-          </div>
-        )}
+      {/* Subtle vignette and ambient background glow behind featured card */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_20%,rgba(0,0,0,0.95)_100%)]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-green-accent/5 filter blur-[120px] opacity-40" />
       </div>
 
-      {isLoading ? (
-        <div className="flex gap-6 justify-center pb-8">
-          {Array.from({ length: 3 }).map((_, idx) => (
-            <MatchCardSkeleton key={idx} />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="w-full bg-zinc-950 border border-red-500/20 rounded p-12 text-center flex flex-col items-center justify-center space-y-4">
-          <AlertCircle className="w-10 h-10 text-red-500 animate-pulse" />
-          <span className="text-[10px] font-mono tracking-[0.2em] text-red-400 uppercase block font-bold">
-            Prediction Engine Offline
-          </span>
-          <h4 className="text-xl font-serif text-white tracking-tight uppercase">Connection Failed</h4>
-          <p className="text-zinc-400 text-xs max-w-lg leading-relaxed font-sans">
-            The live machine learning prediction engine is currently unreachable at{" "}
-            <code className="text-red-400 font-mono">{apiBase || "(no API URL configured)"}</code>.
-            Live predictions have been disabled to prevent displaying fallback/mock data. Please verify
-            your backend server is running and reload.
-          </p>
-          <button
-            onClick={onRetry || (() => window.location.reload())}
-            className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-mono font-bold tracking-widest uppercase border border-zinc-800 hover:border-zinc-700 cursor-pointer transition duration-300"
-          >
-            Retry Connection
-          </button>
-        </div>
-      ) : total === 0 ? null : (
-        <div className="relative select-none">
-          <div
-            className="pointer-events-none absolute inset-y-0 left-0 w-16 md:w-24 z-20 bg-gradient-to-r from-black via-black/80 to-transparent"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 w-16 md:w-24 z-20 bg-gradient-to-l from-black via-black/80 to-transparent"
-            aria-hidden
-          />
-
-          <motion.div
-            ref={containerRef}
-            className="relative h-[500px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y pt-8"
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.12}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            role="region"
-            aria-roledescription="carousel"
-            aria-label="Today's best predictions"
-          >
-            {matches.map((match, index) => {
-              const offset = getLoopOffset(index, activeIndex, total);
-              if (Math.abs(offset) > 2) return null;
-
-              const isActive = offset === 0;
-
-              return (
-                <motion.div
-                  key={match.id}
-                  className="absolute top-8 left-1/2 will-change-transform"
-                  style={{ width: cardWidth }}
-                  initial={false}
-                  animate={{
-                    x: offset * stride - cardWidth / 2,
-                    scale: isActive ? 1.02 : 0.92,
-                    opacity: isActive ? 1 : 0.7,
-                    zIndex: isActive ? 20 : 10 - Math.abs(offset),
-                  }}
-                  transition={premiumTransition}
-                >
-                  <PredictionCard
-                    match={match}
-                    isActive={isActive}
-                    onViewAnalysis={onViewAnalysis}
-                  />
-                </motion.div>
-              );
-            })}
+      <motion.div 
+        className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col justify-center h-full py-8 lg:py-12"
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.15 }}
+      >
+        <div className="flex flex-col md:flex-row md:items-end justify-between pb-6 mb-8 gap-6 relative">
+          <motion.div variants={titleVariants}>
+            <span className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold mb-2">
+              CURATED SELECTIONS
+            </span>
+            <h2 className="text-3xl sm:text-4xl md:text-[44px] font-serif text-white tracking-tight leading-tight block">
+              Today&apos;s Best Predictions
+            </h2>
+            <p className="text-zinc-400 text-xs mt-3 max-w-xl font-sans font-light leading-relaxed">
+              The highest confidence distributions, prominent fixtures, and decisive matchups simulated 50,051 times by the OFFLINE quantitative intelligence model.
+            </p>
           </motion.div>
 
-          <div className="flex justify-center gap-2 mt-6">
-            {matches.map((match, i) => {
-              const isActive = i === activeIndex;
-              return (
-                <button
-                  key={match.id}
-                  type="button"
-                  aria-label={`Go to ${match.teamA} vs ${match.teamB}`}
-                  aria-current={isActive ? "true" : undefined}
-                  onClick={() => setActiveIndex(i)}
-                  className={`h-1.5 rounded-full relative overflow-hidden transition-all duration-[450ms] ${
-                    isActive
-                      ? "w-8 bg-zinc-800"
-                      : "w-1.5 bg-zinc-800 hover:bg-zinc-605"
-                  }`}
-                >
-                  {isActive && (
-                    shouldAutoSlide ? (
-                      <motion.span
-                        key={`${i}-${activeIndex}-${shouldAutoSlide}`}
-                        initial={{ width: 0 }}
-                        animate={{ width: "100%" }}
-                        transition={{ duration: 6, ease: "linear" }}
-                        className="absolute left-0 top-0 bottom-0 bg-green-accent rounded-full"
-                        onAnimationComplete={goNext}
-                      />
-                    ) : (
-                      <span className="absolute inset-0 bg-green-accent rounded-full" />
-                    )
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {!isLoading && !error && total > 0 && (
+            <motion.div 
+              className="flex items-center space-x-3 shrink-0 self-end md:self-auto"
+              variants={fadeVariants}
+            >
+              <motion.button
+                onClick={goPrev}
+                whileHover={{ scale: 1.05, borderColor: "#ffffff" }}
+                whileTap={{ scale: 0.95 }}
+                className="w-11 h-11 rounded-full border border-zinc-850 flex items-center justify-center text-zinc-400 hover:text-white transition-all duration-300 bg-transparent cursor-pointer group"
+                aria-label="Previous prediction"
+              >
+                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform duration-300" />
+              </motion.button>
+              <motion.button
+                onClick={goNext}
+                whileHover={{ scale: 1.05, borderColor: "#ffffff" }}
+                whileTap={{ scale: 0.95 }}
+                className="w-11 h-11 rounded-full border border-zinc-855 flex items-center justify-center text-zinc-400 hover:text-white transition-all duration-300 bg-transparent cursor-pointer group"
+                aria-label="Next prediction"
+              >
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-300" />
+              </motion.button>
+            </motion.div>
+          )}
         </div>
-      )}
 
-      {onViewAll && (
-        <div className="flex justify-center mt-10">
-          <button
-            onClick={onViewAll}
-            className="group inline-flex items-center gap-2.5 px-8 py-3.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-700 rounded text-xs font-mono font-bold tracking-widest text-white uppercase cursor-pointer hover:bg-zinc-900 transition-all duration-300"
-          >
-            VIEW ALL PREDICTIONS{" "}
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
+        {/* Thin divider with left-to-right drawing animation */}
+        <div className="relative w-full mb-8">
+          <motion.div 
+            className="w-full h-[1px] bg-zinc-800 origin-left"
+            variants={dividerVariants}
+          />
         </div>
-      )}
-    </div>
+
+        {isLoading ? (
+          <div className="flex gap-6 justify-center py-8">
+            {Array.from({ length: isMobile ? 1 : isTablet ? 2 : 3 }).map((_, idx) => (
+              <div key={idx} style={{ width: cardWidth }} className="h-full">
+                <MatchCardSkeleton />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="w-full bg-[#0E0E0E] border border-red-500/10 rounded-lg p-12 text-center flex flex-col items-center justify-center space-y-4">
+            <AlertCircle className="w-10 h-10 text-red-500 animate-pulse" />
+            <span className="text-[10px] font-mono tracking-[0.2em] text-red-400 uppercase block font-bold">
+              Prediction Engine Offline
+            </span>
+            <h4 className="text-xl font-serif text-white tracking-tight uppercase">Connection Failed</h4>
+            <p className="text-zinc-400 text-xs max-w-lg leading-relaxed font-sans font-light">
+              The live machine learning prediction engine is currently unreachable at{" "}
+              <code className="text-red-400 font-mono">{apiBase || "(no API URL configured)"}</code>.
+              Live predictions have been disabled to prevent displaying fallback/mock data. Please verify your backend server is running and reload.
+            </p>
+            <button
+              onClick={onRetry || (() => window.location.reload())}
+              className="px-6 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-mono font-bold tracking-widest uppercase border border-zinc-800 hover:border-zinc-700 cursor-pointer transition duration-300"
+            >
+              Retry Connection
+            </button>
+          </div>
+        ) : total === 0 ? null : (
+          <div className="relative select-none w-full">
+            {/* Cropping gradients for Awwwards / Framer feel */}
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 w-8 md:w-20 z-20 bg-gradient-to-r from-[#070707] to-transparent"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 w-8 md:w-20 z-20 bg-gradient-to-l from-[#070707] to-transparent"
+              aria-hidden
+            />
+
+            <motion.div
+              ref={containerRef}
+              className="relative h-[480px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y pt-8"
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.12}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              role="region"
+              aria-roledescription="carousel"
+              aria-label="Today's best predictions"
+            >
+              {matches.map((match, index) => {
+                const offset = getLoopOffset(index, activeIndex, total);
+                // On mobile, only render the active card. On tablet/desktop, render surrounding cards.
+                if (isMobile && Math.abs(offset) > 0) return null;
+                if (Math.abs(offset) > 2) return null;
+
+                const isActive = offset === 0;
+                
+                // Opacity logic matching: center 100%, left/right 75%, mobile hidden
+                const cardOpacity = isActive ? 1 : isMobile ? 0 : 0.75;
+                
+                // Sequence delay calculations for staggered entrance
+                const seqDelay = 0.3 + (offset + 1) * 0.15;
+
+                return (
+                  <motion.div
+                    key={match.id}
+                    className="absolute top-8 left-1/2 will-change-transform"
+                    style={{ width: cardWidth }}
+                    initial={false}
+                    animate={{
+                      x: offset * stride - cardWidth / 2,
+                      scale: isActive ? 1.02 : 0.92,
+                      opacity: cardOpacity,
+                      zIndex: isActive ? 20 : 10 - Math.abs(offset),
+                    }}
+                    transition={premiumTransition}
+                  >
+                    {/* Inner wrapper for Entrance slide + Hover elevation */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 40 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{
+                        duration: 1.0,
+                        ease: [0.16, 1, 0.3, 1],
+                        delay: seqDelay
+                      }}
+                      whileHover={{
+                        y: -6,
+                        scale: isActive ? 1.03 : 0.94,
+                        transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] }
+                      }}
+                      className="h-full w-full rounded-lg"
+                    >
+                      <PredictionCard
+                        match={match}
+                        isActive={isActive}
+                        onViewAnalysis={onViewAnalysis}
+                      />
+                    </motion.div>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+
+            {/* Premium editorial dots */}
+            <div className="flex justify-center gap-3 mt-8">
+              {matches.map((match, i) => {
+                const isActive = i === activeIndex;
+                return (
+                  <button
+                    key={match.id}
+                    type="button"
+                    aria-label={`Go to ${match.teamA} vs ${match.teamB}`}
+                    aria-current={isActive ? "true" : undefined}
+                    onClick={() => setActiveIndex(i)}
+                    className="relative w-3.5 h-3.5 flex items-center justify-center cursor-pointer group"
+                  >
+                    {/* Small background dot */}
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-800 transition-colors duration-300 group-hover:bg-zinc-600" />
+                    
+                    {/* Active ring layout animation */}
+                    {isActive && (
+                      <motion.span
+                        layoutId="activeDot"
+                        className="absolute inset-0 border border-green-accent rounded-full scale-[0.68]"
+                        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {onViewAll && (
+          <div className="flex justify-center mt-12">
+            <motion.button
+              onClick={onViewAll}
+              whileHover={{ y: -2, borderColor: "#ffffff", backgroundColor: "rgba(255,255,255,0.03)" }}
+              whileTap={{ scale: 0.98 }}
+              className="group inline-flex items-center gap-3 px-10 py-4 bg-transparent border border-zinc-800 rounded text-[11px] font-mono font-bold tracking-[0.25em] text-white uppercase cursor-pointer transition-all duration-300"
+            >
+              VIEW ALL PREDICTIONS{" "}
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1.5 transition-transform duration-300" />
+            </motion.button>
+          </div>
+        )}
+      </motion.div>
+    </section>
   );
 }

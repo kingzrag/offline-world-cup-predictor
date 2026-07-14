@@ -86,3 +86,83 @@ body {
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
+
+/* Editorial design utilities */
+.bg-editorial-white {
+  background-color: #F6F4EF;
+}
+
+.text-editorial-dark {
+  color: #1C1B17;
+}
+
+.text-editorial-muted {
+  color: rgba(28, 27, 23, 0.7);
+}
+
+.text-editorial-dim {
+  color: rgba(28, 27, 23, 0.55);
+}
+
+.border-editorial-muted {
+  border-color: rgba(28, 27, 23, 0.08);
+}
+
+.border-editorial-strong {
+  border-color: rgba(28, 27, 23, 0.15);
+}
+
+.bg-paper-grain {
+  position: relative;
+  background-color: #F6F4EF;
+}
+
+.bg-paper-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 2;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Subtle overlay paper texture grid */
+.paper-overlay {
+  background-image: 
+    linear-gradient(rgba(28, 27, 23, 0.004) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28, 27, 23, 0.004) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+/* Custom premium transitions and font sizing */
+.editorial-title {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+/* Minimal hover underline effect for buttons */
+.editorial-underline-hover {
+  position: relative;
+}
+.editorial-underline-hover::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  transform: scaleX(0);
+  height: 1.5px;
+  bottom: -4px;
+  left: 0;
+  background-color: currentColor;
+  transform-origin: bottom right;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.editorial-underline-hover:hover::after {
+  transform: scaleX(1);
+  transform-origin: bottom left;
+}
+
