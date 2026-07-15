@@ -257,13 +257,18 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
       className="relative flex flex-col items-center cursor-pointer group select-none"
       aria-label={`Browse ${name}`}
     >
-      {/* Soft wall shadow behind card */}
-      <div className="absolute top-2 left-2 right-2 bottom-0 bg-[#1C1B17]/4 blur-xl rounded-sm -z-10" />
+      {/* Layered contact shadows */}
+      {/* Small contact shadow directly behind card */}
+      <div className="absolute top-1 left-1 right-1 bottom-0 bg-[#1C1B17]/6 blur-md rounded-sm -z-10" />
+      {/* Medium wall shadow extending downward */}
+      <div className="absolute top-3 left-3 right-3 bottom-[-4px] bg-[#1C1B17]/4 blur-lg rounded-sm -z-10" />
+      {/* Soft ambient shadow with natural falloff */}
+      <div className="absolute top-4 left-4 right-4 bottom-[-8px] bg-[#1C1B17]/2 blur-2xl rounded-sm -z-10" />
       
       {/* Cover card */}
       <div
         className={`
-          relative w-[195px] h-[195px]
+          relative w-[180px] h-[180px]
           ${design.background} ${design.gradient}
           rounded-sm overflow-hidden
           shadow-[0_8px_24px_rgba(0,0,0,0.06)]
@@ -285,27 +290,27 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
         {design.overlay}
 
         {/* Top metadata strip - unified template */}
-        <div className="absolute top-0 left-0 right-0 px-4 pt-3 pb-1.5 flex items-center justify-between z-20">
-          <span className="text-[5.5px] font-mono tracking-[0.3em] text-white/50 uppercase font-medium">OFFLINE</span>
-          <span className="text-[5.5px] font-mono tracking-[0.25em] text-white/40 uppercase">{abbr}</span>
+        <div className="absolute top-0 left-0 right-0 px-3 pt-2.5 pb-1 flex items-center justify-between z-20">
+          <span className="text-[5px] font-mono tracking-[0.3em] text-white/50 uppercase font-medium">OFFLINE</span>
+          <span className="text-[5px] font-mono tracking-[0.25em] text-white/40 uppercase">{abbr}</span>
         </div>
 
         {/* Logo centered with generous whitespace */}
-        <div className="absolute inset-0 flex items-center justify-center z-20 px-6">
+        <div className="absolute inset-0 flex items-center justify-center z-20 px-5">
           <img
             src={logo}
             alt={alt}
             loading="lazy"
-            className="w-16 h-16 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-500 group-hover:scale-105"
+            className="w-14 h-14 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-500 group-hover:scale-105"
           />
         </div>
 
         {/* Thin editorial divider */}
-        <div className="absolute bottom-10 left-6 right-6 h-[0.5px] bg-white/15 z-20" />
+        <div className="absolute bottom-9 left-5 right-5 h-[0.5px] bg-white/15 z-20" />
 
         {/* Competition name at bottom with premium typography */}
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-2 bg-gradient-to-t from-black/50 via-black/30 to-transparent z-20">
-          <p className={`text-[8px] font-serif tracking-[0.12em] leading-tight text-center ${design.textColor} uppercase`}>
+        <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-2 bg-gradient-to-t from-black/50 via-black/30 to-transparent z-20">
+          <p className={`text-[7.5px] font-serif tracking-[0.12em] leading-tight text-center ${design.textColor} uppercase`}>
             {name}
           </p>
         </div>
@@ -376,12 +381,12 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
 
         {/* ── Thin full-width divider (draws left → right) ──────────────── */}
         <motion.div
-          className="w-full h-[1px] bg-[#1C1B17]/12 origin-left mb-16"
+          className="w-full h-[1px] bg-[#1C1B17]/12 origin-left mb-12"
           variants={dividerVariants}
         />
 
         {/* ── Premium floating museum shelves ──────────────────────────────────── */}
-        <motion.div variants={shelfVariants} className="relative mt-6 space-y-28">
+        <motion.div variants={shelfVariants} className="relative mt-4 space-y-20">
           
           {/* ── Shelf One ── */}
           <motion.div 
@@ -409,18 +414,20 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
               </div>
               
               {/* Tight contact shadow directly under shelf */}
-              <div className="absolute bottom-0 left-8 right-8 h-0.5 bg-[#1C1B17]/12 blur-sm" />
+              <div className="absolute bottom-0 left-8 right-8 h-0.5 bg-[#1C1B17]/15 blur-sm" />
               
               {/* Larger soft ambient shadow fading onto wall */}
-              <div className="absolute -bottom-4 left-12 right-12 h-8 bg-[#1C1B17]/6 blur-2xl rounded-full" />
-              <div className="absolute -bottom-2 left-16 right-16 h-4 bg-[#1C1B17]/4 blur-xl rounded-full" />
+              <div className="absolute -bottom-4 left-12 right-12 h-8 bg-[#1C1B17]/8 blur-2xl rounded-full" />
+              <div className="absolute -bottom-2 left-16 right-16 h-4 bg-[#1C1B17]/5 blur-xl rounded-full" />
               
               {/* Realistic wooden shelf - 12px thick with bevel */}
-              <div className="relative h-[12px] bg-gradient-to-b from-[#C8C2B6] via-[#BEB7AB] to-[#B4AD9F] rounded-b-sm shadow-[0_3px_10px_rgba(28,27,23,0.15)]">
+              <div className="relative h-[12px] bg-gradient-to-b from-[#C8C2B6] via-[#BEB7AB] to-[#A8A296] rounded-b-sm shadow-[0_4px_12px_rgba(28,27,23,0.18)]">
                 {/* Front bevel highlight */}
                 <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-b from-[#D8D2C6] to-[#C8C2B6]" />
                 {/* Rounded front edge highlight */}
-                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-t from-[#A49D91] to-[#B4AD9F] rounded-b-sm" />
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-t from-[#9A9488] to-[#A8A296] rounded-b-sm" />
+                {/* Darker underside for depth */}
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-t from-[#8A8478] to-transparent rounded-b-sm" />
               </div>
             </div>
           </motion.div>
@@ -451,18 +458,20 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
               </div>
               
               {/* Tight contact shadow directly under shelf */}
-              <div className="absolute bottom-0 left-8 right-8 h-0.5 bg-[#1C1B17]/12 blur-sm" />
+              <div className="absolute bottom-0 left-8 right-8 h-0.5 bg-[#1C1B17]/15 blur-sm" />
               
               {/* Larger soft ambient shadow fading onto wall */}
-              <div className="absolute -bottom-4 left-12 right-12 h-8 bg-[#1C1B17]/6 blur-2xl rounded-full" />
-              <div className="absolute -bottom-2 left-16 right-16 h-4 bg-[#1C1B17]/4 blur-xl rounded-full" />
+              <div className="absolute -bottom-4 left-12 right-12 h-8 bg-[#1C1B17]/8 blur-2xl rounded-full" />
+              <div className="absolute -bottom-2 left-16 right-16 h-4 bg-[#1C1B17]/5 blur-xl rounded-full" />
               
               {/* Realistic wooden shelf - 12px thick with bevel */}
-              <div className="relative h-[12px] bg-gradient-to-b from-[#C8C2B6] via-[#BEB7AB] to-[#B4AD9F] rounded-b-sm shadow-[0_3px_10px_rgba(28,27,23,0.15)]">
+              <div className="relative h-[12px] bg-gradient-to-b from-[#C8C2B6] via-[#BEB7AB] to-[#A8A296] rounded-b-sm shadow-[0_4px_12px_rgba(28,27,23,0.18)]">
                 {/* Front bevel highlight */}
                 <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-b from-[#D8D2C6] to-[#C8C2B6]" />
                 {/* Rounded front edge highlight */}
-                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-t from-[#A49D91] to-[#B4AD9F] rounded-b-sm" />
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-t from-[#9A9488] to-[#A8A296] rounded-b-sm" />
+                {/* Darker underside for depth */}
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-t from-[#8A8478] to-transparent rounded-b-sm" />
               </div>
             </div>
           </motion.div>
