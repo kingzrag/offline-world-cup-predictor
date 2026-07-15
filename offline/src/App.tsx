@@ -250,7 +250,6 @@ export default function App() {
     return 'home';
   });
 
-  const [isScrolled, setIsScrolled] = useState(false);
 
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress: heroScrollProgress } = useScroll({
@@ -260,37 +259,12 @@ export default function App() {
   const heroOpacity = useTransform(heroScrollProgress, [0, 0.75, 1], [1, 1, 0.85]);
   const heroScale = useTransform(heroScrollProgress, [0, 1], [1, 0.985]);
 
-  // ── Scroll-aware nav theming (snap-scroll compatible) ────────────────────────
-  // Strategy: observe #todays-best-predictions with IntersectionObserver.
-  // When it enters the viewport → animate to dark nav.
-  // When it leaves → animate back to white nav.
-  // CSS transition: 400ms ease-in-out on the header handles the crossfade,
-  // making it completely independent of scroll speed (works with snap too).
-  const [navIsDark, setNavIsDark] = useState(false);
-
-  useEffect(() => {
-    if (activeTab !== 'home') return;
-    const target = document.getElementById('todays-best-predictions');
-    if (!target) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        // intersecting = dark section is visible → go dark
-        // not intersecting = back to hero → go white
-        setNavIsDark(entry.isIntersecting);
-      },
-      // threshold=0: fires the moment even 1px of the section enters the viewport
-      { threshold: 0, rootMargin: '0px 0px 0px 0px' }
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [activeTab]);
-
-  // When not on home tab, always dark
-  const darkNav = activeTab !== 'home';
-  const navDark = darkNav || navIsDark;
-
-  // Helper: pick light or dark value
-  const nv = (light: string, dark: string) => navDark ? dark : light;
+  // ── Hero-overlay header: scroll-driven fade + slide ────────────────────────
+  // Header is fixed over the hero; as hero scrolls away it fades and lifts out.
+  // heroScrollProgress [0 → 0.65] = fully visible
+  // heroScrollProgress [0.65 → 1.0] = fade to 0 + translate -28px
+  const headerOpacity = useTransform(heroScrollProgress, [0, 0.6, 1], [1, 1, 0]);
+  const headerY = useTransform(heroScrollProgress, [0.6, 1], [0, -28]);
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -662,7 +636,6 @@ export default function App() {
     const handleScroll = () => {
       const y = window.scrollY;
       setScrollY(y);
-      setIsScrolled(y > 80);
       
       // Infinite scroll detection
       const scrollHeight = document.documentElement.scrollHeight;
@@ -1728,161 +1701,105 @@ export default function App() {
         />
       )}
       */}
-      {/* Top Premium Editorial Header — IntersectionObserver-driven, 400ms CSS crossfade */}
-      <header
-        id="app-header"
-        className="sticky top-0 z-40 px-6 py-4 md:px-12 grid grid-cols-1 md:grid-cols-3 gap-6 items-center w-full backdrop-blur-md"
-        style={{
-          backgroundColor: nv('rgba(247,246,242,0.96)', 'rgba(9,9,9,0.97)'),
-          borderBottom: `1px solid ${nv('rgba(28,27,23,0.12)', 'rgba(255,255,255,0.08)')}`,
-          transition: 'background-color 400ms ease-in-out, border-color 400ms ease-in-out',
-          ['--nav-hover-color' as any]: nv('#1C1B17', '#FFFFFF'),
-        }}
-      >
-        {/* Tactical Editorial Sections Navigation (Col 1 on desktop) */}
-        <nav
-          id="header-nav"
-          className="flex items-center space-x-3 sm:space-x-4 md:space-x-5 lg:space-x-8 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase justify-center md:justify-start order-2 md:order-1 select-none overflow-x-auto scrollbar-none"
+      {/* ── Hero-only editorial navigation ─────────────────────────────────────
+           Fixed over the hero, fades + slides up as the hero scrolls out.
+           Only rendered on the home tab (subsequent sections are fully immersive). */}
+      {activeTab === 'home' && (
+        <motion.header
+          id="app-header"
+          className="fixed top-0 left-0 right-0 z-50 w-full grid grid-cols-3 items-center
+                     px-8 md:px-14 py-4 md:py-5
+                     bg-[rgba(247,246,242,0.97)] backdrop-blur-md
+                     border-b border-[rgba(28,27,23,0.07)]
+                     select-none"
           style={{
-            color: nv('rgba(28,27,23,0.60)', 'rgba(161,161,170,1)'),
-            transition: 'color 400ms ease-in-out',
+            opacity: headerOpacity,
+            y: headerY,
+            pointerEvents: 'auto',
           }}
         >
-          <button
-            onClick={() => navigateTo('predictions')}
-            className={`py-1 border-b-2 whitespace-nowrap transition-all duration-[400ms] ease-in-out hover:text-[var(--nav-hover-color)] ${
-              activeTab === 'predictions'
-                ? 'text-white border-green-accent'
-                : 'border-transparent'
-            }`}
-          >
-            Predictions
-          </button>
-          <button
-            onClick={() => navigateTo('favorites')}
-            className={`py-1 border-b-2 whitespace-nowrap transition-all duration-[400ms] ease-in-out hover:text-[var(--nav-hover-color)] ${
-              activeTab === 'favorites'
-                ? 'text-white border-green-accent'
-                : 'border-transparent'
-            }`}
-          >
-            Favorites {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length > 0 && (
-              <span className="ml-1 border text-[8px] sm:text-[9px] px-1 py-0.5 font-mono rounded bg-green-accent/10 border-green-accent/30 text-green-accent">
-                {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => navigateTo('intelligence')}
-            className={`py-1 border-b-2 whitespace-nowrap transition-all duration-[400ms] ease-in-out hover:text-[var(--nav-hover-color)] ${
-              activeTab === 'intelligence'
-                ? 'text-white border-green-accent'
-                : 'border-transparent'
-            }`}
-          >
-            Intelligence
-          </button>
-          <button
-            onClick={() => navigateTo('model')}
-            className={`py-1 border-b-2 whitespace-nowrap transition-all duration-[400ms] ease-in-out hover:text-[var(--nav-hover-color)] ${
-              activeTab === 'model'
-                ? 'text-white border-green-accent'
-                : 'border-transparent'
-            }`}
-          >
-            The Model
-          </button>
-        </nav>
-
-        {/* Brand identity: elegant serif wordmark with premium editorial hierarchy (Col 2 on desktop) */}
-        <div
-          onClick={() => navigateTo('home')}
-          className="flex flex-col items-center justify-center cursor-pointer group select-none text-center order-1 md:order-2 animate-fade-in py-1"
-          id="offline-logo-container"
-        >
-          <span
-            className="text-lg sm:text-xl md:text-2xl font-serif tracking-[0.35em] font-light leading-none pl-[0.35em] uppercase group-hover:opacity-70"
-            style={{
-              color: nv('rgb(28,27,23)', 'rgb(255,255,255)'),
-              transition: 'color 400ms ease-in-out, opacity 150ms ease-in-out',
-            }}
-          >
-            OFFLINE
-          </span>
-          <span
-            className="text-[7px] sm:text-[7.5px] font-mono tracking-[0.45em] uppercase mt-1.5 sm:mt-2 pl-[0.45em]"
-            style={{
-              color: nv('rgba(28,27,23,0.50)', 'rgba(161,161,170,0.70)'),
-              transition: 'color 400ms ease-in-out',
-            }}
-          >
-            FOOTBALL INTELLIGENCE
-          </span>
-        </div>
-
-        {/* Global actions: Dynamic Countdown and Tactical Search (Col 3 on desktop) */}
-        <div id="header-actions" className="flex items-center justify-center md:justify-end space-x-3 sm:space-x-4 md:space-x-6 order-3">
-          <button
-            onClick={() => setShowSearchModal(true)}
-            className="flex items-center space-x-1.5 sm:space-x-2 border px-2.5 sm:px-3 py-1.5 rounded group"
-            style={{
-              backgroundColor: nv('rgba(28,27,23,0.0)', 'rgba(9,9,9,0.90)'),
-              borderColor: nv('rgba(28,27,23,0.28)', 'rgba(63,63,70,1)'),
-              color: nv('rgba(28,27,23,0.70)', 'rgba(161,161,170,1)'),
-              transition: 'background-color 400ms ease-in-out, border-color 400ms ease-in-out, color 400ms ease-in-out',
-              ['--search-hover-text' as any]: nv('#1C1B17', '#FFFFFF'),
-            }}
-          >
-            <Search className="w-3.5 h-3.5 group-hover:text-green-accent transition-colors duration-150" />
-            <span
-              className="hidden sm:inline-block text-[10px] tracking-widest uppercase font-mono group-hover:text-[var(--search-hover-text)]"
-              style={{ transition: 'color 150ms ease-in-out' }}
+          {/* Left nav — Predictions · Favorites */}
+          <nav className="flex items-center gap-6 md:gap-8">
+            <button
+              onClick={() => navigateTo('predictions')}
+              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[rgba(28,27,23,0.52)]
+                         hover:text-[#1C1B17] transition-colors duration-200 whitespace-nowrap pb-px
+                         border-b border-transparent hover:border-[rgba(28,27,23,0.30)]"
             >
-              Search
-            </span>
-            <kbd
-              className="hidden md:inline-block font-mono text-[9px] px-1 py-0.5 rounded border"
-              style={{
-                backgroundColor: nv('rgba(28,27,23,0.05)', 'rgba(24,24,27,1)'),
-                color: nv('rgba(28,27,23,0.50)', 'rgba(82,82,91,1)'),
-                borderColor: nv('rgba(28,27,23,0.15)', 'rgba(39,39,42,1)'),
-                transition: 'background-color 400ms ease-in-out, border-color 400ms ease-in-out, color 400ms ease-in-out',
-              }}
+              Predictions
+            </button>
+            <button
+              onClick={() => navigateTo('favorites')}
+              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[rgba(28,27,23,0.52)]
+                         hover:text-[#1C1B17] transition-colors duration-200 whitespace-nowrap pb-px
+                         border-b border-transparent hover:border-[rgba(28,27,23,0.30)]
+                         flex items-center gap-1.5"
             >
-              /
-            </kbd>
-          </button>
+              Favorites
+              {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length > 0 && (
+                <span className="text-[7.5px] font-mono px-1 py-0.5 rounded-sm
+                                 bg-[rgba(58,92,45,0.10)] border border-[rgba(58,92,45,0.28)]
+                                 text-[rgba(58,92,45,1)] tabular-nums leading-none">
+                  {favoriteMatchIds.length + favoriteTeamCodes.length + favoriteInsightIds.length}
+                </span>
+              )}
+            </button>
+          </nav>
 
-
+          {/* Center — OFFLINE wordmark */}
           <div
-            className="flex flex-col items-end md:border-l leading-tight md:pl-4 sm:md:pl-6"
-            style={{
-              borderColor: nv('rgba(28,27,23,0.15)', 'rgba(24,24,27,1)'),
-              transition: 'border-color 400ms ease-in-out',
-            }}
+            onClick={() => navigateTo('home')}
+            className="flex flex-col items-center justify-center cursor-pointer group"
+            id="offline-logo-container"
           >
-            <span
-              className="text-[8px] sm:text-[9px] uppercase tracking-widest font-mono truncate max-w-[120px] sm:max-w-[180px]"
-              style={{
-                color: nv('rgba(28,27,23,0.60)', 'rgba(82,82,91,1)'),
-                transition: 'color 400ms ease-in-out',
-              }}
-              title={countdownLabel}
-            >
-              {countdownLabel}
+            <span className="text-[19px] md:text-[22px] font-serif tracking-[0.38em] font-light
+                             leading-none pl-[0.38em] uppercase text-[#1C1B17]
+                             group-hover:opacity-60 transition-opacity duration-200">
+              OFFLINE
             </span>
-            <span
-              className="text-base sm:text-lg font-mono tracking-wider font-semibold tabular-nums"
-              style={{
-                color: nv('rgb(58,92,45)', 'rgb(74,222,128)'),
-                transition: 'color 400ms ease-in-out',
-              }}
-            >
-              {countdown}
+            <span className="text-[6.5px] md:text-[7px] font-mono tracking-[0.44em] uppercase
+                             mt-[5px] pl-[0.44em] text-[rgba(28,27,23,0.38)]
+                             group-hover:opacity-70 transition-opacity duration-200">
+              FOOTBALL INTELLIGENCE
             </span>
           </div>
-        </div>
-      </header>
+
+          {/* Right nav — Intelligence · The Model */}
+          <nav className="flex items-center justify-end gap-6 md:gap-8">
+            <button
+              onClick={() => navigateTo('intelligence')}
+              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[rgba(28,27,23,0.52)]
+                         hover:text-[#1C1B17] transition-colors duration-200 whitespace-nowrap pb-px
+                         border-b border-transparent hover:border-[rgba(28,27,23,0.30)]"
+            >
+              Intelligence
+            </button>
+            <button
+              onClick={() => navigateTo('model')}
+              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[rgba(28,27,23,0.52)]
+                         hover:text-[#1C1B17] transition-colors duration-200 whitespace-nowrap pb-px
+                         border-b border-transparent hover:border-[rgba(28,27,23,0.30)]"
+            >
+              The Model
+            </button>
+          </nav>
+        </motion.header>
+      )}
+
+      {/* ── Non-home back button ─────────────────────────────────────────────────
+           Minimal floating back-to-home link for Predictions, Favorites, etc.
+           No full navigation shown — those pages are immersive. */}
+      {activeTab !== 'home' && (
+        <button
+          onClick={() => navigateTo('home')}
+          className="fixed top-5 left-6 z-50 flex items-center gap-2
+                     text-[9px] font-mono tracking-[0.28em] uppercase
+                     text-zinc-500 hover:text-white transition-colors duration-200 cursor-pointer"
+        >
+          <span className="opacity-70">←</span>
+          OFFLINE
+        </button>
+      )}
 
 
       {/* Main Container */}
@@ -1894,6 +1811,7 @@ export default function App() {
         {activeTab === 'home' && (
           <>
             {/* Fully Responsive & Cinematic 100% Width editorial-hero */}
+
             <motion.div 
               ref={heroRef}
               id="editorial-hero" 
@@ -1903,7 +1821,7 @@ export default function App() {
               onMouseLeave={handleMouseLeave}
             >
               {/* Main Content Layout */}
-              <div className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 pt-6 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              <div className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 pt-[86px] flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
                 
                 {/* Left Column (Col 2): Editorial metadata */}
                 <motion.div 
@@ -2064,41 +1982,59 @@ export default function App() {
 
               </div>
 
-              {/* Bottom Panel: Statistics Strip & Scroll indicator */}
+              {/* Bottom Panel: Countdown + Scroll indicator */}
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
                 className="relative z-10 w-full"
               >
-                <div className="max-w-7xl mx-auto px-6 md:px-12 pb-6 pt-4 mb-4">
-                  
-                  {/* Premium Competitions Bar — moved to CompetitionArchive section below the predictions carousel */}
+                <div className="max-w-7xl mx-auto px-6 md:px-14 pb-7 pt-4">
+                  <div className="flex items-end justify-between">
 
-                  {/* SCROLL TO EXPLORE Indicator with animated chevron */}
-                  <motion.div 
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                    className="flex flex-col items-center mt-5 cursor-pointer group"
-                    onClick={() => {
-                      const el = document.getElementById('todays-best-predictions');
-                      if (el) el.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                  >
-                    <span className="text-[9px] uppercase tracking-[0.3em] text-[#1C1B17]/60 group-hover:text-[#1C1B17]/85 transition-colors duration-300 font-mono">Scroll to Explore</span>
-                    <motion.div 
-                      animate={{ y: [0, 6, 0] }}
-                      transition={{ 
-                        repeat: Infinity, 
-                        duration: 2.2, 
-                        ease: "easeInOut"
-                      }}
-                      className="text-[#1C1B17]/60 group-hover:text-[#1C1B17]/85 transition-colors duration-300 mt-1.5"
+                    {/* Countdown editorial info block */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.55, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                      className="flex items-start gap-4 pl-3 border-l border-[#1C1B17]/14"
                     >
-                      <ChevronDown className="w-4 h-4" strokeWidth={1.2} />
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-mono tracking-[0.30em] uppercase text-[#1C1B17]/40 mb-0.5">
+                          {countdownLabel}
+                        </span>
+                        <span className="text-[17px] font-mono tracking-wider font-semibold tabular-nums text-[#3a5c2d] leading-none">
+                          {countdown}
+                        </span>
+                      </div>
                     </motion.div>
-                  </motion.div>
+
+                    {/* Scroll to Explore indicator */}
+                    <motion.div 
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.7, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                      className="flex flex-col items-center cursor-pointer group"
+                      onClick={() => {
+                        const el = document.getElementById('todays-best-predictions');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                    >
+                      <span className="text-[9px] uppercase tracking-[0.3em] text-[#1C1B17]/60 group-hover:text-[#1C1B17]/85 transition-colors duration-300 font-mono">Scroll to Explore</span>
+                      <motion.div 
+                        animate={{ y: [0, 6, 0] }}
+                        transition={{ 
+                          repeat: Infinity, 
+                          duration: 2.2, 
+                          ease: "easeInOut"
+                        }}
+                        className="text-[#1C1B17]/60 group-hover:text-[#1C1B17]/85 transition-colors duration-300 mt-1.5"
+                      >
+                        <ChevronDown className="w-4 h-4" strokeWidth={1.2} />
+                      </motion.div>
+                    </motion.div>
+
+                  </div>
                 </div>
               </motion.div>
             </motion.div>
