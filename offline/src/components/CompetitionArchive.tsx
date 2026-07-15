@@ -260,7 +260,7 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
       {/* Cover card */}
       <div
         className={`
-          relative w-[200px] h-[200px]
+          relative w-[185px] h-[185px]
           ${design.background} ${design.gradient}
           rounded-sm overflow-hidden
           shadow-[0_8px_24px_rgba(0,0,0,0.06)]
@@ -282,27 +282,27 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
         {design.overlay}
 
         {/* Top metadata strip - unified template */}
-        <div className="absolute top-0 left-0 right-0 px-3 pt-3 pb-1.5 flex items-center justify-between z-20">
-          <span className="text-[5.5px] font-mono tracking-[0.3em] text-white/50 uppercase font-medium">OFFLINE</span>
-          <span className="text-[5.5px] font-mono tracking-[0.25em] text-white/40 uppercase">{abbr}</span>
+        <div className="absolute top-0 left-0 right-0 px-3 pt-2.5 pb-1 flex items-center justify-between z-20">
+          <span className="text-[5px] font-mono tracking-[0.3em] text-white/50 uppercase font-medium">OFFLINE</span>
+          <span className="text-[5px] font-mono tracking-[0.25em] text-white/40 uppercase">{abbr}</span>
         </div>
 
         {/* Logo centered with generous whitespace */}
-        <div className="absolute inset-0 flex items-center justify-center z-20 px-6">
+        <div className="absolute inset-0 flex items-center justify-center z-20 px-5">
           <img
             src={logo}
             alt={alt}
             loading="lazy"
-            className="w-16 h-16 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-500 group-hover:scale-105"
+            className="w-14 h-14 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-500 group-hover:scale-105"
           />
         </div>
 
         {/* Thin editorial divider */}
-        <div className="absolute bottom-10 left-6 right-6 h-[0.5px] bg-white/15 z-20" />
+        <div className="absolute bottom-9 left-5 right-5 h-[0.5px] bg-white/15 z-20" />
 
         {/* Competition name at bottom with premium typography */}
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-2 bg-gradient-to-t from-black/50 via-black/30 to-transparent z-20">
-          <p className={`text-[8px] font-serif tracking-[0.12em] leading-tight text-center ${design.textColor} uppercase`}>
+        <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-2 bg-gradient-to-t from-black/50 via-black/30 to-transparent z-20">
+          <p className={`text-[7.5px] font-serif tracking-[0.12em] leading-tight text-center ${design.textColor} uppercase`}>
             {name}
           </p>
         </div>
@@ -378,12 +378,12 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
 
         {/* ── Thin full-width divider (draws left → right) ──────────────── */}
         <motion.div
-          className="w-full h-[1px] bg-[#1C1B17]/12 origin-left mb-6"
+          className="w-full h-[1px] bg-[#1C1B17]/12 origin-left mb-16"
           variants={dividerVariants}
         />
 
         {/* ── Premium floating museum shelves ──────────────────────────────────── */}
-        <motion.div variants={shelfVariants} className="relative mt-6 space-y-32">
+        <motion.div variants={shelfVariants} className="relative mt-6 space-y-40">
           
           {/* ── Shelf One ── */}
           <motion.div 
@@ -395,6 +395,18 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
           >
             {/* Realistic floating shelf - mounted to wall */}
             <div className="relative w-[92%] mx-auto">
+              {/* Cards sitting on shelf */}
+              <div className="flex items-end justify-center gap-12 sm:gap-14 px-16 mb-0">
+                {SHELF_ONE.map((comp, i) => (
+                  <CompetitionCover
+                    key={comp.name}
+                    {...comp}
+                    index={i}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+              
               {/* Tight contact shadow directly under shelf */}
               <div className="absolute bottom-0 left-6 right-6 h-0.5 bg-[#1C1B17]/10 blur-sm" />
               
@@ -408,18 +420,6 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
                 <div className="absolute top-0 left-0 right-0 h-[0.5px] bg-gradient-to-b from-[#E0D9CC] to-[#D0C9BC]" />
                 {/* Rounded front edge highlight */}
                 <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-t from-[#A8A198] to-[#B8B1A4] rounded-b-sm" />
-                
-                {/* Cards resting on shelf - bottom edge touching */}
-                <div className="absolute -top-[200px] left-0 right-0 flex items-end justify-center gap-12 sm:gap-14 px-16">
-                  {SHELF_ONE.map((comp, i) => (
-                    <CompetitionCover
-                      key={comp.name}
-                      {...comp}
-                      index={i}
-                      onNavigate={onNavigate}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
           </motion.div>
@@ -434,6 +434,18 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
           >
             {/* Realistic floating shelf - mounted to wall */}
             <div className="relative w-[92%] mx-auto">
+              {/* Cards sitting on shelf */}
+              <div className="flex items-end justify-center gap-12 sm:gap-14 px-16 mb-0">
+                {SHELF_TWO.map((comp, i) => (
+                  <CompetitionCover
+                    key={comp.name}
+                    {...comp}
+                    index={i + 4}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+              
               {/* Tight contact shadow directly under shelf */}
               <div className="absolute bottom-0 left-6 right-6 h-0.5 bg-[#1C1B17]/10 blur-sm" />
               
@@ -447,18 +459,6 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
                 <div className="absolute top-0 left-0 right-0 h-[0.5px] bg-gradient-to-b from-[#E0D9CC] to-[#D0C9BC]" />
                 {/* Rounded front edge highlight */}
                 <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-t from-[#A8A198] to-[#B8B1A4] rounded-b-sm" />
-                
-                {/* Cards resting on shelf - bottom edge touching */}
-                <div className="absolute -top-[200px] left-0 right-0 flex items-end justify-center gap-12 sm:gap-14 px-16">
-                  {SHELF_TWO.map((comp, i) => (
-                    <CompetitionCover
-                      key={comp.name}
-                      {...comp}
-                      index={i + 4}
-                      onNavigate={onNavigate}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
           </motion.div>
