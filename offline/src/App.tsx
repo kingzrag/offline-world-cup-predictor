@@ -1817,6 +1817,9 @@ export default function App() {
               id="editorial-hero" 
               className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark"
               style={{ opacity: heroOpacity, scale: heroScale }}
+              initial={{ opacity: 0, y: 80, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
             >

@@ -472,10 +472,10 @@ export function BestPredictionsCarousel({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ opacity: exitOpacity, scale: exitScale }}
-      initial={{ opacity: 0, y: 40, scale: 0.98 }}
+      initial={{ opacity: 0, y: 80, scale: 0.98 }}
       whileInView={{ opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, amount: 0.12 }}
-      transition={{ duration: 0.7, ease: [0.215, 0.61, 0.355, 1] }}
+      transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
       onAnimationComplete={() => setSectionSettled(true)}
     >
       {/* Subtle vignette and ambient background glow behind featured card */}
