@@ -2064,7 +2064,7 @@ export default function App() {
 
             {/* ── THE MODEL section — Apple keynote editorial dark block ───── */}
             <motion.section
-              className="w-full h-[100dvh] bg-[#0A0A0A] snap-start origin-center flex items-center"
+              className="w-full min-h-[60dvh] py-24 bg-[#0A0A0A] origin-center flex items-center"
               initial={{ opacity: 0, y: 40, scale: 0.98 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, amount: 0.12 }}
@@ -4664,7 +4664,7 @@ export default function App() {
       {/* FOOTER AREA (Designed by Anurag Saikia based on branding guidelines) */}
       <motion.footer
         id="app-footer"
-        className="bg-[#0A0A0A] border-t border-zinc-900/50 h-[100dvh] px-6 md:px-12 pt-16 pb-10 text-xs snap-start"
+        className="bg-[#0A0A0A] border-t border-zinc-900/50 min-h-[50dvh] px-6 md:px-12 pt-12 pb-8 text-xs"
         initial={{ opacity: 0, y: 24 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.1 }}
@@ -4673,7 +4673,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto">
 
           {/* Top rule */}
-          <div className="w-full h-[1px] bg-zinc-800/60 mb-12" />
+          <div className="w-full h-[1px] bg-zinc-800/60 mb-8" />
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8 items-start">
 
