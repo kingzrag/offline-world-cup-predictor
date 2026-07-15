@@ -773,6 +773,13 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     statusMapped = "COMPLETED";
   }
 
+  // Auto-populate finished_at when match is COMPLETED
+  let finishedAt: string | null = null;
+  if (statusMapped === "COMPLETED") {
+    // Use current time if no finished_at from API, otherwise use API value
+    finishedAt = (f as any).finished_at || new Date().toISOString();
+  }
+
   // Baseline outcome fields
   let predictionLabel = "Draw / Even Lean";
   let confidence: "High" | "Medium" | "Low" = "Medium";
@@ -830,6 +837,7 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     liveScore: f.live_score ?? null,
     winner: f.winner,
     minute: f.live_minute ?? null,
+    finished_at: finishedAt,
     ...(f.prediction || enrichment ? { isLiveData: true } : {}),
 
     // Default neutral placeholders for stats loaded dynamically in the match drawer

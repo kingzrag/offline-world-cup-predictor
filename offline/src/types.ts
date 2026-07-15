@@ -204,6 +204,13 @@ export interface MatchPrediction {
 
   /** Match minute from football-data.org (IN_PLAY / PAUSED only) */
   minute?: number | null;
+
+  /**
+   * Timestamp when match status changed to COMPLETED.
+   * Used for 12-hour visibility window after match finishes.
+   * Populated automatically when status transitions to COMPLETED.
+   */
+  finished_at?: string | null;
 }
 
 export interface TrophyProbability {

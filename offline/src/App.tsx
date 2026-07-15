@@ -188,23 +188,36 @@ const getYear = (match: MatchPrediction) => {
 };
 
 const sortSourceMatches = (matches: MatchPrediction[]) => {
+  // Filter out finished matches older than 12 hours
+  const now = Date.now();
+  const twelveHoursMs = 12 * 60 * 60 * 1000;
+  
+  const visibleMatches = matches.filter(match => {
+    if (match.status === 'LIVE') return true;
+    if (match.status === 'UPCOMING') return true;
+    if (match.status === 'COMPLETED') {
+      if (!match.finished_at) return true; // If no finished_at, show by default
+      const finishedTime = new Date(match.finished_at).getTime();
+      const hoursSinceFinished = (now - finishedTime) / (1000 * 60 * 60);
+      return hoursSinceFinished <= 12;
+    }
+    return false;
+  });
+
   const getSortPriority = (match: MatchPrediction) => {
-    const year = getYear(match);
-    const is2026 = year >= 2026;
-    
     if (match.status === 'LIVE') {
       return 1; // Live matches always at the very top
     }
     
-    if (is2026) {
-      if (match.status === 'UPCOMING') {
-        return 2; // Scheduled 2026 fixtures
-      } else {
-        return 3; // Finished 2026 matches
-      }
-    } else {
-      return 4; // Historical matches (all finished)
+    if (match.status === 'UPCOMING') {
+      return 2; // Upcoming matches second
     }
+    
+    if (match.status === 'COMPLETED') {
+      return 3; // Recently finished matches (within 12h) last
+    }
+    
+    return 4; // Fallback
   };
 
   const getTimestampValue = (dateStr: string) => {
@@ -215,7 +228,7 @@ const sortSourceMatches = (matches: MatchPrediction[]) => {
     }
   };
 
-  return [...matches].sort((a, b) => {
+  return [...visibleMatches].sort((a, b) => {
     const pA = getSortPriority(a);
     const pB = getSortPriority(b);
     
@@ -226,8 +239,8 @@ const sortSourceMatches = (matches: MatchPrediction[]) => {
     const tA = getTimestampValue(a.kickoffTime || a.date);
     const tB = getTimestampValue(b.kickoffTime || b.date);
     
-    // Finished matches (2026 finished or historical finished) sorted latest first (descending)
-    if (pA === 3 || pA === 4) {
+    // Finished matches sorted most recent first (descending)
+    if (pA === 3) {
       return tB - tA;
     }
     
