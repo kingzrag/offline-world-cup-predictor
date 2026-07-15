@@ -1,13 +1,15 @@
 import { useRef, useState } from 'react';
 import { motion, useScroll, useTransform } from 'motion/react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 // ─── Competition data (matches CompetitionSelector exactly) ──────────────────
-const ALL_COMPETITIONS = [
+const SHELF_ONE = [
   { name: 'FIFA World Cup',   abbr: 'WC 2026',   logo: '/leagues/world-cup.svg',         alt: 'FIFA World Cup'    },
   { name: 'Premier League',   abbr: 'EPL',        logo: '/leagues/premier-league.svg',    alt: 'Premier League'    },
   { name: 'La Liga',          abbr: 'LIGA',       logo: '/leagues/la-liga-seeklogo.png',  alt: 'La Liga'           },
   { name: 'Bundesliga',       abbr: 'BL 1',       logo: '/leagues/bundesliga.png',        alt: 'Bundesliga'        },
+];
+
+const SHELF_TWO = [
   { name: 'Champions League',  abbr: 'UCL',       logo: '/leagues/champions-league.svg',  alt: 'Champions League'  },
   { name: 'Europa League',     abbr: 'UEL',       logo: '/leagues/europa-league.svg',     alt: 'Europa League'     },
   { name: 'Serie A',           abbr: 'SA',        logo: '/leagues/serie-a.png',            alt: 'Serie A'           },
@@ -44,7 +46,142 @@ interface CoverProps {
   onNavigate: () => void;
 }
 
+// ─── Competition-specific cover designs ─────────────────────────────────────────
+function getCoverDesign(name: string) {
+  switch (name) {
+    case 'FIFA World Cup':
+      return {
+        background: 'bg-[#0A0A0A]',
+        gradient: 'bg-gradient-to-br from-[#1A1A1A] via-[#0A0A0A] to-[#151515]',
+        overlay: (
+          <>
+            <div className="absolute inset-0 opacity-20">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full bg-gradient-to-br from-[#D4AF37] to-transparent blur-3xl" />
+            </div>
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGZpbHRlciBpZD0ibm9pc2UiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjUiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgjbm9pc2UpIiBvcGFjaXR5PSIwLjAzIi8+PC9zdmc+')] opacity-40" />
+          </>
+        ),
+        textColor: 'text-[#D4AF37]',
+        accentColor: '#D4AF37'
+      };
+    case 'Premier League':
+      return {
+        background: 'bg-[#1E1B4B]',
+        gradient: 'bg-gradient-to-br from-[#2D2676] via-[#1E1B4B] to-[#0F0D2A]',
+        overlay: (
+          <>
+            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-[#6366F1]/20 to-transparent" />
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-8 right-8 w-32 h-32 border border-[#6366F1]/30 rounded-full" />
+              <div className="absolute bottom-12 left-12 w-24 h-24 border border-[#6366F1]/20 rounded-full" />
+            </div>
+          </>
+        ),
+        textColor: 'text-white',
+        accentColor: '#6366F1'
+      };
+    case 'La Liga':
+      return {
+        background: 'bg-[#F5F0E6]',
+        gradient: 'bg-gradient-to-br from-[#FFF8F0] via-[#F5F0E6] to-[#FFE8D6]',
+        overlay: (
+          <>
+            <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-[#FF6B35]/15 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-1/4 bg-gradient-to-t from-[#FF6B35]/10 to-transparent" />
+          </>
+        ),
+        textColor: 'text-[#1C1B17]',
+        accentColor: '#FF6B35'
+      };
+    case 'Bundesliga':
+      return {
+        background: 'bg-[#FFFFFF]',
+        gradient: 'bg-gradient-to-br from-[#FAFAFA] via-[#FFFFFF] to-[#F0F0F0]',
+        overlay: (
+          <>
+            <div className="absolute inset-0 opacity-5">
+              <div className="absolute top-0 left-0 w-full h-full" style={{
+                backgroundImage: 'linear-gradient(45deg, #DC2626 25%, transparent 25%, transparent 75%, #DC2626 75%, #DC2626), linear-gradient(45deg, #DC2626 25%, transparent 25%, transparent 75%, #DC2626 75%, #DC2626)',
+                backgroundSize: '20px 20px',
+                backgroundPosition: '0 0, 10px 10px'
+              }} />
+            </div>
+            <div className="absolute top-4 right-4 w-2 h-2 bg-[#DC2626] rounded-full" />
+          </>
+        ),
+        textColor: 'text-[#1C1B17]',
+        accentColor: '#DC2626'
+      };
+    case 'Champions League':
+      return {
+        background: 'bg-[#0A1628]',
+        gradient: 'bg-gradient-to-br from-[#1E3A5F] via-[#0A1628] to-[#050A14]',
+        overlay: (
+          <>
+            <div className="absolute inset-0 opacity-30">
+              {Array.from({ length: 20 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-1 h-1 bg-white rounded-full"
+                  style={{
+                    top: `${Math.random() * 100}%`,
+                    left: `${Math.random() * 100}%`,
+                    opacity: Math.random() * 0.5 + 0.2
+                  }}
+                />
+              ))}
+            </div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-[#0066CC]/20 rounded-full blur-2xl" />
+          </>
+        ),
+        textColor: 'text-white',
+        accentColor: '#0066CC'
+      };
+    case 'Europa League':
+      return {
+        background: 'bg-[#1F2937]',
+        gradient: 'bg-gradient-to-br from-[#374151] via-[#1F2937] to-[#111827]',
+        overlay: (
+          <>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#F97316]/10 rounded-full blur-2xl" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#F97316]/5 rounded-full blur-xl" />
+          </>
+        ),
+        textColor: 'text-white',
+        accentColor: '#F97316'
+      };
+    case 'Serie A':
+      return {
+        background: 'bg-[#F5F0E6]',
+        gradient: 'bg-gradient-to-br from-[#FFF8F0] via-[#F5F0E6] to-[#E8E4DB]',
+        overlay: (
+          <>
+            <div className="absolute inset-0 opacity-8">
+              <div className="absolute top-0 left-0 w-full h-full" style={{
+                backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #1E40AF 20px, #1E40AF 21px), repeating-linear-gradient(0deg, transparent, transparent 20px, #1E40AF 20px, #1E40AF 21px)',
+                opacity: 0.03
+              }} />
+            </div>
+            <div className="absolute top-6 left-6 w-16 h-16 border-l-2 border-t-2 border-[#1E40AF]/30" />
+            <div className="absolute bottom-6 right-6 w-16 h-16 border-r-2 border-b-2 border-[#1E40AF]/30" />
+          </>
+        ),
+        textColor: 'text-[#1C1B17]',
+        accentColor: '#1E40AF'
+      };
+    default:
+      return {
+        background: 'bg-[#F3F0E8]',
+        gradient: 'bg-gradient-to-br from-[#F8F5F0] via-[#F3F0E8] to-[#E8E4DB]',
+        overlay: null,
+        textColor: 'text-[#1C1B17]',
+        accentColor: '#1C1B17'
+      };
+  }
+}
+
 function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverProps) {
+  const design = getCoverDesign(name);
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
@@ -56,10 +193,10 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
         delay: 0.15 + index * 0.06,
       }}
       whileHover={{
-        y: -8,
-        rotate: index % 2 === 0 ? 1.5 : -1.5,
+        y: -10,
+        rotate: index % 2 === 0 ? 2 : -2,
         scale: 1.03,
-        transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] as const },
+        transition: { duration: 0.35, ease: [0.215, 0.61, 0.355, 1] as const },
       }}
       onClick={onNavigate}
       className="relative flex flex-col items-center cursor-pointer group select-none"
@@ -67,48 +204,47 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
     >
       {/* Cover card */}
       <div
-        className="
-          relative w-[122px] sm:w-[136px] md:w-[150px] aspect-[2/3]
-          bg-[#F3F0E8] border border-[#1C1B17]/10
+        className={`
+          relative w-[280px] h-[280px]
+          ${design.background} ${design.gradient}
           rounded-sm overflow-hidden
-          shadow-[0_6px_28px_rgba(28,27,23,0.10),0_2px_6px_rgba(28,27,23,0.06)]
-          group-hover:shadow-[0_18px_52px_rgba(28,27,23,0.20),0_4px_12px_rgba(28,27,23,0.10)]
-          group-hover:border-[#1C1B17]/20
-          transition-shadow transition-border duration-500
-        "
+          shadow-[0_18px_45px_rgba(0,0,0,0.08)]
+          group-hover:shadow-[0_28px_70px_rgba(0,0,0,0.14)]
+          group-hover:scale-[1.03]
+          group-hover:brightness-110
+          transition-all duration-350
+          transition-timing-function cubic-bezier(0.215, 0.61, 0.355, 1)
+        `}
       >
         {/* Paper grain overlay */}
-        <div className="absolute inset-0 bg-paper-grain opacity-30 pointer-events-none z-10" />
+        <div className="absolute inset-0 bg-paper-grain opacity-20 pointer-events-none z-10" />
 
-        {/* Top thin rule */}
-        <div className="absolute top-0 left-0 right-0 h-[3px] bg-[#1C1B17]/90 z-20" />
+        {/* Competition-specific overlay */}
+        {design.overlay}
 
         {/* Top metadata strip */}
-        <div className="absolute top-[3px] left-0 right-0 px-2 pt-1.5 pb-0.5 flex items-center justify-between z-20">
-          <span className="text-[6px] font-mono tracking-[0.25em] text-[#1C1B17]/50 uppercase">OFFLINE</span>
-          <span className="text-[6px] font-mono tracking-[0.2em] text-[#1C1B17]/40 uppercase">{abbr}</span>
+        <div className="absolute top-0 left-0 right-0 px-4 pt-3 pb-2 flex items-center justify-between z-20">
+          <span className="text-[7px] font-mono tracking-[0.25em] text-white/40 uppercase">OFFLINE</span>
+          <span className="text-[7px] font-mono tracking-[0.2em] text-white/30 uppercase">{abbr}</span>
         </div>
 
-        {/* Logo centred */}
-        <div className="absolute inset-0 flex items-center justify-center z-20">
+        {/* Logo centered with generous whitespace */}
+        <div className="absolute inset-0 flex items-center justify-center z-20 px-8">
           <img
             src={logo}
             alt={alt}
             loading="lazy"
-            className="w-14 h-14 sm:w-18 sm:h-18 object-contain drop-shadow-[0_2px_8px_rgba(28,27,23,0.18)] transition-transform duration-500 group-hover:scale-105"
+            className="w-24 h-24 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition-transform duration-500 group-hover:scale-110"
           />
         </div>
 
-        {/* Bottom title strip */}
-        <div className="absolute bottom-0 left-0 right-0 px-2.5 pt-1.5 pb-2.5 bg-gradient-to-t from-[#F3F0E8] via-[#F3F0E8]/90 to-transparent z-20">
-          <div className="h-[0.5px] w-full bg-[#1C1B17]/12 mb-1.5" />
-          <p className="text-[7.5px] font-serif text-[#1C1B17]/80 tracking-[0.08em] leading-tight text-center line-clamp-2 uppercase">
+        {/* Competition name at bottom with premium typography */}
+        <div className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-8 bg-gradient-to-t from-black/40 via-black/20 to-transparent z-20">
+          <div className="h-[0.5px] w-full bg-white/20 mb-3" />
+          <p className={`text-[11px] font-serif tracking-[0.08em] leading-tight text-center ${design.textColor} uppercase`}>
             {name}
           </p>
         </div>
-
-        {/* Hover reveal — green accent edge */}
-        <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-[#3a5c2d] opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-30" />
       </div>
 
       {/* Below-card index number */}
@@ -126,7 +262,6 @@ interface CompetitionArchiveProps {
 
 export default function CompetitionArchive({ onNavigate }: CompetitionArchiveProps) {
   const sectionRef = useRef<HTMLElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [settled, setSettled] = useState(false);
 
   // Scroll-driven exit — section gently dims and compresses as it scrolls away
@@ -137,19 +272,11 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
   const exitOpacity = useTransform(exitProgress, [0, 0.75, 1], [1, 1, 0.85]);
   const exitScale   = useTransform(exitProgress, [0, 1], [1, 0.985]);
 
-  const handleScroll = (direction: 'left' | 'right') => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const cardWidth = window.innerWidth >= 768 ? 180 : 140;
-    const scrollAmount = direction === 'left' ? -cardWidth * 2 : cardWidth * 2;
-    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-  };
-
   return (
     <motion.section
       ref={sectionRef}
       id="competition-archive"
-      className="relative w-full h-[100dvh] bg-editorial-white overflow-hidden snap-start origin-center flex flex-col justify-center"
+      className="relative w-full h-[100dvh] bg-[#F6F4EF] overflow-hidden snap-start origin-center flex flex-col justify-center"
       aria-label="Explore Every Competition"
       style={{ opacity: exitOpacity, scale: exitScale }}
       initial={{ opacity: 0, y: 40, scale: 0.98 }}
@@ -158,8 +285,11 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
       transition={{ duration: 0.7, ease: [0.215, 0.61, 0.355, 1] }}
       onAnimationComplete={() => setSettled(true)}
     >
+      {/* Soft ambient light from above */}
+      <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
+      
       {/* Very subtle grain layer */}
-      <div className="absolute inset-0 bg-paper-grain opacity-20 pointer-events-none" />
+      <div className="absolute inset-0 bg-paper-grain opacity-15 pointer-events-none" />
 
       <motion.div
         className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col justify-center"
@@ -180,27 +310,6 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
               Every competition contains predictions, statistics, AI insights and match analysis.
             </p>
           </motion.div>
-
-          {/* Carousel navigation controls */}
-          <motion.div
-            variants={fadeVariants}
-            className="flex items-center space-x-3 shrink-0 self-end md:self-auto mb-1"
-          >
-            <button
-              onClick={() => handleScroll('left')}
-              className="w-10 h-10 rounded-full border border-[#1C1B17]/12 flex items-center justify-center text-[#1C1B17]/65 hover:text-[#1C1B17] hover:border-[#1C1B17]/30 transition-all duration-300 bg-transparent cursor-pointer group"
-              aria-label="Previous competitions"
-            >
-              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform duration-300" />
-            </button>
-            <button
-              onClick={() => handleScroll('right')}
-              className="w-10 h-10 rounded-full border border-[#1C1B17]/12 flex items-center justify-center text-[#1C1B17]/65 hover:text-[#1C1B17] hover:border-[#1C1B17]/30 transition-all duration-300 bg-transparent cursor-pointer group"
-              aria-label="Next competitions"
-            >
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-300" />
-            </button>
-          </motion.div>
         </div>
 
         {/* ── Thin full-width divider (draws left → right) ──────────────── */}
@@ -209,26 +318,77 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
           variants={dividerVariants}
         />
 
-        {/* ── Snapping horizontal shelf ──────────────────────────────────── */}
-        <motion.div variants={shelfVariants} className="relative mt-2">
-          {/* Horizontal Snapping Carousel */}
-          <div
-            ref={scrollContainerRef}
-            className="flex items-end gap-6 sm:gap-8 overflow-x-auto scrollbar-none snap-x snap-mandatory pb-5 -mx-4 px-4 sm:-mx-6 sm:px-6 md:-mx-12 md:px-12"
+        {/* ── Premium floating museum shelves ──────────────────────────────────── */}
+        <motion.div variants={shelfVariants} className="relative mt-6 space-y-20">
+          
+          {/* ── Shelf One ── */}
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.4 }}
+            className="relative"
           >
-            {ALL_COMPETITIONS.map((comp, i) => (
-              <div key={comp.name} className="snap-start shrink-0">
-                <CompetitionCover
-                  {...comp}
-                  index={i}
-                  onNavigate={onNavigate}
-                />
+            {/* Shelf platform with depth */}
+            <div className="relative w-[85%] mx-auto">
+              {/* Enhanced floating shadow */}
+              <div className="absolute -bottom-8 left-6 right-6 h-12 bg-[#1C1B17]/12 blur-2xl rounded-full" />
+              <div className="absolute -bottom-4 left-8 right-8 h-8 bg-[#1C1B17]/6 blur-xl rounded-full" />
+              
+              {/* Shelf surface */}
+              <div className="relative bg-gradient-to-b from-[#E8E4DB] to-[#D9D5CC] rounded-sm shadow-[0_12px_40px_rgba(28,27,23,0.15),0_4px_12px_rgba(28,27,23,0.10)]">
+                {/* Shelf top edge highlight */}
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-[#1C1B17]/15 via-[#1C1B17]/8 to-[#1C1B17]/15" />
+                
+                {/* Cards on shelf */}
+                <div className="flex items-end justify-center gap-10 sm:gap-14 px-10 py-8">
+                  {SHELF_ONE.map((comp, i) => (
+                    <CompetitionCover
+                      key={comp.name}
+                      {...comp}
+                      index={i}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
-          {/* Shelf ledge */}
-          <div className="w-full h-[1.5px] bg-gradient-to-r from-[#1C1B17]/18 via-[#1C1B17]/10 to-transparent rounded-full" />
-          <div className="w-full h-[4px] bg-gradient-to-b from-[#1C1B17]/6 to-transparent rounded-b-sm" />
+            </div>
+          </motion.div>
+
+          {/* ── Shelf Two ── */}
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.5 }}
+            className="relative"
+          >
+            {/* Shelf platform with depth */}
+            <div className="relative w-[85%] mx-auto">
+              {/* Enhanced floating shadow */}
+              <div className="absolute -bottom-8 left-6 right-6 h-12 bg-[#1C1B17]/12 blur-2xl rounded-full" />
+              <div className="absolute -bottom-4 left-8 right-8 h-8 bg-[#1C1B17]/6 blur-xl rounded-full" />
+              
+              {/* Shelf surface */}
+              <div className="relative bg-gradient-to-b from-[#E8E4DB] to-[#D9D5CC] rounded-sm shadow-[0_12px_40px_rgba(28,27,23,0.15),0_4px_12px_rgba(28,27,23,0.10)]">
+                {/* Shelf top edge highlight */}
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-[#1C1B17]/15 via-[#1C1B17]/8 to-[#1C1B17]/15" />
+                
+                {/* Cards on shelf */}
+                <div className="flex items-end justify-center gap-10 sm:gap-14 px-10 py-8">
+                  {SHELF_TWO.map((comp, i) => (
+                    <CompetitionCover
+                      key={comp.name}
+                      {...comp}
+                      index={i + 4}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
         </motion.div>
 
       </motion.div>
