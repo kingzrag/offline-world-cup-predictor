@@ -120,10 +120,12 @@ function getCoverDesign(name: string) {
       };
     case 'Bundesliga':
       return {
-        background: 'bg-[#FFFFFF]',
-        gradient: 'bg-gradient-to-br from-[#FAFAFA] via-[#FFFFFF] to-[#F5F5F5]',
+        background: 'bg-[#F7F4EE]',
+        gradient: 'bg-gradient-to-br from-[#FAF8F5] via-[#F7F4EE] to-[#F0EDE4]',
         overlay: (
           <>
+            {/* Paper texture */}
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGZpbHRlciBpZD0ibm9pc2UiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjUiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgjbm9pc2UpIiBvcGFjaXR5PSIwLjAzIi8+PC9zdmc+')] opacity-40" />
             {/* Modern geometric pattern - clean lines */}
             <div className="absolute inset-0 opacity-4">
               <div className="absolute top-8 left-8 w-24 h-24 border border-[#1C1B17]/10 rotate-45" />
@@ -144,11 +146,13 @@ function getCoverDesign(name: string) {
     case 'Champions League':
       return {
         background: 'bg-[#0A1628]',
-        gradient: 'bg-gradient-to-br from-[#1E3A5F] via-[#0A1628] to-[#050A14]',
+        gradient: 'bg-gradient-to-br from-[#2A4A7F] via-[#1A3050] to-[#0A1628]',
         overlay: (
           <>
+            {/* Soft radial spotlight in center to brighten logo area */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-[#4A7ABF]/20 rounded-full blur-2xl" />
             {/* Constellation pattern - elegant stars */}
-            <div className="absolute inset-0 opacity-25">
+            <div className="absolute inset-0 opacity-20">
               <div className="absolute top-12 left-16 w-1.5 h-1.5 bg-white rounded-full" />
               <div className="absolute top-20 left-24 w-1 h-1 bg-white rounded-full" />
               <div className="absolute top-8 left-32 w-1 h-1 bg-white rounded-full" />
@@ -158,16 +162,16 @@ function getCoverDesign(name: string) {
               <div className="absolute top-1/3 right-1/3 w-1 h-1 bg-white rounded-full" />
               <div className="absolute bottom-1/3 left-1/3 w-1 h-1 bg-white rounded-full" />
               {/* Constellation lines */}
-              <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.15 }}>
+              <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.12 }}>
                 <line x1="64" y1="48" x2="96" y2="80" stroke="white" strokeWidth="0.5" />
                 <line x1="96" y1="80" x2="128" y2="32" stroke="white" strokeWidth="0.5" />
                 <line x1="128" y1="32" x2="192" y2="64" stroke="white" strokeWidth="0.5" />
               </svg>
             </div>
             {/* Elegant blue glow */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#0066CC]/15 rounded-full blur-3xl" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#0066CC]/12 rounded-full blur-3xl" />
             {/* Star burst accent */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 opacity-10">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 opacity-8">
               <div className="absolute inset-0 bg-gradient-to-br from-[#0066CC] to-transparent" style={{ clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' }} />
             </div>
           </>
@@ -178,20 +182,22 @@ function getCoverDesign(name: string) {
     case 'Europa League':
       return {
         background: 'bg-[#1F2937]',
-        gradient: 'bg-gradient-to-br from-[#374151] via-[#1F2937] to-[#111827]',
+        gradient: 'bg-gradient-to-br from-[#4B5563] via-[#2D3748] to-[#1A202C]',
         overlay: (
           <>
+            {/* Warm orange glow in center behind trophy */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 bg-[#F97316]/15 rounded-full blur-2xl" />
             {/* Orange lighting from top-right */}
-            <div className="absolute top-0 right-0 w-40 h-40 bg-[#F97316]/12 rounded-full blur-3xl" />
-            <div className="absolute top-8 right-8 w-24 h-24 bg-[#F97316]/8 rounded-full blur-2xl" />
+            <div className="absolute top-0 right-0 w-40 h-40 bg-[#F97316]/10 rounded-full blur-3xl" />
+            <div className="absolute top-8 right-8 w-24 h-24 bg-[#F97316]/6 rounded-full blur-2xl" />
             {/* Subtle orange accent lines */}
-            <div className="absolute top-0 right-0 w-full h-full opacity-6">
-              <div className="absolute top-12 right-12 w-20 h-0.5 bg-[#F97316]/30" />
-              <div className="absolute top-16 right-8 w-16 h-0.5 bg-[#F97316]/20" />
-              <div className="absolute top-20 right-4 w-12 h-0.5 bg-[#F97316]/15" />
+            <div className="absolute top-0 right-0 w-full h-full opacity-4">
+              <div className="absolute top-12 right-12 w-20 h-0.5 bg-[#F97316]/25" />
+              <div className="absolute top-16 right-8 w-16 h-0.5 bg-[#F97316]/18" />
+              <div className="absolute top-20 right-4 w-12 h-0.5 bg-[#F97316]/12" />
             </div>
             {/* Bottom orange glow */}
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#F97316]/6 rounded-full blur-2xl" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#F97316]/5 rounded-full blur-2xl" />
           </>
         ),
         textColor: 'text-white',
@@ -199,10 +205,12 @@ function getCoverDesign(name: string) {
       };
     case 'Serie A':
       return {
-        background: 'bg-[#F5F0E6]',
-        gradient: 'bg-gradient-to-br from-[#FFF8F0] via-[#F5F0E6] to-[#E8E4DB]',
+        background: 'bg-[#F7F4EE]',
+        gradient: 'bg-gradient-to-br from-[#FAF8F5] via-[#F7F4EE] to-[#E8E4DB]',
         overlay: (
           <>
+            {/* Paper texture */}
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGZpbHRlciBpZD0ibm9pc2UiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjUiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgjbm9pc2UpIiBvcGFjaXR5PSIwLjAzIi8+PC9zdmc+')] opacity-40" />
             {/* Italian marble texture - subtle veining */}
             <div className="absolute inset-0 opacity-6">
               <div className="absolute top-8 left-8 w-32 h-48 bg-[#1E40AF]/5 rounded-full blur-2xl" />
@@ -271,8 +279,8 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
           relative w-[180px] h-[180px]
           ${design.background} ${design.gradient}
           rounded-sm overflow-hidden
-          shadow-[0_8px_24px_rgba(0,0,0,0.06)]
-          group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.10)]
+          shadow-[0_8px_24px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)]
+          group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.10),0_0_0_1px_rgba(0,0,0,0.06)]
           group-hover:scale-[1.02]
           transition-all duration-350
           transition-timing-function cubic-bezier(0.215, 0.61, 0.355, 1)
@@ -280,7 +288,7 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
       >
         {/* Premium depth layers */}
         {/* Soft vignette */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-transparent to-black/20 pointer-events-none z-10" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-transparent to-black/10 pointer-events-none z-10" />
         {/* Gentle top highlight */}
         <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent pointer-events-none z-10" />
         {/* Paper grain overlay */}
