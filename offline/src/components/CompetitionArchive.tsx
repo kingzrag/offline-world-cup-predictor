@@ -52,13 +52,20 @@ function getCoverDesign(name: string) {
     case 'FIFA World Cup':
       return {
         background: 'bg-[#0A0A0A]',
-        gradient: 'bg-gradient-to-br from-[#1A1A1A] via-[#0A0A0A] to-[#151515]',
+        gradient: 'bg-gradient-to-br from-[#1A1A1A] via-[#0A0A0A] to-[#0D0D0D]',
         overlay: (
           <>
-            <div className="absolute inset-0 opacity-20">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full bg-gradient-to-br from-[#D4AF37] to-transparent blur-3xl" />
+            {/* Trophy silhouette - subtle gold glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 opacity-15">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#D4AF37] via-[#FFD700] to-[#B8860B] blur-3xl rounded-full" />
             </div>
-            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGZpbHRlciBpZD0ibm9pc2UiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjUiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgjbm9pc2UpIiBvcGFjaXR5PSIwLjAzIi8+PC9zdmc+')] opacity-40" />
+            {/* Subtle trophy shape silhouette */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-40 opacity-8">
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-24 bg-[#D4AF37] rounded-full blur-sm" />
+              <div className="absolute bottom-20 left-1/2 -translate-x-1/2 w-8 h-16 bg-[#D4AF37] rounded-t-lg blur-sm" />
+            </div>
+            {/* Paper texture */}
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGZpbHRlciBpZD0ibm9pc2UiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjUiIHN0aXRjaFRpbGVzPSJzdGl0Y2giLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgjbm9pc2UpIiBvcGFjaXR5PSIwLjAyIi8+PC9zdmc+')] opacity-30" />
           </>
         ),
         textColor: 'text-[#D4AF37]',
@@ -70,10 +77,20 @@ function getCoverDesign(name: string) {
         gradient: 'bg-gradient-to-br from-[#2D2676] via-[#1E1B4B] to-[#0F0D2A]',
         overlay: (
           <>
-            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-[#6366F1]/20 to-transparent" />
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute top-8 right-8 w-32 h-32 border border-[#6366F1]/30 rounded-full" />
-              <div className="absolute bottom-12 left-12 w-24 h-24 border border-[#6366F1]/20 rounded-full" />
+            {/* Soft spotlight from top */}
+            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-[#6366F1]/15 to-transparent" />
+            {/* Lion watermark - subtle geometric lion silhouette */}
+            <div className="absolute bottom-8 right-8 w-40 h-40 opacity-8">
+              <div className="absolute inset-0 border-2 border-[#6366F1]/20 rounded-t-full" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-24 bg-[#6366F1]/10 rounded-t-full" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-16 h-4 bg-[#6366F1]/10 rounded-full" />
+            </div>
+            {/* Subtle crown element */}
+            <div className="absolute top-12 left-12 w-16 h-8 opacity-6">
+              <div className="absolute bottom-0 left-0 right-0 h-2 bg-[#FFD700]/30 rounded" />
+              <div className="absolute bottom-2 left-2 w-3 h-4 bg-[#FFD700]/20 rounded-t" />
+              <div className="absolute bottom-2 right-2 w-3 h-4 bg-[#FFD700]/20 rounded-t" />
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-[#FFD700]/20 rounded-t" />
             </div>
           </>
         ),
@@ -86,8 +103,16 @@ function getCoverDesign(name: string) {
         gradient: 'bg-gradient-to-br from-[#FFF8F0] via-[#F5F0E6] to-[#FFE8D6]',
         overlay: (
           <>
-            <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-[#FF6B35]/15 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 h-1/4 bg-gradient-to-t from-[#FF6B35]/10 to-transparent" />
+            {/* Stadium lighting effect - warm orange glow from top */}
+            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-[#FF6B35]/12 to-transparent" />
+            {/* Stadium silhouette - subtle arches */}
+            <div className="absolute bottom-0 left-0 right-0 h-32 opacity-6">
+              <div className="absolute bottom-0 left-4 w-20 h-24 bg-[#FF6B35]/10 rounded-t-full" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-32 h-28 bg-[#FF6B35]/10 rounded-t-full" />
+              <div className="absolute bottom-0 right-4 w-20 h-24 bg-[#FF6B35]/10 rounded-t-full" />
+            </div>
+            {/* Soft orange gradient accent */}
+            <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-[#FF6B35]/8 to-transparent" />
           </>
         ),
         textColor: 'text-[#1C1B17]',
@@ -96,17 +121,21 @@ function getCoverDesign(name: string) {
     case 'Bundesliga':
       return {
         background: 'bg-[#FFFFFF]',
-        gradient: 'bg-gradient-to-br from-[#FAFAFA] via-[#FFFFFF] to-[#F0F0F0]',
+        gradient: 'bg-gradient-to-br from-[#FAFAFA] via-[#FFFFFF] to-[#F5F5F5]',
         overlay: (
           <>
-            <div className="absolute inset-0 opacity-5">
-              <div className="absolute top-0 left-0 w-full h-full" style={{
-                backgroundImage: 'linear-gradient(45deg, #DC2626 25%, transparent 25%, transparent 75%, #DC2626 75%, #DC2626), linear-gradient(45deg, #DC2626 25%, transparent 25%, transparent 75%, #DC2626 75%, #DC2626)',
-                backgroundSize: '20px 20px',
-                backgroundPosition: '0 0, 10px 10px'
-              }} />
+            {/* Modern geometric pattern - clean lines */}
+            <div className="absolute inset-0 opacity-4">
+              <div className="absolute top-8 left-8 w-24 h-24 border border-[#1C1B17]/10 rotate-45" />
+              <div className="absolute bottom-8 right-8 w-32 h-32 border border-[#1C1B17]/8" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 border border-[#1C1B17]/6 rounded-full" />
             </div>
-            <div className="absolute top-4 right-4 w-2 h-2 bg-[#DC2626] rounded-full" />
+            {/* Red accent line */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#DC2626]/20 to-transparent" />
+            {/* Subtle red dot accent */}
+            <div className="absolute top-6 right-6 w-1.5 h-1.5 bg-[#DC2626] rounded-full" />
+            {/* Charcoal geometric elements */}
+            <div className="absolute bottom-12 left-12 w-12 h-12 border-l-2 border-b-2 border-[#1C1B17]/10" />
           </>
         ),
         textColor: 'text-[#1C1B17]',
@@ -118,20 +147,29 @@ function getCoverDesign(name: string) {
         gradient: 'bg-gradient-to-br from-[#1E3A5F] via-[#0A1628] to-[#050A14]',
         overlay: (
           <>
-            <div className="absolute inset-0 opacity-30">
-              {Array.from({ length: 20 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute w-1 h-1 bg-white rounded-full"
-                  style={{
-                    top: `${Math.random() * 100}%`,
-                    left: `${Math.random() * 100}%`,
-                    opacity: Math.random() * 0.5 + 0.2
-                  }}
-                />
-              ))}
+            {/* Constellation pattern - elegant stars */}
+            <div className="absolute inset-0 opacity-25">
+              <div className="absolute top-12 left-16 w-1.5 h-1.5 bg-white rounded-full" />
+              <div className="absolute top-20 left-24 w-1 h-1 bg-white rounded-full" />
+              <div className="absolute top-8 left-32 w-1 h-1 bg-white rounded-full" />
+              <div className="absolute top-16 right-20 w-1.5 h-1.5 bg-white rounded-full" />
+              <div className="absolute bottom-24 right-16 w-1 h-1 bg-white rounded-full" />
+              <div className="absolute bottom-16 left-20 w-1 h-1 bg-white rounded-full" />
+              <div className="absolute top-1/3 right-1/3 w-1 h-1 bg-white rounded-full" />
+              <div className="absolute bottom-1/3 left-1/3 w-1 h-1 bg-white rounded-full" />
+              {/* Constellation lines */}
+              <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.15 }}>
+                <line x1="64" y1="48" x2="96" y2="80" stroke="white" strokeWidth="0.5" />
+                <line x1="96" y1="80" x2="128" y2="32" stroke="white" strokeWidth="0.5" />
+                <line x1="128" y1="32" x2="192" y2="64" stroke="white" strokeWidth="0.5" />
+              </svg>
             </div>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-[#0066CC]/20 rounded-full blur-2xl" />
+            {/* Elegant blue glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#0066CC]/15 rounded-full blur-3xl" />
+            {/* Star burst accent */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 opacity-10">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#0066CC] to-transparent" style={{ clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' }} />
+            </div>
           </>
         ),
         textColor: 'text-white',
@@ -143,8 +181,17 @@ function getCoverDesign(name: string) {
         gradient: 'bg-gradient-to-br from-[#374151] via-[#1F2937] to-[#111827]',
         overlay: (
           <>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#F97316]/10 rounded-full blur-2xl" />
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#F97316]/5 rounded-full blur-xl" />
+            {/* Orange lighting from top-right */}
+            <div className="absolute top-0 right-0 w-40 h-40 bg-[#F97316]/12 rounded-full blur-3xl" />
+            <div className="absolute top-8 right-8 w-24 h-24 bg-[#F97316]/8 rounded-full blur-2xl" />
+            {/* Subtle orange accent lines */}
+            <div className="absolute top-0 right-0 w-full h-full opacity-6">
+              <div className="absolute top-12 right-12 w-20 h-0.5 bg-[#F97316]/30" />
+              <div className="absolute top-16 right-8 w-16 h-0.5 bg-[#F97316]/20" />
+              <div className="absolute top-20 right-4 w-12 h-0.5 bg-[#F97316]/15" />
+            </div>
+            {/* Bottom orange glow */}
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#F97316]/6 rounded-full blur-2xl" />
           </>
         ),
         textColor: 'text-white',
@@ -156,14 +203,23 @@ function getCoverDesign(name: string) {
         gradient: 'bg-gradient-to-br from-[#FFF8F0] via-[#F5F0E6] to-[#E8E4DB]',
         overlay: (
           <>
-            <div className="absolute inset-0 opacity-8">
-              <div className="absolute top-0 left-0 w-full h-full" style={{
-                backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 20px, #1E40AF 20px, #1E40AF 21px), repeating-linear-gradient(0deg, transparent, transparent 20px, #1E40AF 20px, #1E40AF 21px)',
-                opacity: 0.03
-              }} />
+            {/* Italian marble texture - subtle veining */}
+            <div className="absolute inset-0 opacity-6">
+              <div className="absolute top-8 left-8 w-32 h-48 bg-[#1E40AF]/5 rounded-full blur-2xl" />
+              <div className="absolute bottom-12 right-12 w-24 h-32 bg-[#1E40AF]/4 rounded-full blur-xl" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-[#1E40AF]/3 rounded-full blur-3xl" />
             </div>
-            <div className="absolute top-6 left-6 w-16 h-16 border-l-2 border-t-2 border-[#1E40AF]/30" />
-            <div className="absolute bottom-6 right-6 w-16 h-16 border-r-2 border-b-2 border-[#1E40AF]/30" />
+            {/* Elegant blue architectural lines */}
+            <div className="absolute inset-0 opacity-8">
+              <div className="absolute top-12 left-12 w-20 h-20 border-l-2 border-t-2 border-[#1E40AF]/20" />
+              <div className="absolute top-12 right-12 w-20 h-20 border-r-2 border-t-2 border-[#1E40AF]/20" />
+              <div className="absolute bottom-12 left-12 w-20 h-20 border-l-2 border-b-2 border-[#1E40AF]/20" />
+              <div className="absolute bottom-12 right-12 w-20 h-20 border-r-2 border-b-2 border-[#1E40AF]/20" />
+              {/* Central architectural element */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-24 border border-[#1E40AF]/15 rounded-t-full" />
+            </div>
+            {/* Subtle column silhouette */}
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-16 bg-[#1E40AF]/4 rounded-t-lg" />
           </>
         ),
         textColor: 'text-[#1C1B17]',
@@ -193,7 +249,7 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
         delay: 0.15 + index * 0.06,
       }}
       whileHover={{
-        y: -10,
+        y: -8,
         rotate: index % 2 === 0 ? 2 : -2,
         scale: 1.03,
         transition: { duration: 0.35, ease: [0.215, 0.61, 0.355, 1] as const },
@@ -208,40 +264,46 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
           relative w-[280px] h-[280px]
           ${design.background} ${design.gradient}
           rounded-sm overflow-hidden
-          shadow-[0_18px_45px_rgba(0,0,0,0.08)]
-          group-hover:shadow-[0_28px_70px_rgba(0,0,0,0.14)]
+          shadow-[0_12px_32px_rgba(0,0,0,0.06)]
+          group-hover:shadow-[0_20px_48px_rgba(0,0,0,0.12)]
           group-hover:scale-[1.03]
-          group-hover:brightness-110
           transition-all duration-350
           transition-timing-function cubic-bezier(0.215, 0.61, 0.355, 1)
         `}
       >
+        {/* Premium depth layers */}
+        {/* Soft vignette */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-transparent to-black/20 pointer-events-none z-10" />
+        {/* Gentle top highlight */}
+        <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent pointer-events-none z-10" />
         {/* Paper grain overlay */}
-        <div className="absolute inset-0 bg-paper-grain opacity-20 pointer-events-none z-10" />
+        <div className="absolute inset-0 bg-paper-grain opacity-15 pointer-events-none z-10" />
 
         {/* Competition-specific overlay */}
         {design.overlay}
 
-        {/* Top metadata strip */}
-        <div className="absolute top-0 left-0 right-0 px-4 pt-3 pb-2 flex items-center justify-between z-20">
-          <span className="text-[7px] font-mono tracking-[0.25em] text-white/40 uppercase">OFFLINE</span>
-          <span className="text-[7px] font-mono tracking-[0.2em] text-white/30 uppercase">{abbr}</span>
+        {/* Top metadata strip - unified template */}
+        <div className="absolute top-0 left-0 right-0 px-5 pt-4 pb-2 flex items-center justify-between z-20">
+          <span className="text-[6.5px] font-mono tracking-[0.3em] text-white/50 uppercase font-medium">OFFLINE</span>
+          <span className="text-[6.5px] font-mono tracking-[0.25em] text-white/40 uppercase">{abbr}</span>
         </div>
 
         {/* Logo centered with generous whitespace */}
-        <div className="absolute inset-0 flex items-center justify-center z-20 px-8">
+        <div className="absolute inset-0 flex items-center justify-center z-20 px-10">
           <img
             src={logo}
             alt={alt}
             loading="lazy"
-            className="w-24 h-24 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition-transform duration-500 group-hover:scale-110"
+            className="w-28 h-28 object-contain drop-shadow-[0_6px_16px_rgba(0,0,0,0.3)] transition-transform duration-500 group-hover:scale-105"
           />
         </div>
 
+        {/* Thin editorial divider */}
+        <div className="absolute bottom-12 left-8 right-8 h-[0.5px] bg-white/15 z-20" />
+
         {/* Competition name at bottom with premium typography */}
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-8 bg-gradient-to-t from-black/40 via-black/20 to-transparent z-20">
-          <div className="h-[0.5px] w-full bg-white/20 mb-3" />
-          <p className={`text-[11px] font-serif tracking-[0.08em] leading-tight text-center ${design.textColor} uppercase`}>
+        <div className="absolute bottom-0 left-0 right-0 px-5 pb-5 pt-2 bg-gradient-to-t from-black/50 via-black/30 to-transparent z-20">
+          <p className={`text-[10px] font-serif tracking-[0.12em] leading-tight text-center ${design.textColor} uppercase`}>
             {name}
           </p>
         </div>
@@ -319,7 +381,7 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
         />
 
         {/* ── Premium floating museum shelves ──────────────────────────────────── */}
-        <motion.div variants={shelfVariants} className="relative mt-6 space-y-20">
+        <motion.div variants={shelfVariants} className="relative mt-6 space-y-24">
           
           {/* ── Shelf One ── */}
           <motion.div 
@@ -329,19 +391,19 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
             transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.4 }}
             className="relative"
           >
-            {/* Shelf platform with depth */}
+            {/* Elegant floating shelf - thin and light */}
             <div className="relative w-[85%] mx-auto">
-              {/* Enhanced floating shadow */}
-              <div className="absolute -bottom-8 left-6 right-6 h-12 bg-[#1C1B17]/12 blur-2xl rounded-full" />
-              <div className="absolute -bottom-4 left-8 right-8 h-8 bg-[#1C1B17]/6 blur-xl rounded-full" />
+              {/* Soft ambient shadow for floating effect */}
+              <div className="absolute -bottom-6 left-8 right-8 h-10 bg-[#1C1B17]/8 blur-2xl rounded-full" />
+              <div className="absolute -bottom-3 left-10 right-10 h-6 bg-[#1C1B17]/4 blur-xl rounded-full" />
               
-              {/* Shelf surface */}
-              <div className="relative bg-gradient-to-b from-[#E8E4DB] to-[#D9D5CC] rounded-sm shadow-[0_12px_40px_rgba(28,27,23,0.15),0_4px_12px_rgba(28,27,23,0.10)]">
-                {/* Shelf top edge highlight */}
-                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-[#1C1B17]/15 via-[#1C1B17]/8 to-[#1C1B17]/15" />
+              {/* Ultra-thin shelf surface */}
+              <div className="relative bg-gradient-to-b from-[#EBE7DE] to-[#E5E1D8] rounded-sm shadow-[0_4px_16px_rgba(28,27,23,0.08),0_1px_4px_rgba(28,27,23,0.04)]">
+                {/* Subtle top edge highlight */}
+                <div className="absolute top-0 left-0 right-0 h-[0.5px] bg-gradient-to-r from-[#1C1B17]/10 via-[#1C1B17]/5 to-[#1C1B17]/10" />
                 
-                {/* Cards on shelf */}
-                <div className="flex items-end justify-center gap-10 sm:gap-14 px-10 py-8">
+                {/* Cards on shelf - minimal padding for thin shelf */}
+                <div className="flex items-end justify-center gap-10 sm:gap-14 px-10 py-5">
                   {SHELF_ONE.map((comp, i) => (
                     <CompetitionCover
                       key={comp.name}
@@ -363,19 +425,19 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
             transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.5 }}
             className="relative"
           >
-            {/* Shelf platform with depth */}
+            {/* Elegant floating shelf - thin and light */}
             <div className="relative w-[85%] mx-auto">
-              {/* Enhanced floating shadow */}
-              <div className="absolute -bottom-8 left-6 right-6 h-12 bg-[#1C1B17]/12 blur-2xl rounded-full" />
-              <div className="absolute -bottom-4 left-8 right-8 h-8 bg-[#1C1B17]/6 blur-xl rounded-full" />
+              {/* Soft ambient shadow for floating effect */}
+              <div className="absolute -bottom-6 left-8 right-8 h-10 bg-[#1C1B17]/8 blur-2xl rounded-full" />
+              <div className="absolute -bottom-3 left-10 right-10 h-6 bg-[#1C1B17]/4 blur-xl rounded-full" />
               
-              {/* Shelf surface */}
-              <div className="relative bg-gradient-to-b from-[#E8E4DB] to-[#D9D5CC] rounded-sm shadow-[0_12px_40px_rgba(28,27,23,0.15),0_4px_12px_rgba(28,27,23,0.10)]">
-                {/* Shelf top edge highlight */}
-                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-[#1C1B17]/15 via-[#1C1B17]/8 to-[#1C1B17]/15" />
+              {/* Ultra-thin shelf surface */}
+              <div className="relative bg-gradient-to-b from-[#EBE7DE] to-[#E5E1D8] rounded-sm shadow-[0_4px_16px_rgba(28,27,23,0.08),0_1px_4px_rgba(28,27,23,0.04)]">
+                {/* Subtle top edge highlight */}
+                <div className="absolute top-0 left-0 right-0 h-[0.5px] bg-gradient-to-r from-[#1C1B17]/10 via-[#1C1B17]/5 to-[#1C1B17]/10" />
                 
-                {/* Cards on shelf */}
-                <div className="flex items-end justify-center gap-10 sm:gap-14 px-10 py-8">
+                {/* Cards on shelf - minimal padding for thin shelf */}
+                <div className="flex items-end justify-center gap-10 sm:gap-14 px-10 py-5">
                   {SHELF_TWO.map((comp, i) => (
                     <CompetitionCover
                       key={comp.name}
