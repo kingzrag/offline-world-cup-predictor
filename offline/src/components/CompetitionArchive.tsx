@@ -261,7 +261,7 @@ function CompetitionCover({ name, abbr, logo, alt, index, onNavigate }: CoverPro
       {/* Cover card */}
       <div
         className={`
-          relative w-[280px] h-[280px]
+          relative w-[320px] h-[320px]
           ${design.background} ${design.gradient}
           rounded-sm overflow-hidden
           shadow-[0_12px_32px_rgba(0,0,0,0.06)]
@@ -350,8 +350,11 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
       {/* Soft ambient light from above */}
       <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
       
+      {/* Subtle plaster texture for museum wall */}
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZmlsdGVyIGlkPSJwbGFzdGVyIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iMC44IiBudW1PY3RhdmVzPSIzIiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsdGVyPSJ1cmwoI3BsYXN0ZXIpIiBvcGFjaXR5PSIwLjAyIi8+PC9zdmc+')] opacity-30 pointer-events-none" />
+      
       {/* Very subtle grain layer */}
-      <div className="absolute inset-0 bg-paper-grain opacity-15 pointer-events-none" />
+      <div className="absolute inset-0 bg-paper-grain opacity-10 pointer-events-none" />
 
       <motion.div
         className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col justify-center"
@@ -381,7 +384,7 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
         />
 
         {/* ── Premium floating museum shelves ──────────────────────────────────── */}
-        <motion.div variants={shelfVariants} className="relative mt-6 space-y-24">
+        <motion.div variants={shelfVariants} className="relative mt-6 space-y-28">
           
           {/* ── Shelf One ── */}
           <motion.div 
@@ -391,19 +394,24 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
             transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.4 }}
             className="relative"
           >
-            {/* Elegant floating shelf - thin and light */}
+            {/* Realistic floating shelf - mounted to wall */}
             <div className="relative w-[85%] mx-auto">
-              {/* Soft ambient shadow for floating effect */}
-              <div className="absolute -bottom-6 left-8 right-8 h-10 bg-[#1C1B17]/8 blur-2xl rounded-full" />
-              <div className="absolute -bottom-3 left-10 right-10 h-6 bg-[#1C1B17]/4 blur-xl rounded-full" />
+              {/* Tight contact shadow directly under shelf */}
+              <div className="absolute bottom-0 left-4 right-4 h-1 bg-[#1C1B17]/12 blur-sm" />
               
-              {/* Ultra-thin shelf surface */}
-              <div className="relative bg-gradient-to-b from-[#EBE7DE] to-[#E5E1D8] rounded-sm shadow-[0_4px_16px_rgba(28,27,23,0.08),0_1px_4px_rgba(28,27,23,0.04)]">
-                {/* Subtle top edge highlight */}
-                <div className="absolute top-0 left-0 right-0 h-[0.5px] bg-gradient-to-r from-[#1C1B17]/10 via-[#1C1B17]/5 to-[#1C1B17]/10" />
+              {/* Larger soft ambient shadow fading onto wall */}
+              <div className="absolute -bottom-4 left-8 right-8 h-8 bg-[#1C1B17]/6 blur-2xl rounded-full" />
+              <div className="absolute -bottom-2 left-12 right-12 h-4 bg-[#1C1B17]/3 blur-xl rounded-full" />
+              
+              {/* Realistic shelf - 10px thick with bevel */}
+              <div className="relative h-[10px] bg-gradient-to-b from-[#D4D0C4] via-[#C9C3B7] to-[#BEB8AC] rounded-b-sm shadow-[0_2px_8px_rgba(28,27,23,0.12)]">
+                {/* Front bevel highlight */}
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-b from-[#E8E4DB] to-[#D4D0C4]" />
+                {/* Rounded front edge highlight */}
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-t from-[#A9A398] to-[#BEB8AC] rounded-b-sm" />
                 
-                {/* Cards on shelf - minimal padding for thin shelf */}
-                <div className="flex items-end justify-center gap-10 sm:gap-14 px-10 py-5">
+                {/* Cards resting on shelf - bottom edge touching */}
+                <div className="absolute -top-[320px] left-0 right-0 flex items-end justify-center gap-12 sm:gap-16 px-12">
                   {SHELF_ONE.map((comp, i) => (
                     <CompetitionCover
                       key={comp.name}
@@ -425,19 +433,24 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
             transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.5 }}
             className="relative"
           >
-            {/* Elegant floating shelf - thin and light */}
+            {/* Realistic floating shelf - mounted to wall */}
             <div className="relative w-[85%] mx-auto">
-              {/* Soft ambient shadow for floating effect */}
-              <div className="absolute -bottom-6 left-8 right-8 h-10 bg-[#1C1B17]/8 blur-2xl rounded-full" />
-              <div className="absolute -bottom-3 left-10 right-10 h-6 bg-[#1C1B17]/4 blur-xl rounded-full" />
+              {/* Tight contact shadow directly under shelf */}
+              <div className="absolute bottom-0 left-4 right-4 h-1 bg-[#1C1B17]/12 blur-sm" />
               
-              {/* Ultra-thin shelf surface */}
-              <div className="relative bg-gradient-to-b from-[#EBE7DE] to-[#E5E1D8] rounded-sm shadow-[0_4px_16px_rgba(28,27,23,0.08),0_1px_4px_rgba(28,27,23,0.04)]">
-                {/* Subtle top edge highlight */}
-                <div className="absolute top-0 left-0 right-0 h-[0.5px] bg-gradient-to-r from-[#1C1B17]/10 via-[#1C1B17]/5 to-[#1C1B17]/10" />
+              {/* Larger soft ambient shadow fading onto wall */}
+              <div className="absolute -bottom-4 left-8 right-8 h-8 bg-[#1C1B17]/6 blur-2xl rounded-full" />
+              <div className="absolute -bottom-2 left-12 right-12 h-4 bg-[#1C1B17]/3 blur-xl rounded-full" />
+              
+              {/* Realistic shelf - 10px thick with bevel */}
+              <div className="relative h-[10px] bg-gradient-to-b from-[#D4D0C4] via-[#C9C3B7] to-[#BEB8AC] rounded-b-sm shadow-[0_2px_8px_rgba(28,27,23,0.12)]">
+                {/* Front bevel highlight */}
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-b from-[#E8E4DB] to-[#D4D0C4]" />
+                {/* Rounded front edge highlight */}
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-t from-[#A9A398] to-[#BEB8AC] rounded-b-sm" />
                 
-                {/* Cards on shelf - minimal padding for thin shelf */}
-                <div className="flex items-end justify-center gap-10 sm:gap-14 px-10 py-5">
+                {/* Cards resting on shelf - bottom edge touching */}
+                <div className="absolute -top-[320px] left-0 right-0 flex items-end justify-center gap-12 sm:gap-16 px-12">
                   {SHELF_TWO.map((comp, i) => (
                     <CompetitionCover
                       key={comp.name}
