@@ -105,52 +105,52 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.32, 0.72, 0, 1] }}
-      className={`bg-zinc-950 border rounded-lg px-7 py-6 flex flex-col justify-between min-h-[340px] h-full transition-colors duration-300 ${
+      className={`bg-zinc-950 border rounded-lg px-5 py-4.5 flex flex-col justify-between min-h-[285px] h-full transition-colors duration-300 ${
         isActive
-          ? "border-zinc-700 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(16,185,129,0.15)]"
+          ? "border-zinc-700 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.85),0_0_0_1px_rgba(16,185,129,0.15)]"
           : "border-zinc-900 hover:border-zinc-800"
       }`}
     >
       {/* Header: stage + badge left, kickoff right — responsive, no overlap */}
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 mb-1 min-w-0">
-        <div className="flex flex-col items-start gap-1.5 min-w-0 flex-1">
-          <span className="text-[10px] font-mono text-zinc-500 tracking-wider uppercase leading-snug break-words">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3 mb-0.5 min-w-0">
+        <div className="flex flex-col items-start gap-1 min-w-0 flex-1">
+          <span className="text-[9.5px] font-mono text-zinc-500 tracking-wider uppercase leading-snug break-words">
             {match.stage}
           </span>
           {match.isLiveData ? (
-            <span className="inline-flex shrink-0 text-green-accent text-[8px] bg-green-accent/10 border border-green-accent/25 px-2 py-0.5 rounded leading-none select-none tracking-widest uppercase font-bold">
+            <span className="inline-flex shrink-0 text-green-accent text-[7.5px] bg-green-accent/10 border border-green-accent/25 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase font-bold">
               LIVE MODEL
             </span>
           ) : (
-            <span className="inline-flex shrink-0 text-zinc-500 text-[8px] bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded leading-none select-none tracking-widest uppercase">
+            <span className="inline-flex shrink-0 text-zinc-500 text-[7.5px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase">
               LOCAL
             </span>
           )}
         </div>
-        <div className="shrink-0 text-left sm:text-right min-w-[7.5rem] sm:min-w-[8.5rem] text-[10px] font-mono self-start sm:self-auto">
+        <div className="shrink-0 text-left sm:text-right min-w-[7rem] sm:min-w-[8rem] text-[9.5px] font-mono self-start sm:self-auto">
           <MatchTimeDisplay match={match} />
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-center my-3 min-h-0">
-        <div className="text-xl font-bold text-white uppercase tracking-normal space-y-2.5">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="text-2xl leading-none select-none shrink-0">{flagA}</span>
+      <div className="flex-1 flex flex-col justify-center my-2 min-h-0">
+        <div className="text-lg font-bold text-white uppercase tracking-normal space-y-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-xl leading-none select-none shrink-0">{flagA}</span>
             <span className="truncate leading-tight">{match.teamA}</span>
           </div>
-          <div className="text-zinc-500 text-[10px] font-mono uppercase pl-11 font-medium">vs</div>
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="text-2xl leading-none select-none shrink-0">{flagB}</span>
+          <div className="text-zinc-500 text-[9px] font-mono uppercase pl-9 font-medium">vs</div>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-xl leading-none select-none shrink-0">{flagB}</span>
             <span className="truncate leading-tight">{match.teamB}</span>
           </div>
         </div>
 
         {match.status === "LIVE" ? (
-          <div className="mt-6 flex flex-col justify-center items-start gap-1.5">
-            <span className="text-[9px] font-mono uppercase tracking-widest text-red-500 block animate-pulse font-bold">
+          <div className="mt-4 flex flex-col justify-center items-start gap-1">
+            <span className="text-[8.5px] font-mono uppercase tracking-widest text-red-500 block animate-pulse font-bold">
               Live Score
             </span>
-            <div className="flex items-center gap-3 text-3xl font-black text-white tracking-wider">
+            <div className="flex items-center gap-2.5 text-2xl font-black text-white tracking-wider">
               <motion.span
                 key={`home-${match.liveScore?.home ?? 0}`}
                 initial={{ scale: 1.2, color: "#22C55E" }}
@@ -177,13 +177,13 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
               (match.prediction === `${match.teamB} Win` && match.winner === "AWAY_TEAM") ||
               (match.prediction === "Draw" && match.winner === "DRAW");
             return (
-              <div className="mt-6 flex flex-col justify-center items-start gap-1.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 block font-bold">
+              <div className="mt-4 flex flex-col justify-center items-start gap-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[8.5px] font-mono uppercase tracking-widest text-zinc-500 block font-bold">
                     Final Score
                   </span>
                   <span
-                    className={`text-[8.5px] font-mono font-bold px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase ${
+                    className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded leading-none select-none tracking-widest uppercase ${
                       isCorrect
                         ? "text-green-accent bg-green-accent/15 border border-green-accent/25"
                         : "text-red-400 bg-red-950/20 border border-red-900/20"
@@ -192,7 +192,7 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
                     {isCorrect ? "✓ Correct" : "✕ Miss"}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 text-3xl font-black text-white tracking-wider">
+                <div className="flex items-center gap-2.5 text-2xl font-black text-white tracking-wider">
                   <span>{match.liveScore?.home ?? 0}</span>
                   <span className="text-zinc-700 font-light">—</span>
                   <span>{match.liveScore?.away ?? 0}</span>
@@ -201,11 +201,11 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
             );
           })()
         ) : (
-          <div className="mt-6 space-y-1.5">
-            <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 block">
+          <div className="mt-4 space-y-1">
+            <span className="text-[8.5px] font-mono uppercase tracking-widest text-zinc-500 block">
               Assessment
             </span>
-            <span className="text-white text-base font-medium tracking-normal leading-snug block">
+            <span className="text-white text-sm font-medium tracking-normal leading-snug block">
               {match.prediction}
             </span>
           </div>
@@ -213,8 +213,8 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
       </div>
 
       <div className="mt-auto pt-1">
-        <div className="mb-4">
-          <div className="flex justify-between items-center gap-2 text-[11px] font-mono text-zinc-400 mb-2 min-w-0">
+        <div className="mb-3">
+          <div className="flex justify-between items-center gap-2 text-[10px] font-mono text-zinc-400 mb-1.5 min-w-0">
             <motion.span
               key={`probA-${match.id}-${match.probA}`}
               initial={{ scale: 1.1, color: "#22C55E" }}
@@ -268,9 +268,9 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-3 border-t border-zinc-900 gap-3">
+        <div className="flex items-center justify-between pt-2 border-t border-zinc-900 gap-2">
           <span
-            className={`text-[10px] font-mono uppercase tracking-widest font-bold shrink-0 ${
+            className={`text-[9px] font-mono uppercase tracking-widest font-bold shrink-0 ${
               match.confidence === "High" ? "text-green-accent" : "text-yellow-500"
             }`}
           >
@@ -282,9 +282,9 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
               onViewAnalysis(match);
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="text-xs font-mono font-bold text-white hover:text-green-accent flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+            className="text-[11px] font-mono font-bold text-white hover:text-green-accent flex items-center gap-1 transition-colors cursor-pointer shrink-0"
           >
-            View Analysis <ArrowRight className="w-3.5 h-3.5" />
+            View Analysis <ArrowRight className="w-3 h-3" />
           </button>
         </div>
       </div>
@@ -303,8 +303,8 @@ function useCarouselMetrics(containerRef: RefObject<HTMLDivElement | null>) {
       const isLg = window.innerWidth >= 1024;
       const isMd = window.innerWidth >= 768;
 
-      const cardWidth = isLg ? w * 0.36 : isMd ? w * 0.52 : w * 0.78;
-      const stride = isLg ? w * 0.34 : isMd ? w * 0.48 : w * 0.72;
+      const cardWidth = isLg ? w * 0.315 : isMd ? w * 0.46 : w * 0.70;
+      const stride = isLg ? w * 0.29 : isMd ? w * 0.42 : w * 0.64;
 
       setMetrics({ cardWidth, stride });
     };
@@ -468,7 +468,7 @@ export function BestPredictionsCarousel({
     <motion.section
       ref={sectionRef}
       id="todays-best-predictions"
-      className="relative w-full h-[100dvh] flex flex-col justify-center pb-8 lg:pb-0 bg-[#070707] text-zinc-150 select-none snap-start z-20 origin-center"
+      className="relative w-full h-[100dvh] flex flex-col justify-center pb-4 lg:pb-2 bg-[#070707] text-zinc-150 select-none snap-start z-20 origin-center"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ opacity: exitOpacity, scale: exitScale }}
@@ -484,8 +484,8 @@ export function BestPredictionsCarousel({
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-green-accent/5 filter blur-[120px] opacity-40" />
       </div>
 
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col justify-center h-full py-4 lg:py-6">
-        <div className="flex flex-col md:flex-row md:items-end justify-between pb-4 mb-6 gap-6 relative">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 md:px-12 flex flex-col justify-center h-full py-2 lg:py-3.5">
+        <div className="flex flex-col md:flex-row md:items-end justify-between pb-1.5 mb-3.5 gap-4 relative">
           <motion.div 
             variants={titleVariants}
             initial="hidden"
@@ -494,10 +494,10 @@ export function BestPredictionsCarousel({
             <span className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold mb-2">
               CURATED SELECTIONS
             </span>
-            <h2 className="text-3xl sm:text-4xl md:text-[44px] font-serif text-white tracking-tight leading-tight block">
+            <h2 className="text-3xl sm:text-4xl md:text-[40px] font-serif text-white tracking-tight leading-tight block">
               Today&apos;s Best Predictions
             </h2>
-            <p className="text-zinc-400 text-xs mt-3 max-w-xl font-sans font-light leading-relaxed">
+            <p className="text-zinc-400 text-xs mt-1.5 max-w-xl font-sans font-light leading-relaxed">
               The highest confidence distributions, prominent fixtures, and decisive matchups simulated 50,051 times by the OFFLINE quantitative intelligence model.
             </p>
           </motion.div>
@@ -532,7 +532,7 @@ export function BestPredictionsCarousel({
         </div>
 
         {/* Thin divider with left-to-right drawing animation */}
-        <div className="relative w-full mb-6">
+        <div className="relative w-full mb-3.5">
           <motion.div 
             className="w-full h-[1px] bg-zinc-800 origin-left"
             variants={dividerVariants}
@@ -582,7 +582,7 @@ export function BestPredictionsCarousel({
 
             <motion.div
               ref={containerRef}
-              className="relative h-[420px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y pt-6"
+              className="relative h-[355px] overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y pt-3"
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.12}
@@ -610,7 +610,7 @@ export function BestPredictionsCarousel({
                 return (
                   <motion.div
                     key={match.id}
-                    className="absolute top-8 left-1/2 will-change-transform"
+                    className="absolute top-4 left-1/2 will-change-transform"
                     style={{ width: cardWidth }}
                     initial={false}
                     animate={{
@@ -656,7 +656,7 @@ export function BestPredictionsCarousel({
             </motion.div>
 
             {/* Premium editorial dots */}
-            <div className="flex justify-center gap-3 mt-8">
+            <div className="flex justify-center gap-3 mt-3.5">
               {matches.map((match, i) => {
                 const isActive = i === activeIndex;
                 return (
@@ -687,12 +687,12 @@ export function BestPredictionsCarousel({
         )}
 
         {onViewAll && (
-          <div className="flex justify-center mt-12">
+          <div className="flex justify-center mt-3.5">
             <motion.button
               onClick={onViewAll}
               whileHover={{ y: -2, borderColor: "#ffffff", backgroundColor: "rgba(255,255,255,0.03)" }}
               whileTap={{ scale: 0.98 }}
-              className="group inline-flex items-center gap-3 px-10 py-4 bg-transparent border border-zinc-800 rounded text-[11px] font-mono font-bold tracking-[0.25em] text-white uppercase cursor-pointer transition-all duration-300"
+              className="group inline-flex items-center gap-3 px-8 py-3 bg-transparent border border-zinc-800 rounded text-[10px] font-mono font-bold tracking-[0.25em] text-white uppercase cursor-pointer transition-all duration-300"
             >
               VIEW ALL PREDICTIONS{" "}
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1.5 transition-transform duration-300" />
