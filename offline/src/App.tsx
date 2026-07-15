@@ -1815,7 +1815,7 @@ export default function App() {
             <motion.div 
               ref={heroRef}
               id="editorial-hero" 
-              className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark snap-start"
+              className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark"
               style={{ opacity: heroOpacity, scale: heroScale }}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
