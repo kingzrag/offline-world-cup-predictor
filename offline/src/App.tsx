@@ -2062,9 +2062,9 @@ export default function App() {
             {/* ── COMPETITION ARCHIVE SECTION ──────────────────────────────── */}
             <CompetitionArchive onNavigate={() => navigateTo('predictions')} />
 
-            {/* ── THE MODEL section — Apple keynote editorial dark block ───── */}
+            {/* ── THE MODEL section — Apple keynote editorial light block ───── */}
             <motion.section
-              className="w-full min-h-[60dvh] py-24 bg-[#0A0A0A] origin-center flex items-center"
+              className="w-full min-h-[60dvh] py-24 bg-[#F7F4EE] origin-center flex items-center"
               initial={{ opacity: 0, y: 40, scale: 0.98 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, amount: 0.12 }}
@@ -2083,7 +2083,7 @@ export default function App() {
                   {/* Left Column — label + headline + body */}
                   <div className="lg:col-span-8 space-y-6">
                     <motion.span
-                      className="text-[10px] font-mono tracking-[0.3em] text-green-accent uppercase block font-bold"
+                      className="text-[10px] font-mono tracking-[0.3em] text-[#3a5c2d] uppercase block font-bold"
                       variants={{
                         hidden: { opacity: 0, y: 20 },
                         show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] as const } },
@@ -2093,25 +2093,25 @@ export default function App() {
                     </motion.span>
 
                     <motion.h2
-                      className="text-5xl md:text-6xl lg:text-[72px] font-serif text-white tracking-tight leading-[1.05]"
+                      className="text-5xl md:text-6xl lg:text-[72px] font-serif text-[#1C1B17] tracking-tight leading-[1.05]"
                       variants={{
                         hidden: { opacity: 0, y: 30 },
                         show: { opacity: 1, y: 0, transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] as const } },
                       }}
                     >
                       Transparent intelligence.{' '}
-                      <span className="text-zinc-500">No black boxes.</span>
+                      <span className="text-[#6B6B6B]">No black boxes.</span>
                     </motion.h2>
 
                     <motion.p
-                      className="text-zinc-400 text-base md:text-lg font-light leading-[1.75] max-w-2xl"
+                      className="text-[#4A4A4A] text-base md:text-lg font-light leading-[1.75] max-w-2xl"
                       variants={{
                         hidden: { opacity: 0, y: 20 },
                         show: { opacity: 1, y: 0, transition: { duration: 0.85, ease: [0.16, 1, 0.3, 1] as const } },
                       }}
                     >
                       Twelve weighted signals — from ELO and squad value to injuries, momentum and schedule difficulty — feed 50,051 simulations per match.{' '}
-                      <span className="font-serif italic text-zinc-500 block mt-3">
+                      <span className="font-serif italic text-[#6B6B6B] block mt-3">
                         The output is a probability, not a prophecy.
                       </span>
                     </motion.p>
@@ -2127,12 +2127,12 @@ export default function App() {
                   >
                     <button
                       onClick={() => navigateTo('model')}
-                      className="group relative inline-flex items-center gap-2.5 text-[11px] font-mono font-bold tracking-[0.2em] text-zinc-300 hover:text-white uppercase cursor-pointer transition-colors duration-300 pb-2"
+                      className="group relative inline-flex items-center gap-2.5 text-[11px] font-mono font-bold tracking-[0.2em] text-[#4A4A4A] hover:text-[#1C1B17] uppercase cursor-pointer transition-colors duration-300 pb-2"
                     >
                       LEARN HOW OFFLINE WORKS
                       <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1.5 transition-transform duration-300 shrink-0" />
                       {/* Underline that extends on hover */}
-                      <span className="absolute bottom-0 left-0 right-0 h-[1px] bg-zinc-700 group-hover:bg-green-accent transition-colors duration-300" />
+                      <span className="absolute bottom-0 left-0 right-0 h-[1px] bg-[#D4D4D4] group-hover:bg-[#3a5c2d] transition-colors duration-300" />
                     </button>
                   </motion.div>
 
@@ -4664,7 +4664,7 @@ export default function App() {
       {/* FOOTER AREA (Designed by Anurag Saikia based on branding guidelines) */}
       <motion.footer
         id="app-footer"
-        className="bg-[#0A0A0A] border-t border-zinc-900/50 min-h-[50dvh] px-6 md:px-12 pt-12 pb-8 text-xs"
+        className="bg-[#F7F4EE] border-t border-[#E0DED8] min-h-[50dvh] px-6 md:px-12 pt-12 pb-8 text-xs"
         initial={{ opacity: 0, y: 24 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.1 }}
@@ -4673,7 +4673,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto">
 
           {/* Top rule */}
-          <div className="w-full h-[1px] bg-zinc-800/60 mb-8" />
+          <div className="w-full h-[1px] bg-[#D4D4D4] mb-8" />
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8 items-start">
 
@@ -4683,62 +4683,62 @@ export default function App() {
                 onClick={() => navigateTo('home')}
                 className="flex flex-col items-start cursor-pointer group select-none"
               >
-                <span className="text-xl font-serif text-white tracking-[0.35em] font-light leading-none group-hover:text-green-accent transition-colors duration-300 uppercase">
+                <span className="text-xl font-serif text-[#1C1B17] tracking-[0.35em] font-light leading-none group-hover:text-[#3a5c2d] transition-colors duration-300 uppercase">
                   OFFLINE
                 </span>
-                <span className="text-[7px] font-mono tracking-[0.45em] text-zinc-600 uppercase mt-2 group-hover:text-zinc-400 transition-colors duration-300">
+                <span className="text-[7px] font-mono tracking-[0.45em] text-[#6B6B6B] uppercase mt-2 group-hover:text-[#4A4A4A] transition-colors duration-300">
                   FOOTBALL INTELLIGENCE
                 </span>
               </div>
 
-              <p className="text-zinc-500 font-serif italic text-[12px] leading-relaxed">
+              <p className="text-[#6B6B6B] font-serif italic text-[12px] leading-relaxed">
                 &ldquo;Believe In Your Guts.&rdquo;
               </p>
-              <p className="text-zinc-600 text-[11px] leading-relaxed max-w-sm font-light">
+              <p className="text-[#4A4A4A] text-[11px] leading-relaxed max-w-sm font-light">
                 Football intelligence for readers, analysts and strategists.
               </p>
 
               {/* Simulated Specs Metric Matrix */}
-              <div className="pt-2 text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-600 space-y-1.5">
-                <div className="flex items-center gap-2"><span className="text-zinc-200 font-bold tabular-nums">50,051</span><span>simulations per match.</span></div>
-                <div className="flex items-center gap-2"><span className="text-zinc-200 font-bold tabular-nums">104</span><span>World Cup fixtures.</span></div>
-                <div className="flex items-center gap-2"><span className="text-zinc-200 font-bold tabular-nums">48</span><span>national teams.</span></div>
-                <div className="flex items-center gap-2"><span className="text-zinc-200 font-bold tabular-nums">12</span><span>weighted model signals.</span></div>
+              <div className="pt-2 text-[10px] font-mono uppercase tracking-[0.15em] text-[#4A4A4A] space-y-1.5">
+                <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">50,051</span><span>simulations per match.</span></div>
+                <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">104</span><span>World Cup fixtures.</span></div>
+                <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">48</span><span>national teams.</span></div>
+                <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">12</span><span>weighted model signals.</span></div>
               </div>
             </div>
 
             {/* ── Navigation column ────────────────────────────────────── */}
             <div className="md:col-span-3 space-y-4">
-              <h4 className="text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-600 font-bold">
+              <h4 className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#4A4A4A] font-bold">
                 Index Navigation
               </h4>
-              <div className="flex flex-col space-y-2.5 text-zinc-500 text-[10.5px] font-mono uppercase tracking-wider">
-                <span onClick={() => navigateTo('home')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Home</span>
-                <span onClick={() => navigateTo('predictions')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Predictions</span>
-                <span onClick={() => navigateTo('favorites')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Favorites</span>
-                <span onClick={() => navigateTo('intelligence')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Intelligence Hub</span>
-                {/* <span onClick={() => navigateTo('tournament')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Tournament</span> */}
-                <span onClick={() => navigateTo('model')} className="hover:text-white hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">The Model</span>
+              <div className="flex flex-col space-y-2.5 text-[#6B6B6B] text-[10.5px] font-mono uppercase tracking-wider">
+                <span onClick={() => navigateTo('home')} className="hover:text-[#1C1B17] hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Home</span>
+                <span onClick={() => navigateTo('predictions')} className="hover:text-[#1C1B17] hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Predictions</span>
+                <span onClick={() => navigateTo('favorites')} className="hover:text-[#1C1B17] hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Favorites</span>
+                <span onClick={() => navigateTo('intelligence')} className="hover:text-[#1C1B17] hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Intelligence Hub</span>
+                {/* <span onClick={() => navigateTo('tournament')} className="hover:text-[#1C1B17] hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">Tournament</span> */}
+                <span onClick={() => navigateTo('model')} className="hover:text-[#1C1B17] hover:translate-x-1 transition-all duration-200 cursor-pointer select-none">The Model</span>
               </div>
             </div>
 
             {/* ── System Matrix column ──────────────────────────────────── */}
             <div className="md:col-span-4 space-y-4">
-              <h4 className="text-[9px] font-mono uppercase tracking-[0.3em] text-zinc-600 font-bold">
+              <h4 className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#4A4A4A] font-bold">
                 System Matrix
               </h4>
-              <div className="text-[10.5px] font-mono text-zinc-500 bg-zinc-950/60 border border-zinc-800/60 rounded-sm overflow-hidden">
+              <div className="text-[10.5px] font-mono text-[#4A4A4A] bg-white border border-[#E0DED8] rounded-sm overflow-hidden">
                 {[
-                  { label: 'Data Refresh', value: 'Daily', color: 'text-zinc-100 font-bold' },
-                  { label: 'Engine', value: 'poisson_v4.2', color: 'text-zinc-300' },
-                  { label: 'Simulation', value: '50,051/fixt.', color: 'text-zinc-300' },
-                  { label: 'Confidence Threshold', value: '72%', color: 'text-zinc-300' },
-                  { label: 'Risk Index', value: 'active', color: 'text-green-accent' },
-                  { label: 'API Latency', value: '~14ms', color: 'text-zinc-400' },
+                  { label: 'Data Refresh', value: 'Daily', color: 'text-[#1C1B17] font-bold' },
+                  { label: 'Engine', value: 'poisson_v4.2', color: 'text-[#4A4A4A]' },
+                  { label: 'Simulation', value: '50,051/fixt.', color: 'text-[#4A4A4A]' },
+                  { label: 'Confidence Threshold', value: '72%', color: 'text-[#4A4A4A]' },
+                  { label: 'Risk Index', value: 'active', color: 'text-[#3a5c2d]' },
+                  { label: 'API Latency', value: '~14ms', color: 'text-[#6B6B6B]' },
                 ].map(({ label, value, color }, i, arr) => (
                   <div
                     key={label}
-                    className={`flex justify-between px-4 py-2 ${i < arr.length - 1 ? 'border-b border-zinc-900/50' : ''}`}
+                    className={`flex justify-between px-4 py-2 ${i < arr.length - 1 ? 'border-b border-[#E8E6E0]' : ''}`}
                   >
                     <span>{label}:</span>
                     <span className={color}>{value}</span>
@@ -4750,7 +4750,7 @@ export default function App() {
           </div>
 
           {/* ── Copyright bar ──────────────────────────────────────────── */}
-          <div className="mt-14 pt-6 border-t border-zinc-900/40 flex flex-col sm:flex-row justify-between items-center gap-3 text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-700">
+          <div className="mt-14 pt-6 border-t border-[#E0DED8] flex flex-col sm:flex-row justify-between items-center gap-3 text-[9px] font-mono uppercase tracking-[0.2em] text-[#6B6B6B]">
             <div>
               © 2026 OFFLINE. All rights reserved. No black boxes.
             </div>
