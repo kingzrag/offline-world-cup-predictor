@@ -115,7 +115,7 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3 mb-0.5 min-w-0">
         <div className="flex flex-col items-start gap-1 min-w-0 flex-1">
           <span className="text-[9.5px] font-mono text-zinc-500 tracking-wider uppercase leading-snug break-words">
-            {match.stage}
+            {match.competition || match.stage}
           </span>
           {match.isLiveData ? (
             <span className="inline-flex shrink-0 text-green-accent text-[7.5px] bg-green-accent/10 border border-green-accent/25 px-1.5 py-0.5 rounded leading-none select-none tracking-widest uppercase font-bold">

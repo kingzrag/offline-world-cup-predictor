@@ -676,7 +676,7 @@ export default function MatchAnalysis({
             <div className="flex items-center text-[10px] font-mono text-[#6b6656] uppercase tracking-wider border-b border-[rgba(237,232,222,0.10)] pb-2">
               <div className="flex items-center gap-1.5">
                 <Trophy className="w-3.5 h-3.5 text-[#6b6656] stroke-[1.75]" />
-                <span className="text-[#ece7da]">{match.stage}</span>
+                <span className="text-[#ece7da]">{match.competition || match.stage}</span>
               </div>
             </div>
 

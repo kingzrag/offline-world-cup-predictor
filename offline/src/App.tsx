@@ -110,6 +110,7 @@ function useMediaQuery(query: string): boolean {
 function pickFeaturedMatch(matches: MatchPrediction[]): MatchPrediction | null {
   if (!matches.length) return null;
 
+  // Prioritize LIVE matches across all competitions
   const live = matches.filter(m => m.status === 'LIVE');
   if (live.length > 0) {
     return [...live].sort((a, b) => {
@@ -119,6 +120,7 @@ function pickFeaturedMatch(matches: MatchPrediction[]): MatchPrediction | null {
     })[0];
   }
 
+  // Next prioritize UPCOMING matches by kickoff time across all competitions
   const upcoming = matches
     .filter(m => m.status === 'UPCOMING')
     .sort((a, b) => {
@@ -128,6 +130,7 @@ function pickFeaturedMatch(matches: MatchPrediction[]): MatchPrediction | null {
     });
   if (upcoming.length > 0) return upcoming[0];
 
+  // Finally, pick highest confidence prediction across all competitions
   const bestPrediction = [...matches]
     .filter(m => m.status === 'UPCOMING')
     .sort((a, b) => {
@@ -932,54 +935,38 @@ export default function App() {
     // Filter out historical matches
     list = list.filter(m => getYear(m) >= 2026);
     
-    if (selectedFilter === 'Live') {
+    if (selectedFilter === 'all') {
+      // Show all matches
+    } else if (selectedFilter === 'live') {
       list = list.filter(m => m.status === 'LIVE');
-    } else if (selectedFilter === "Today") {
+    } else if (selectedFilter === 'today') {
       list = list.filter(m => isKickoffToday(m.kickoffTime));
-    } else if (selectedFilter === "Tomorrow") {
+    } else if (selectedFilter === 'tomorrow') {
       list = list.filter(m => isKickoffTomorrow(m.kickoffTime));
-    } else if (selectedFilter === "This Week") {
-      const now = new Date();
-      const weekEnd = new Date();
-      weekEnd.setDate(now.getDate() + 7);
-      list = list.filter(m => {
-        if (!m.kickoffTime) return false;
-        const ko = new Date(m.kickoffTime);
-        return ko >= now && ko <= weekEnd;
-      });
-    } else if (selectedFilter === "Group Stage") {
-      list = list.filter(m => m.stage.toLowerCase().includes('group stage'));
-    } else if (selectedFilter === "Round of 32") {
-      list = list.filter(m => m.stage.toLowerCase().includes('round of 32'));
-    } else if (selectedFilter === "Round of 16") {
-      list = list.filter(m => m.stage.toLowerCase().includes('round of 16'));
-    } else if (selectedFilter === "Quarter Final") {
-      list = list.filter(m => m.stage.toLowerCase().includes('quarter final'));
-    } else if (selectedFilter === "Semi Final") {
-      list = list.filter(m => m.stage.toLowerCase().includes('semi final'));
-    } else if (selectedFilter === "Final") {
-      list = list.filter(m => m.stage.toLowerCase().includes('final'));
-    } else if (selectedFilter === "Favorites") {
+    } else if (selectedFilter === 'favorites') {
       list = list.filter(m => favoriteMatchIds.includes(m.id));
+    } else {
+      // Competition-based filtering
+      list = list.filter(m => {
+        const compId = m.competitionId?.toUpperCase();
+        return compId === selectedFilter.toUpperCase();
+      });
     }
 
     const getSortPriority = (match: MatchPrediction) => {
-      const year = getYear(match);
-      const is2026 = year >= 2026;
-      
       if (match.status === 'LIVE') {
         return 1; // Live matches always at the very top
       }
       
-      if (is2026) {
-        if (match.status === 'UPCOMING') {
-          return 2; // Scheduled 2026 fixtures
-        } else {
-          return 3; // Finished 2026 matches
-        }
-      } else {
-        return 4; // Historical matches (all finished)
+      if (match.status === 'UPCOMING') {
+        return 2; // Upcoming matches second
       }
+      
+      if (match.status === 'COMPLETED') {
+        return 3; // Recently finished matches (within 12h) last
+      }
+      
+      return 4; // Fallback
     };
 
     const getTimestampValue = (dateStr: string) => {
@@ -1050,7 +1037,7 @@ export default function App() {
       if (nextUpcoming?.kickoffTime) {
         setCountdownLabel(`${nextUpcoming.teamA} vs ${nextUpcoming.teamB}`);
       } else {
-        setCountdownLabel('World Cup 2026 Opening');
+      setCountdownLabel('Next Match Opening');
       }
 
       if (diff <= 0) {
@@ -1302,7 +1289,7 @@ export default function App() {
 
   const startupStages = [
     "Connecting to prediction engine...",
-    "Loading World Cup fixtures...",
+    "Loading football fixtures...",
     "Running Poisson simulations...",
     "Generating betting markets...",
     "Preparing dashboard...",
@@ -2172,7 +2159,7 @@ export default function App() {
                     PREDICTION FEED
                   </span>
                   <h1 className="text-4xl md:text-5xl font-serif text-white tracking-tight font-light leading-none animate-fade-in">
-                    World Cup Intelligence
+                    Football Intelligence
                   </h1>
                   <p className="text-zinc-500 text-sm max-w-2xl font-sans">
                     Ranked by probability, confidence and model signals. Pure mathematics derived across fifty thousand discrete match environments.
@@ -2248,16 +2235,16 @@ export default function App() {
                     <div className="flex items-center overflow-x-auto gap-2.5 scrollbar-none w-full">
                       {[
                         'All Matches',
-                        'Live',
+                        'LIVE',
                         'Today',
                         'Tomorrow',
-                        'This Week',
-                        'Group Stage',
-                        'Round of 32',
-                        'Round of 16',
-                        'Quarter Final',
-                        'Semi Final',
-                        'Final',
+                        'Premier League',
+                        'La Liga',
+                        'Bundesliga',
+                        'Serie A',
+                        'Champions League',
+                        'Europa League',
+                        'World Cup',
                         'Favorites'
                       ].map((item) => {
                         const liveMatchesCount = sourceMatches.filter(m => m.status === 'LIVE').length;
@@ -2273,7 +2260,7 @@ export default function App() {
                                 : 'bg-zinc-950 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-700 text-zinc-400 hover:text-white'
                             }`}
                           >
-                            {item === 'Live' ? `🔴 LIVE (${liveMatchesCount})` : item} {countLabel !== null && `(${countLabel})`}
+                            {item === 'LIVE' ? `🔴 LIVE (${liveMatchesCount})` : item} {countLabel !== null && `(${countLabel})`}
                           </button>
                         );
                       })}
@@ -2322,7 +2309,7 @@ export default function App() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <span className="text-[10px] sm:text-xs uppercase font-mono tracking-widest text-[#1cdb5e] block font-bold">{heroMatch.stage}</span>
+                          <span className="text-[10px] sm:text-xs uppercase font-mono tracking-widest text-[#1cdb5e] block font-bold">{heroMatch.competition || heroMatch.stage}</span>
                           <h3 className="text-2xl sm:text-3xl font-serif text-white uppercase tracking-tight">
                             {heroMatch.teamA} vs {heroMatch.teamB}
                           </h3>
@@ -2532,7 +2519,7 @@ export default function App() {
                                       <span>{match.teamB}</span>
                                     </div>
                                     <div className="flex items-center space-x-2.5 text-[9.5px] font-mono uppercase text-zinc-500">
-                                      <span>{match.stage}</span>
+                                      <span>{match.competition || match.stage}</span>
                                       <span>•</span>
                                       <MatchTimeDisplay match={match} />
                                       <span>•</span>
@@ -2645,7 +2632,7 @@ export default function App() {
                     {/* Header */}
                     <div className="p-5 border-b border-zinc-900 flex justify-between items-start">
                       <div className="flex flex-col">
-                        <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase">{match.stage}</span>
+                        <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase">{match.competition || match.stage}</span>
                         <span className="text-[11px] font-mono text-zinc-300 font-semibold mt-1">{formatSmartKickoffLocal(match.kickoffTime)}</span>
                       </div>
                       <button 
@@ -2899,7 +2886,7 @@ export default function App() {
                           >
                             <div className="flex justify-between items-start mb-4">
                               <div>
-                                <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase block">{match.stage}</span>
+                                <span className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase block">{match.competition || match.stage}</span>
                                 <span className="text-[9px] font-mono text-zinc-400 mt-1 block">{formatSmartKickoffLocal(match.kickoffTime)}</span>
                               </div>
                               <button 
@@ -2947,7 +2934,7 @@ export default function App() {
                       <h3 className="text-xs uppercase tracking-widest font-mono font-bold text-zinc-400 border-b border-zinc-950 pb-2">Monitored Trophy Contenders</h3>
                       <div className="flex flex-col items-center justify-center py-12 px-4 bg-zinc-950/20 border border-dashed border-zinc-900 rounded-lg text-center">
                         <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">
-                          World Cup Winner Probabilities Coming Soon
+                          Trophy Winner Probabilities Coming Soon
                         </span>
                       </div>
                     </div>
@@ -3668,7 +3655,7 @@ export default function App() {
               <span className="mono-label text-green-accent text-[9px] block mb-2">Statistical Blueprint Transparency</span>
               <h2 className="text-4xl font-serif italic text-white mb-2">Transparent Intelligence. No Black Boxes.</h2>
               <p className="text-xs text-zinc-400 max-w-xl">
-                We believe predictions should be supported by mathematical rigor and reproducible data. Here is how our 2026 World Cup model operates.
+                We believe predictions should be supported by mathematical rigor and reproducible data. Here is how our football prediction model operates.
               </p>
             </div>
 
@@ -3760,7 +3747,7 @@ export default function App() {
                 <div className="lg:col-span-5 space-y-4">
                   <h4 className="text-sm font-semibold uppercase tracking-wider text-white">Monte Carlo Tournament Simulations</h4>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Every prediction is generated through large-scale Monte Carlo simulations combining ELO ratings, Expected Goals data, player availability, recent form, and tournament scheduling variables to estimate match outcomes, progression probabilities, and World Cup winning chances.
+                    Every prediction is generated through large-scale Monte Carlo simulations combining ELO ratings, Expected Goals data, player availability, recent form, and tournament scheduling variables to estimate match outcomes, progression probabilities, and winning chances.
                   </p>
                   
                   <ul className="space-y-3 text-xs text-zinc-400">
@@ -3799,7 +3786,7 @@ export default function App() {
                     return (
                       <div className="p-4 bg-zinc-900/30 rounded border border-zinc-900/60 text-center">
                         <div className="text-zinc-400 text-[11px] leading-relaxed">
-                          Historical validation currently being built from completed 2026 World Cup fixtures.
+                          Historical validation currently being built from completed fixtures.
                         </div>
                         <div className="text-zinc-600 text-[10px] mt-2 font-mono uppercase tracking-wider">
                           Available after more completed matches
@@ -4717,8 +4704,8 @@ export default function App() {
               {/* Simulated Specs Metric Matrix */}
               <div className="pt-2 text-[10px] font-mono uppercase tracking-[0.15em] text-[#4A4A4A] space-y-1.5">
                 <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">50,051</span><span>simulations per match.</span></div>
-                <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">104</span><span>World Cup fixtures.</span></div>
-                <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">48</span><span>national teams.</span></div>
+                <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">100+</span><span>active competitions.</span></div>
+                <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">500+</span><span>teams tracked.</span></div>
                 <div className="flex items-center gap-2"><span className="text-[#1C1B17] font-bold tabular-nums">12</span><span>weighted model signals.</span></div>
               </div>
             </div>

@@ -86,6 +86,15 @@ export interface MatchPrediction {
   probA: number; // probability of teamA win (0-100)
   probD: number; // probability of draw (0-100)
   probB: number; // probability of teamB win (0-100)
+  
+  // Competition information
+  competition: string; // e.g., "Premier League", "UEFA Champions League", "FIFA World Cup"
+  competitionId?: string; // e.g., "PL", "CL", "WC"
+  competitionLogo?: string | null;
+  competitionCountry?: string; // e.g., "England", "Europe", "International"
+  competitionType?: string; // e.g., "League", "Cup", "International"
+  season?: string; // e.g., "2024-25", "2026"
+  
   /** Home stadium — only present when verified in backend data */
   venue?: string | null;
   winner?: 'HOME_TEAM' | 'AWAY_TEAM' | 'DRAW' | null;

@@ -780,6 +780,14 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     finishedAt = (f as any).finished_at || new Date().toISOString();
   }
 
+  // Extract competition信息 from API response
+  const competitionName = (f as any).competition || "FIFA World Cup";
+  const competitionId = (f as any).competition_id || "WC";
+  const competitionLogo = (f as any).competition_logo || null;
+  const competitionCountry = (f as any).competition_country || "International";
+  const competitionType = (f as any).competition_type || "International";
+  const season = (f as any).season || "2026";
+
   // Baseline outcome fields
   let predictionLabel = "Draw / Even Lean";
   let confidence: "High" | "Medium" | "Low" = "Medium";
@@ -833,6 +841,12 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     probA,
     probD,
     probB,
+    competition: competitionName,
+    competitionId: competitionId,
+    competitionLogo: competitionLogo,
+    competitionCountry: competitionCountry,
+    competitionType: competitionType,
+    season: season,
     venue: f.venue?.trim() || null,
     liveScore: f.live_score ?? null,
     winner: f.winner,
