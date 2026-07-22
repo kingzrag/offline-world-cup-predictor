@@ -354,7 +354,7 @@ export default function AIAssistant({ onAskAboutMatch, matches = [] }: AIAssista
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-white tracking-tight">OFFLINE AI</h3>
-                      <p className="text-[10px] text-zinc-400 font-medium tracking-wide">Football Intelligence Assistant</p>
+                      <p className="text-[10px] text-zinc-400 font-medium tracking-wide">Football Decision Engine Assistant</p>
                     </div>
                   </div>
                   <button

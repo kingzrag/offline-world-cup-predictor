@@ -3,12 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import football2 from './assets/images/football2.png';
 // @ts-ignore
 import background from './assets/images/background.png';
+// Static fallback hero images (used when no editorial images are available)
 // @ts-ignore
-import heroLeft from './assets/images/hero_left.png';
+import heroLeftFallback from './assets/images/hero_left.png';
 // @ts-ignore
-import heroCenter from './assets/images/hero_center.png';
+import heroCenterFallback from './assets/images/hero_center.png';
 // @ts-ignore
-import heroRight from './assets/images/hero_right.png';
+import heroRightFallback from './assets/images/hero_right.png';
 import CompetitionSelector from './components/CompetitionSelector';
 import { 
   getPredictions, 
@@ -274,6 +275,73 @@ export default function App() {
   });
   const heroOpacity = useTransform(heroScrollProgress, [0, 0.75, 1], [1, 1, 0.85]);
   const heroScale = useTransform(heroScrollProgress, [0, 1], [1, 0.985]);
+
+  // ── Editorial hero image rotation ─────────────────────────────────────────
+  // Loads available hero sets from manifest.json and rotates through them.
+  // Only shows sets where all three images (cover, left, right) are available.
+  interface EditorialHeroSet {
+    id: string;
+    title: string;
+    left: string;
+    center: string;
+    right: string;
+  }
+  const [editorialHeroes, setEditorialHeroes] = useState<EditorialHeroSet[]>([]);
+  const [currentHeroIdx, setCurrentHeroIdx] = useState(0);
+
+  useEffect(() => {
+    // Fetch manifest and probe which hero sets have all 3 images available
+    const EDITORIAL_BASE = '/editorial';
+    fetch(`${EDITORIAL_BASE}/manifest.json`)
+      .then(r => r.json())
+      .then(async (manifest: Array<{ id: string; title: string; cover: string; left: string; right: string }>) => {
+        const available: EditorialHeroSet[] = [];
+        for (const entry of manifest) {
+          const base = `${EDITORIAL_BASE}/${entry.id}`;
+          // Probe all three images via HEAD requests
+          try {
+            const [coverRes, leftRes, rightRes] = await Promise.all([
+              fetch(`${base}/${entry.cover}`, { method: 'HEAD' }),
+              fetch(`${base}/${entry.left}`, { method: 'HEAD' }),
+              fetch(`${base}/${entry.right}`, { method: 'HEAD' }),
+            ]);
+            if (coverRes.ok && leftRes.ok && rightRes.ok) {
+              available.push({
+                id: entry.id,
+                title: entry.title,
+                left: `${base}/${entry.left}`,
+                center: `${base}/${entry.cover}`,
+                right: `${base}/${entry.right}`,
+              });
+            }
+          } catch {
+            // Image not available — skip
+          }
+        }
+        if (available.length > 0) {
+          // Start from a random index for variety on each page load
+          setCurrentHeroIdx(Math.floor(Math.random() * available.length));
+          setEditorialHeroes(available);
+        }
+      })
+      .catch(() => {
+        // Manifest not available — stay with fallback images
+      });
+  }, []);
+
+  // Rotate through editorial heroes every 8 seconds
+  useEffect(() => {
+    if (editorialHeroes.length < 2) return;
+    const timer = setInterval(() => {
+      setCurrentHeroIdx(idx => (idx + 1) % editorialHeroes.length);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [editorialHeroes]);
+
+  const currentHero = editorialHeroes[currentHeroIdx];
+  const heroLeft   = currentHero ? currentHero.left   : heroLeftFallback;
+  const heroCenter = currentHero ? currentHero.center : heroCenterFallback;
+  const heroRight  = currentHero ? currentHero.right  : heroRightFallback;
 
   // ── Hero-overlay header: scroll-driven fade + slide ────────────────────────
   // Header is fixed over the hero; as hero scrolls away it fades and lifts out.
@@ -1486,7 +1554,7 @@ export default function App() {
                   OFFLINE
                 </span>
                 <span className="font-mono tracking-[0.6em] text-zinc-500 uppercase pl-[0.6em] text-center max-w-full" style={{ fontSize: 'clamp(0.625rem, 1.5vw, 0.75rem)' }}>
-                  FOOTBALL INTELLIGENCE
+                  FOOTBALL DECISION ENGINE
                 </span>
               </div>
 
@@ -1629,7 +1697,7 @@ export default function App() {
 
               {/* Copyright at bottom */}
               <div className="text-center text-zinc-600 text-xs max-sm:text-[10px] font-mono tracking-wider">
-                © 2026 OFFLINE Football Intelligence. All rights reserved.
+                © 2026 OFFLINE Football Decision Engine. All rights reserved.
               </div>
             </div>
           </div>
@@ -1760,7 +1828,7 @@ export default function App() {
             <span className="text-[6.5px] md:text-[7px] font-mono tracking-[0.44em] uppercase
                              mt-[5px] pl-[0.44em] text-[rgba(28,27,23,0.38)]
                              group-hover:opacity-70 transition-opacity duration-200">
-              FOOTBALL INTELLIGENCE
+              FOOTBALL DECISION ENGINE
             </span>
           </div>
 
@@ -1965,7 +2033,7 @@ export default function App() {
                       show: { opacity: 1, transition: { duration: 1.0, ease: [0.16, 1, 0.3, 1] } }
                     }}
                   >
-                    A quantitative expected value simulation index and elite football intelligence publication built for analysts, experts, and readers who demand mathematical clarity over gambling noise.
+                    A quantitative expected value simulation index and elite football decision engine publication built for analysts, experts, and readers who demand mathematical clarity over gambling noise.
                   </motion.p>
 
                   <motion.div
@@ -2159,7 +2227,7 @@ export default function App() {
                     PREDICTION FEED
                   </span>
                   <h1 className="text-4xl md:text-5xl font-serif text-white tracking-tight font-light leading-none animate-fade-in">
-                    Football Intelligence
+                    Football Decision Engine
                   </h1>
                   <p className="text-zinc-500 text-sm max-w-2xl font-sans">
                     Ranked by probability, confidence and model signals. Pure mathematics derived across fifty thousand discrete match environments.
@@ -4690,7 +4758,7 @@ export default function App() {
                   OFFLINE
                 </span>
                 <span className="text-[7px] font-mono tracking-[0.45em] text-[#6B6B6B] uppercase mt-2 group-hover:text-[#4A4A4A] transition-colors duration-300">
-                  FOOTBALL INTELLIGENCE
+                  FOOTBALL DECISION ENGINE
                 </span>
               </div>
 
@@ -4698,7 +4766,7 @@ export default function App() {
                 &ldquo;Believe In Your Guts.&rdquo;
               </p>
               <p className="text-[#4A4A4A] text-[11px] leading-relaxed max-w-sm font-light">
-                Football intelligence for readers, analysts and strategists.
+                Football decision engine for readers, analysts and strategists.
               </p>
 
               {/* Simulated Specs Metric Matrix */}

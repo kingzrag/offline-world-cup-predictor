@@ -27,3 +27,4 @@ final_production_validation.py
 *.md
 !README.md
 !requirements.txt
+!public/editorial/manifest.json

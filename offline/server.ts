@@ -92,7 +92,7 @@ app.post("/api/match-summary", async (req: express.Request, res: express.Respons
     return;
   }
 
-  const prompt = `You are the lead tactical analyst at OFFLINE, an elite football intelligence publication designed in the style of The Athletic and Financial Times. 
+  const prompt = `You are the lead tactical analyst at OFFLINE, an elite football decision engine publication designed in the style of The Athletic and Financial Times. 
 Write a forensic, highly polished tactical match preview summary between ${teamA} and ${teamB} at the World Cup 2026 (${stage || "Group Stage"}).
 Do NOT use clichés, exclamation marks, or promotional phrases. Maintain a cold, clinical, highly authoritative editorial tone.
 
@@ -111,7 +111,7 @@ Provide a single, powerful paragraph (approx. 80-120 words) analyzing the techni
         contents: prompt,
         config: {
           temperature: 0.3,
-          systemInstruction: "You are a senior clinical football intelligence director. Avoid generic phrases and emojis. Focus on rigorous tactical terminology, structure, and spacing.",
+          systemInstruction: "You are a senior clinical football decision engine director. Avoid generic phrases and emojis. Focus on rigorous tactical terminology, structure, and spacing.",
         }
       });
       const explanation = response.text || "";
