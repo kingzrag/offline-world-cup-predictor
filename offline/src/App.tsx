@@ -3,13 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import football2 from './assets/images/football2.png';
 // @ts-ignore
 import background from './assets/images/background.png';
-// Static fallback hero images (used when no editorial images are available)
-// @ts-ignore
-import heroLeftFallback from './assets/images/hero_left.png';
-// @ts-ignore
-import heroCenterFallback from './assets/images/hero_center.png';
-// @ts-ignore
-import heroRightFallback from './assets/images/hero_right.png';
 import CompetitionSelector from './components/CompetitionSelector';
 import { 
   getPredictions, 
@@ -276,9 +269,12 @@ export default function App() {
   const heroOpacity = useTransform(heroScrollProgress, [0, 0.75, 1], [1, 1, 0.85]);
   const heroScale = useTransform(heroScrollProgress, [0, 1], [1, 0.985]);
 
+  // Define fallback images dynamically to avoid static ES module imports of fixed assets
+  const heroLeftFallback = new URL('./assets/images/hero_left.png', import.meta.url).href;
+  const heroCenterFallback = new URL('./assets/images/hero_center.png', import.meta.url).href;
+  const heroRightFallback = new URL('./assets/images/hero_right.png', import.meta.url).href;
+
   // ── Editorial hero image rotation ─────────────────────────────────────────
-  // Loads available hero sets from manifest.json and rotates through them.
-  // Only shows sets where all three images (cover, left, right) are available.
   interface EditorialHeroSet {
     id: string;
     title: string;
@@ -290,44 +286,42 @@ export default function App() {
   const [currentHeroIdx, setCurrentHeroIdx] = useState(0);
 
   useEffect(() => {
-    // Fetch manifest and probe which hero sets have all 3 images available
     const EDITORIAL_BASE = '/editorial';
     fetch(`${EDITORIAL_BASE}/manifest.json`)
       .then(r => r.json())
-      .then(async (manifest: Array<{ id: string; title: string; cover: string; left: string; right: string }>) => {
-        const available: EditorialHeroSet[] = [];
-        for (const entry of manifest) {
-          const base = `${EDITORIAL_BASE}/${entry.id}`;
-          // Probe all three images via HEAD requests
-          try {
-            const [coverRes, leftRes, rightRes] = await Promise.all([
-              fetch(`${base}/${entry.cover}`, { method: 'HEAD' }),
-              fetch(`${base}/${entry.left}`, { method: 'HEAD' }),
-              fetch(`${base}/${entry.right}`, { method: 'HEAD' }),
-            ]);
-            if (coverRes.ok && leftRes.ok && rightRes.ok) {
-              available.push({
-                id: entry.id,
-                title: entry.title,
-                left: `${base}/${entry.left}`,
-                center: `${base}/${entry.cover}`,
-                right: `${base}/${entry.right}`,
-              });
-            }
-          } catch {
-            // Image not available — skip
-          }
-        }
-        if (available.length > 0) {
-          // Start from a random index for variety on each page load
-          setCurrentHeroIdx(Math.floor(Math.random() * available.length));
+      .then((manifest: Array<{ id: string; title: string; cover: string; left: string; right: string }>) => {
+        if (Array.isArray(manifest) && manifest.length > 0) {
+          const available: EditorialHeroSet[] = manifest.map(entry => ({
+            id: entry.id,
+            title: entry.title,
+            left: `${EDITORIAL_BASE}/${entry.id}/${entry.left}`,
+            center: `${EDITORIAL_BASE}/${entry.id}/${entry.cover}`,
+            right: `${EDITORIAL_BASE}/${entry.id}/${entry.right}`,
+          }));
           setEditorialHeroes(available);
+          setCurrentHeroIdx(0);
         }
       })
-      .catch(() => {
-        // Manifest not available — stay with fallback images
+      .catch((err) => {
+        console.warn("[App] Failed to load editorial manifest.json, using static fallbacks.", err);
       });
   }, []);
+
+  // Preload the next hero set to prevent layout flashing or blank images during transition
+  useEffect(() => {
+    if (editorialHeroes.length <= 1) return;
+    const nextIdx = (currentHeroIdx + 1) % editorialHeroes.length;
+    const nextHero = editorialHeroes[nextIdx];
+
+    const preloadLeft = new Image();
+    preloadLeft.src = nextHero.left;
+
+    const preloadCenter = new Image();
+    preloadCenter.src = nextHero.center;
+
+    const preloadRight = new Image();
+    preloadRight.src = nextHero.right;
+  }, [currentHeroIdx, editorialHeroes]);
 
   // Rotate through editorial heroes every 8 seconds
   useEffect(() => {
@@ -1939,7 +1933,15 @@ export default function App() {
                       }}
                       transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
                     >
-                      <img src={heroLeft} alt="Cover Left" className="w-full h-full object-cover" />
+                      <motion.img 
+                        key={currentHeroIdx + '-left'}
+                        src={heroLeft} 
+                        alt="Cover Left" 
+                        className="w-full h-full object-cover"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.7 }}
+                      />
                     </motion.div>
 
                     {/* Right Card */}
@@ -1963,7 +1965,15 @@ export default function App() {
                       }}
                       transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
                     >
-                      <img src={heroRight} alt="Cover Right" className="w-full h-full object-cover" />
+                      <motion.img 
+                        key={currentHeroIdx + '-right'}
+                        src={heroRight} 
+                        alt="Cover Right" 
+                        className="w-full h-full object-cover"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.7 }}
+                      />
                     </motion.div>
 
                     {/* Center Card */}
@@ -1982,7 +1992,15 @@ export default function App() {
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
                     >
-                      <img src={heroCenter} alt="Cover Center" className="w-full h-full object-cover" />
+                      <motion.img 
+                        key={currentHeroIdx + '-center'}
+                        src={heroCenter} 
+                        alt="Cover Center" 
+                        className="w-full h-full object-cover"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.7 }}
+                      />
                     </motion.div>
                   </div>
                 </motion.div>
