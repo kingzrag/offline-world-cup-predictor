@@ -10,6 +10,25 @@ interface EditorialHeroSet {
   right: string;
 }
 
+// Built-in list of all 15 editorial hero photo sets deployed under /editorial/hero-01 .. /hero-15
+const BUILTIN_EDITORIAL_SETS: EditorialHeroSet[] = [
+  { id: 'hero-01', title: 'The Final',               left: '/editorial/hero-01/left.jpg', center: '/editorial/hero-01/cover.jpg', right: '/editorial/hero-01/right.jpg' },
+  { id: 'hero-02', title: 'Champions League Night', left: '/editorial/hero-02/left.jpg', center: '/editorial/hero-02/cover.jpg', right: '/editorial/hero-02/right.jpg' },
+  { id: 'hero-03', title: 'Derby Day',              left: '/editorial/hero-03/left.jpg', center: '/editorial/hero-03/cover.jpg', right: '/editorial/hero-03/right.jpg' },
+  { id: 'hero-04', title: 'Tactical Masterclass',   left: '/editorial/hero-04/left.jpg', center: '/editorial/hero-04/cover.jpg', right: '/editorial/hero-04/right.jpg' },
+  { id: 'hero-05', title: 'Wonderkid',              left: '/editorial/hero-05/left.jpg', center: '/editorial/hero-05/cover.jpg', right: '/editorial/hero-05/right.jpg' },
+  { id: 'hero-06', title: 'Goalkeeper',             left: '/editorial/hero-06/left.jpg', center: '/editorial/hero-06/cover.jpg', right: '/editorial/hero-06/right.jpg' },
+  { id: 'hero-07', title: 'Premier League',         left: '/editorial/hero-07/left.jpg', center: '/editorial/hero-07/cover.jpg', right: '/editorial/hero-07/right.jpg' },
+  { id: 'hero-08', title: 'La Liga',                left: '/editorial/hero-08/left.jpg', center: '/editorial/hero-08/cover.jpg', right: '/editorial/hero-08/right.jpg' },
+  { id: 'hero-09', title: 'Serie A',                left: '/editorial/hero-09/left.jpg', center: '/editorial/hero-09/cover.jpg', right: '/editorial/hero-09/right.jpg' },
+  { id: 'hero-10', title: 'Bundesliga',             left: '/editorial/hero-10/left.jpg', center: '/editorial/hero-10/cover.jpg', right: '/editorial/hero-10/right.jpg' },
+  { id: 'hero-11', title: 'Ligue 1',                 left: '/editorial/hero-11/left.jpg', center: '/editorial/hero-11/cover.jpg', right: '/editorial/hero-11/right.jpg' },
+  { id: 'hero-12', title: 'Champions League',       left: '/editorial/hero-12/left.jpg', center: '/editorial/hero-12/cover.jpg', right: '/editorial/hero-12/right.jpg' },
+  { id: 'hero-13', title: 'World Cup History',      left: '/editorial/hero-13/left.jpg', center: '/editorial/hero-13/cover.jpg', right: '/editorial/hero-13/right.jpg' },
+  { id: 'hero-14', title: 'Golden Boot',            left: '/editorial/hero-14/left.jpg', center: '/editorial/hero-14/cover.jpg', right: '/editorial/hero-14/right.jpg' },
+  { id: 'hero-15', title: 'Football Culture',       left: '/editorial/hero-15/left.jpg', center: '/editorial/hero-15/cover.jpg', right: '/editorial/hero-15/right.jpg' },
+];
+
 interface EditorialHeroProps {
   heroRef: React.RefObject<HTMLDivElement | null>;
   heroOpacity: MotionValue<number>;
@@ -31,19 +50,17 @@ export function EditorialHero({
   scrollY,
   isMobile,
 }: EditorialHeroProps) {
-  // Dynamic fallback images (avoiding static ES module imports of fixed hero covers)
-  const heroLeftFallback = new URL('../assets/images/hero_left.png', import.meta.url).href;
-  const heroCenterFallback = new URL('../assets/images/hero_center.png', import.meta.url).href;
-  const heroRightFallback = new URL('../assets/images/hero_right.png', import.meta.url).href;
-
-  const [editorialHeroes, setEditorialHeroes] = useState<EditorialHeroSet[]>([]);
+  const [editorialHeroes, setEditorialHeroes] = useState<EditorialHeroSet[]>(BUILTIN_EDITORIAL_SETS);
   const [currentHeroIdx, setCurrentHeroIdx] = useState(0);
 
-  // 1. Fetch manifest.json immediately on mount
+  // Fetch manifest.json to sync any server-side metadata updates if available
   useEffect(() => {
     const EDITORIAL_BASE = '/editorial';
     fetch(`${EDITORIAL_BASE}/manifest.json`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((manifest: Array<{ id: string; title: string; cover: string; left: string; right: string }>) => {
         if (Array.isArray(manifest) && manifest.length > 0) {
           const available: EditorialHeroSet[] = manifest.map((entry) => ({
@@ -54,15 +71,14 @@ export function EditorialHero({
             right: `${EDITORIAL_BASE}/${entry.id}/${entry.right}`,
           }));
           setEditorialHeroes(available);
-          setCurrentHeroIdx(0);
         }
       })
       .catch((err) => {
-        console.warn('[EditorialHero] Failed to load manifest.json, using static fallbacks.', err);
+        console.warn('[EditorialHero] Could not fetch remote manifest.json, using built-in editorial sets:', err.message);
       });
   }, []);
 
-  // 2. Preload the next hero set to prevent layout flashing or blank images during transitions
+  // Preload the next hero set to prevent layout flashing or blank images during transitions
   useEffect(() => {
     if (editorialHeroes.length <= 1) return;
     const nextIdx = (currentHeroIdx + 1) % editorialHeroes.length;
@@ -78,7 +94,7 @@ export function EditorialHero({
     preloadRight.src = nextHero.right;
   }, [currentHeroIdx, editorialHeroes]);
 
-  // 3. Rotate through editorial heroes every 8 seconds
+  // Rotate through editorial heroes every 8 seconds
   useEffect(() => {
     if (editorialHeroes.length < 2) return;
     const timer = setInterval(() => {
@@ -87,10 +103,10 @@ export function EditorialHero({
     return () => clearInterval(timer);
   }, [editorialHeroes]);
 
-  const currentHero = editorialHeroes[currentHeroIdx];
-  const heroLeft = currentHero ? currentHero.left : heroLeftFallback;
-  const heroCenter = currentHero ? currentHero.center : heroCenterFallback;
-  const heroRight = currentHero ? currentHero.right : heroRightFallback;
+  const currentHero = editorialHeroes[currentHeroIdx] || BUILTIN_EDITORIAL_SETS[0];
+  const heroLeft = currentHero.left;
+  const heroCenter = currentHero.center;
+  const heroRight = currentHero.right;
 
   // Mouse parallax state
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
