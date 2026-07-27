@@ -14,115 +14,124 @@ const DEFAULT_SECTIONS = [
   'app-footer',
 ];
 
+// Duration of the scroll animation (ms)
+const ANIMATION_DURATION = 800;
+// Extra cooldown after animation to absorb trackpad momentum inertia (ms)
+const MOMENTUM_COOLDOWN = 250;
+// Minimum wheel delta to count as an intentional gesture
+const INTENT_THRESHOLD = 35;
+
 export function useViewportSnap({
   activeTab,
   sectionIds = DEFAULT_SECTIONS,
   enabled = true,
 }: UseViewportSnapOptions) {
-  const isSnappingRef = useRef(false);
-  const lastScrollYRef = useRef(0);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const visibleRatiosRef = useRef<Record<string, number>>({});
+  const activeIndexRef = useRef(0);
+  const isLockedRef = useRef(false);
 
   useEffect(() => {
-    // Only enable on desktop/tablet viewports (>= 768px) on the home tab
     if (!enabled || activeTab !== 'home' || typeof window === 'undefined') return;
 
+    // Only enable on desktop non-touch screens
     const isDesktop = window.innerWidth >= 768;
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (!isDesktop || isTouch) return;
 
-    lastScrollYRef.current = window.scrollY;
+    // -------------------------------------------------------------------
+    // Helper: resolve chapter elements in document order
+    // -------------------------------------------------------------------
+    const getElements = (): Array<HTMLElement | null> =>
+      sectionIds.map((id) => document.getElementById(id));
 
-    // 1. Setup IntersectionObserver to track visibility ratio of each chapter section
-    const observerCallback: IntersectionObserverCallback = (entries) => {
-      entries.forEach((entry) => {
-        if (entry.target.id) {
-          visibleRatiosRef.current[entry.target.id] = entry.intersectionRatio;
+    // -------------------------------------------------------------------
+    // Helper: find which chapter is closest to viewport top right now
+    // -------------------------------------------------------------------
+    const syncActiveIndex = () => {
+      const els = getElements();
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      els.forEach((el, i) => {
+        if (!el) return;
+        const dist = Math.abs(el.getBoundingClientRect().top);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
         }
       });
+      activeIndexRef.current = bestIdx;
     };
 
-    const observer = new IntersectionObserver(observerCallback, {
-      threshold: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.0],
-    });
+    // -------------------------------------------------------------------
+    // Helper: smoothly scroll to chapter at index and engage lock
+    // -------------------------------------------------------------------
+    const goToChapter = (idx: number) => {
+      const els = getElements();
+      const target = els[idx];
+      if (!target) return;
 
-    const elements: HTMLElement[] = [];
-    sectionIds.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) {
-        elements.push(el);
-        observer.observe(el);
-      }
-    });
+      const targetTop = window.scrollY + target.getBoundingClientRect().top;
 
-    // 2. Debounced scroll handler to trigger gentle alignment after scrolling settles
-    const handleScroll = () => {
-      if (isSnappingRef.current) return;
+      isLockedRef.current = true;
+      activeIndexRef.current = idx;
 
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
+      window.scrollTo({ top: targetTop, behavior: 'smooth' });
 
-      scrollTimeoutRef.current = setTimeout(() => {
-        const currentScrollY = window.scrollY;
-        const delta = Math.abs(currentScrollY - lastScrollYRef.current);
-
-        // Ignore tiny accidental touchpad movements (< 50px)
-        if (delta < 50) {
-          lastScrollYRef.current = currentScrollY;
-          return;
-        }
-
-        // Find section with highest visibility or threshold >= 45%
-        let bestId: string | null = null;
-        let maxRatio = 0;
-
-        sectionIds.forEach((id) => {
-          const ratio = visibleRatiosRef.current[id] || 0;
-          if (ratio > maxRatio) {
-            maxRatio = ratio;
-            bestId = id;
-          }
-        });
-
-        // Trigger gentle alignment if a target section is meaningfully visible (>= 40%)
-        if (bestId && maxRatio >= 0.4) {
-          const targetEl = document.getElementById(bestId);
-          if (targetEl) {
-            const rect = targetEl.getBoundingClientRect();
-            const targetTop = window.scrollY + rect.top;
-
-            // Only snap if target is not already aligned near top (within 30px)
-            if (Math.abs(rect.top) > 30) {
-              isSnappingRef.current = true;
-              window.scrollTo({
-                top: targetTop,
-                behavior: 'smooth',
-              });
-
-              // Reset snapping lock after smooth animation settles
-              setTimeout(() => {
-                isSnappingRef.current = false;
-                lastScrollYRef.current = window.scrollY;
-              }, 750);
-              return;
-            }
-          }
-        }
-
-        lastScrollYRef.current = currentScrollY;
-      }, 200);
+      // Unlock after animation + momentum cooldown
+      setTimeout(() => {
+        isLockedRef.current = false;
+        // Sync index in case user manually scrolled mid-animation
+        syncActiveIndex();
+      }, ANIMATION_DURATION + MOMENTUM_COOLDOWN);
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    // -------------------------------------------------------------------
+    // Wheel handler: detect intent and transition
+    // -------------------------------------------------------------------
+    const handleWheel = (e: WheelEvent) => {
+      // Ignore horizontal scrolls (trackpad two-finger side swipe)
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+
+      const delta = e.deltaY;
+
+      // Ignore tiny accidental movements
+      if (Math.abs(delta) < INTENT_THRESHOLD) return;
+
+      // Block if currently animating
+      if (isLockedRef.current) {
+        e.preventDefault();
+        return;
+      }
+
+      const current = activeIndexRef.current;
+      const maxIdx = sectionIds.length - 1;
+
+      const nextIdx = delta > 0
+        ? Math.min(current + 1, maxIdx)   // scroll down → next chapter
+        : Math.max(current - 1, 0);       // scroll up   → previous chapter
+
+      // Already at edge — let browser handle naturally
+      if (nextIdx === current) return;
+
+      // Intercept and drive the transition
+      e.preventDefault();
+      goToChapter(nextIdx);
+    };
+
+    // -------------------------------------------------------------------
+    // Sync on resize so index stays accurate
+    // -------------------------------------------------------------------
+    const handleResize = () => syncActiveIndex();
+
+    // Initial sync to whatever chapter is visible on mount
+    syncActiveIndex();
+
+    // Use { capture: true } so we receive the event before browser default
+    window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+    window.addEventListener('resize', handleResize, { passive: true });
 
     return () => {
-      window.removeEventListener('scroll', handleScroll);
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-      observer.disconnect();
+      window.removeEventListener('wheel', handleWheel, { capture: true });
+      window.removeEventListener('resize', handleResize);
     };
   }, [activeTab, sectionIds, enabled]);
 }
