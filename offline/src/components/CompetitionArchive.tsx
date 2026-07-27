@@ -348,9 +348,9 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
     <motion.section
       ref={sectionRef}
       id="competition-archive"
-      className="relative w-full h-[100dvh] bg-[#F6F4EF] bg-paper-grain paper-overlay overflow-hidden origin-center flex flex-col justify-center editorial-snap-section"
+      className="relative w-full h-[100dvh] bg-[#F6F4EF] bg-paper-grain paper-overlay origin-center flex flex-col justify-center editorial-snap-section"
       aria-label="Explore Every Competition"
-      style={{ opacity: exitOpacity, scale: exitScale }}
+      style={{ opacity: exitOpacity }}
       initial={{ opacity: 0, y: 80, scale: 0.98 }}
       whileInView={{ opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, amount: 0.12 }}

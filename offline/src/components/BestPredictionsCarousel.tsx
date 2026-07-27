@@ -471,7 +471,7 @@ export function BestPredictionsCarousel({
       className="relative w-full h-[100dvh] flex flex-col justify-center pb-4 lg:pb-2 bg-[#070707] text-zinc-150 select-none z-20 origin-center editorial-snap-section"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      style={{ opacity: exitOpacity, scale: exitScale }}
+      style={{ opacity: exitOpacity }}
       initial={{ opacity: 0, y: 80, scale: 0.98 }}
       whileInView={{ opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, amount: 0.12 }}

@@ -1691,7 +1691,7 @@ export default function App() {
   return (
     <motion.div
       id="app-root"
-      className="min-h-screen bg-black text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased"
+      className="min-h-screen bg-[#F6F4EF] text-zinc-100 flex flex-col selection:bg-green-accent selection:text-black antialiased"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5, delay: 0.1 }}
@@ -1814,7 +1814,7 @@ export default function App() {
 
 
       {/* Main Container */}
-      <main id="app-main-content" className="flex-1 w-full flex flex-col min-h-0 relative bg-black">
+      <main id="app-main-content" className="flex-1 w-full flex flex-col min-h-0 relative">
 
         <div className="relative z-10 flex-1 flex flex-col min-h-0">
           
@@ -1858,7 +1858,7 @@ export default function App() {
             {/* ── THE MODEL section — Apple keynote editorial light block ───── */}
             <motion.section
               id="the-model-section"
-              className="w-full min-h-[100dvh] py-24 bg-[#F6F4EF] bg-paper-grain paper-overlay origin-center flex items-center editorial-snap-section"
+              className="w-full min-h-[60dvh] py-16 bg-[#F6F4EF] bg-paper-grain paper-overlay origin-center flex items-center editorial-snap-section"
               initial={{ opacity: 0, y: 40, scale: 0.98 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, amount: 0.12 }}
@@ -3621,7 +3621,7 @@ export default function App() {
       {/* FOOTER AREA (Designed by Anurag Saikia based on branding guidelines) */}
       <motion.footer
         id="app-footer"
-        className="bg-[#F6F4EF] bg-paper-grain paper-overlay border-t border-editorial-muted min-h-[50dvh] px-6 md:px-12 pt-12 pb-8 text-xs editorial-snap-section"
+        className="bg-[#F6F4EF] bg-paper-grain paper-overlay px-6 md:px-12 pt-8 pb-8 text-xs editorial-snap-section"
         initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.12 }}
@@ -3629,7 +3629,7 @@ export default function App() {
       >
         <div className="max-w-7xl mx-auto">
 
-          {/* Top rule */}
+          {/* Subtle divider rule */}
           <div className="w-full h-[1px] bg-[#D4D4D4] mb-8" />
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8 items-start">
