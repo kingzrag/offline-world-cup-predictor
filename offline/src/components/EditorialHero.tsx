@@ -124,7 +124,7 @@ export function EditorialHero({
     <motion.div
       ref={heroRef}
       id="editorial-hero"
-      className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark"
+      className="relative w-full h-[100dvh] flex flex-col justify-between bg-editorial-white bg-paper-grain paper-overlay overflow-hidden select-none text-editorial-dark editorial-snap-section"
       style={{ opacity: heroOpacity, scale: heroScale }}
       initial={{ opacity: 0, y: 80, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}

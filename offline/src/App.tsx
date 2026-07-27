@@ -5,6 +5,7 @@ import football2 from './assets/images/football2.png';
 import background from './assets/images/background.png';
 import CompetitionSelector from './components/CompetitionSelector';
 import { EditorialHero } from './components/EditorialHero';
+import { useViewportSnap } from './hooks/useViewportSnap';
 import { 
   getPredictions, 
   loadFixturesInstant,
@@ -279,6 +280,9 @@ export default function App() {
   // heroScrollProgress [0.65 → 1.0] = fade to 0 + translate -28px
   const headerOpacity = useTransform(heroScrollProgress, [0, 0.6, 1], [1, 1, 0]);
   const headerY = useTransform(heroScrollProgress, [0.6, 1], [0, -28]);
+
+  // Enable smart desktop viewport chapter snapping
+  useViewportSnap({ activeTab });
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -1853,11 +1857,12 @@ export default function App() {
 
             {/* ── THE MODEL section — Apple keynote editorial light block ───── */}
             <motion.section
-              className="w-full min-h-[60dvh] py-24 bg-[#F7F4EE] origin-center flex items-center"
+              id="the-model-section"
+              className="w-full min-h-[100dvh] py-24 bg-[#F6F4EF] bg-paper-grain paper-overlay origin-center flex items-center editorial-snap-section"
               initial={{ opacity: 0, y: 40, scale: 0.98 }}
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, amount: 0.12 }}
-              transition={{ duration: 0.7, ease: [0.215, 0.61, 0.355, 1] }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
             >
               {/* Single inner orchestrator — stagger children after section fades in */}
               <motion.div
@@ -3616,11 +3621,11 @@ export default function App() {
       {/* FOOTER AREA (Designed by Anurag Saikia based on branding guidelines) */}
       <motion.footer
         id="app-footer"
-        className="bg-[#F7F4EE] border-t border-[#E0DED8] min-h-[50dvh] px-6 md:px-12 pt-12 pb-8 text-xs"
-        initial={{ opacity: 0, y: 24 }}
+        className="bg-[#F6F4EF] bg-paper-grain paper-overlay border-t border-editorial-muted min-h-[50dvh] px-6 md:px-12 pt-12 pb-8 text-xs editorial-snap-section"
+        initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.1 }}
-        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] as const }}
+        viewport={{ once: true, amount: 0.12 }}
+        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as const }}
       >
         <div className="max-w-7xl mx-auto">
 

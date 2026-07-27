@@ -468,7 +468,7 @@ export function BestPredictionsCarousel({
     <motion.section
       ref={sectionRef}
       id="todays-best-predictions"
-      className="relative w-full h-[100dvh] flex flex-col justify-center pb-4 lg:pb-2 bg-[#070707] text-zinc-150 select-none z-20 origin-center"
+      className="relative w-full h-[100dvh] flex flex-col justify-center pb-4 lg:pb-2 bg-[#070707] text-zinc-150 select-none z-20 origin-center editorial-snap-section"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ opacity: exitOpacity, scale: exitScale }}
