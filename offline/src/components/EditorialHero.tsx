@@ -324,24 +324,7 @@ export function EditorialHero({
         className="relative z-10 w-full"
       >
         <div className="max-w-7xl mx-auto px-6 md:px-14 pb-7 pt-4">
-          <div className="flex items-end justify-between">
-            {/* Countdown editorial info block */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.55, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="flex items-start gap-4 pl-3 border-l border-[#1C1B17]/14"
-            >
-              <div className="flex flex-col">
-                <span className="text-[8px] font-mono tracking-[0.30em] uppercase text-[#1C1B17]/40 mb-0.5">
-                  {countdownLabel}
-                </span>
-                <span className="text-[17px] font-mono tracking-wider font-semibold tabular-nums text-[#3a5c2d] leading-none">
-                  {countdown}
-                </span>
-              </div>
-            </motion.div>
-
+          <div className="flex items-end justify-center">
             {/* Scroll to Explore indicator */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}

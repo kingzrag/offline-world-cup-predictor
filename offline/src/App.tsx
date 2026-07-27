@@ -1733,7 +1733,7 @@ export default function App() {
           <nav className="flex items-center gap-6 md:gap-8">
             <button
               onClick={() => navigateTo('predictions')}
-              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[rgba(28,27,23,0.52)]
+              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[#4A453D]
                          hover:text-[#1C1B17] transition-colors duration-200 whitespace-nowrap pb-px
                          border-b border-transparent hover:border-[rgba(28,27,23,0.30)]"
             >
@@ -1741,7 +1741,7 @@ export default function App() {
             </button>
             <button
               onClick={() => navigateTo('favorites')}
-              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[rgba(28,27,23,0.52)]
+              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[#4A453D]
                          hover:text-[#1C1B17] transition-colors duration-200 whitespace-nowrap pb-px
                          border-b border-transparent hover:border-[rgba(28,27,23,0.30)]
                          flex items-center gap-1.5"
@@ -1779,7 +1779,7 @@ export default function App() {
           <nav className="flex items-center justify-end gap-6 md:gap-8">
             <button
               onClick={() => navigateTo('intelligence')}
-              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[rgba(28,27,23,0.52)]
+              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[#4A453D]
                          hover:text-[#1C1B17] transition-colors duration-200 whitespace-nowrap pb-px
                          border-b border-transparent hover:border-[rgba(28,27,23,0.30)]"
             >
@@ -1787,7 +1787,7 @@ export default function App() {
             </button>
             <button
               onClick={() => navigateTo('model')}
-              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[rgba(28,27,23,0.52)]
+              className="text-[9.5px] font-mono tracking-[0.26em] uppercase text-[#4A453D]
                          hover:text-[#1C1B17] transition-colors duration-200 whitespace-nowrap pb-px
                          border-b border-transparent hover:border-[rgba(28,27,23,0.30)]"
             >
