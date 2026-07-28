@@ -172,6 +172,17 @@ def debug_db_test(request: Request):
         }
 
 
+@app.get("/debug/simple")
+@limiter.limit("10/minute")
+def debug_simple(request: Request):
+    """Simple test endpoint without database."""
+    return {
+        "status": "success",
+        "message": "Routing works",
+        "timestamp": time.time()
+    }
+
+
 # Register primary API sub-routers
 app.include_router(matches.router, prefix="/api/v1")
 app.include_router(teams.router, prefix="/api/v1")
