@@ -173,9 +173,8 @@ def debug_db_test(request: Request):
 
 
 @app.get("/api/fixtures-test")
-@limiter.limit("10/minute")
 def fixtures_test(request: Request):
-    """Simple test endpoint to verify routing works."""
+    """Simple test endpoint to verify routing works without rate limiting."""
     return {
         "status": "success",
         "message": "Routing works at main app level",
