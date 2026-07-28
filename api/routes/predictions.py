@@ -15,8 +15,9 @@ prediction_service = PredictionService()
 collection_service = CollectionService()
 
 @router.get("")
-def read_predictions(
+def read_matches_predictions(
     competition_id: Optional[int] = Query(None, description="Filter predictions by Competition ID"),
+    competition_code: Optional[str] = Query(None, description="Filter predictions by Competition Code (e.g. PL, PD, SA)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -27,6 +28,9 @@ def read_predictions(
     
     if competition_id:
         query = query.join(Prediction.match).filter(Prediction.match.has(competition_id=competition_id))
+
+    if competition_code:
+        query = query.join(Prediction.match).filter(Prediction.match.has(Competition.code == competition_code.upper()))
 
     predictions = query.order_by(Prediction.created_at.desc()).all()
 
@@ -59,7 +63,9 @@ def read_predictions(
                 "utc_date": pred.match.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
                 "home_team": pred.match.home_team.name,
                 "away_team": pred.match.away_team.name,
-                "status": pred.match.status
+                "status": pred.match.status,
+                "competition_code": pred.match.competition.code if pred.match.competition else None,
+                "competition_name": pred.match.competition.name if pred.match.competition else None,
             },
             "predicted_outcome": pred_outcome,
             "predicted_winner": pred_winner,
@@ -69,10 +75,29 @@ def read_predictions(
                 "draw": draw_p
             },
             "model_version": "actual_result_override" if is_finished else pred.model_version,
-            "calculated_at": pred.updated_at.isoformat()
+            "actual_result": pred.actual_result,
+            "is_correct": pred.is_correct,
+            "calculated_at": pred.updated_at.isoformat() if pred.updated_at else None
         })
 
     return results
+
+@router.get("/accuracy-summary")
+def get_prediction_accuracy_summary(db: Session = Depends(get_db)):
+    """
+    Returns total correct, total incorrect, and accuracy rate across all evaluated historical predictions.
+    """
+    total_evaluated = db.query(Prediction).filter(Prediction.is_correct.isnot(None)).count()
+    correct_count = db.query(Prediction).filter(Prediction.is_correct == True).count()
+    incorrect_count = db.query(Prediction).filter(Prediction.is_correct == False).count()
+    accuracy_rate = (correct_count / total_evaluated * 100) if total_evaluated > 0 else 0.0
+
+    return {
+        "total_evaluated": total_evaluated,
+        "correct_predictions": correct_count,
+        "incorrect_predictions": incorrect_count,
+        "accuracy_rate_percent": round(accuracy_rate, 2)
+    }
 
 @router.post("/trigger")
 def trigger_predictions(
@@ -95,16 +120,14 @@ def trigger_predictions(
 
 @router.post("/collect")
 async def trigger_collection(
-    competition_code: str = Query("WC", description="League code to sync (default: WC for World Cup)"),
+    competition_code: str = Query("PL", description="League code to sync (e.g. PL, PD, SA, BL1, FL1, CL, WC)"),
     db: Session = Depends(get_db)
 ):
     """
-    Orchestrates live synchronization of sports API records to local PostgreSQL database.
+    Orchestrates live synchronization of sports API records to local database.
     """
     try:
         summary = await collection_service.ingest_football_data(db, competition_code)
-        
-        # After collection finishes, automatically trigger predictions update!
         prediction_service.generate_predictions_for_fixtures(db)
 
         return {

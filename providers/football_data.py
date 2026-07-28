@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 from collectors.base import BaseCollector
 from utils.logger import logger
 from providers.base import (
-    BaseProvider,
+    FootballProvider,
+    BaseProvider,  # backward-compat alias
     CompetitionData,
     MatchData,
     TeamData,
@@ -16,7 +17,7 @@ from providers.base import (
 )
 
 
-class FootballDataProvider(BaseProvider):
+class FootballDataProvider(FootballProvider):
     """
     Football-Data.org API Provider
     - Competitions, standings, fixtures, results, teams

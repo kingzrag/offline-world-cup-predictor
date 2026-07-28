@@ -1,16 +1,15 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional
 
 from utils.logger import logger
 
 
-# --- Unified Data Models ---
+# ── UNIFIED DATA MODELS ────────────────────────────────────────────────────────
 @dataclass
 class TeamData:
     """Unified representation of a team (national or club)"""
-
     id: Optional[str] = None
     name: Optional[str] = None
     short_name: Optional[str] = None
@@ -25,7 +24,6 @@ class TeamData:
 @dataclass
 class PlayerData:
     """Unified representation of a player"""
-
     id: Optional[str] = None
     name: Optional[str] = None
     position: Optional[str] = None
@@ -38,7 +36,6 @@ class PlayerData:
 @dataclass
 class MatchData:
     """Unified representation of a football match"""
-
     id: Optional[str] = None
     competition_id: Optional[str] = None
     home_team: Optional[TeamData] = None
@@ -64,15 +61,12 @@ class MatchData:
     home_yellow_cards: Optional[int] = None
     away_yellow_cards: Optional[int] = None
     source: Optional[str] = None
-    provider_ids: Optional[Dict[str, str]] = (
-        None  # Maps provider name to their match ID
-    )
+    provider_ids: Optional[Dict[str, str]] = None
 
 
 @dataclass
 class CompetitionData:
     """Unified representation of a football competition"""
-
     id: Optional[str] = None
     name: Optional[str] = None
     code: Optional[str] = None
@@ -84,7 +78,6 @@ class CompetitionData:
 @dataclass
 class StandingData:
     """Unified representation of a competition standing row"""
-
     competition_id: Optional[str] = None
     team: Optional[TeamData] = None
     position: Optional[int] = None
@@ -102,7 +95,6 @@ class StandingData:
 @dataclass
 class MatchStatisticsData:
     """Unified representation of match statistics"""
-
     match_id: Optional[str] = None
     home_possession: Optional[float] = None
     away_possession: Optional[float] = None
@@ -140,7 +132,6 @@ class MatchStatisticsData:
 @dataclass
 class PlayerMatchPerformanceData:
     """Unified representation of a player's performance in a match"""
-
     match_id: Optional[str] = None
     player: Optional[PlayerData] = None
     team: Optional[TeamData] = None
@@ -172,7 +163,6 @@ class PlayerMatchPerformanceData:
 @dataclass
 class MatchLineupData:
     """Unified representation of a match lineup"""
-
     match_id: Optional[str] = None
     team: Optional[TeamData] = None
     formation: Optional[str] = None
@@ -183,11 +173,10 @@ class MatchLineupData:
 
 @dataclass
 class MatchEventData:
-    """Unified representation of a match event (goal, card, substitution, etc.)"""
-
+    """Unified representation of a match event"""
     id: Optional[str] = None
     match_id: Optional[str] = None
-    type: Optional[str] = None  # GOAL, YELLOW_CARD, RED_CARD, SUBSTITUTION, etc.
+    type: Optional[str] = None
     minute: Optional[int] = None
     description: Optional[str] = None
     player_name: Optional[str] = None
@@ -199,12 +188,11 @@ class MatchEventData:
 @dataclass
 class InjuryData:
     """Unified representation of a player injury"""
-
     id: Optional[str] = None
     player: Optional[PlayerData] = None
     team: Optional[TeamData] = None
     injury_type: Optional[str] = None
-    status: Optional[str] = None  # OUT, DOUBTFUL, FIT
+    status: Optional[str] = None
     return_date: Optional[datetime] = None
     source: Optional[str] = None
 
@@ -212,29 +200,27 @@ class InjuryData:
 @dataclass
 class SuspensionData:
     """Unified representation of a player suspension"""
-
     id: Optional[str] = None
     player: Optional[PlayerData] = None
     team: Optional[TeamData] = None
     reason: Optional[str] = None
-    status: Optional[str] = None  # PENDING, SERVING, SERVED
+    status: Optional[str] = None
     matches_missed: Optional[int] = None
     source: Optional[str] = None
 
 
-# --- Base Provider Class ---
-class BaseProvider(ABC):
+# ── ABSTRACT FOOTBALL PROVIDER INTERFACE (SOLID Principle - Dependency Inversion) ──
+class FootballProvider(ABC):
     """
-    Abstract base class for all football data providers.
-    All providers must implement these methods, but can raise NotImplementedError
-    for functionality they don't support.
+    Abstract interface for all sports API providers (Football-Data, API-Football, SportMonks, etc.).
+    High-level business logic and prediction engines consume this interface exclusively.
     """
 
-    name: str = "BaseProvider"
+    name: str = "FootballProvider"
     enabled: bool = True
 
     def __init__(self):
-        logger.info(f"Initialized provider: {self.name}")
+        logger.info(f"Initialized football provider: {self.name}")
 
     @abstractmethod
     async def get_competitions(self) -> List[CompetitionData]:
@@ -269,7 +255,7 @@ class BaseProvider(ABC):
     async def get_match_lineups(
         self, match_id: str
     ) -> Optional[Dict[str, MatchLineupData]]:
-        """Get lineups for a specific match (home and away)"""
+        """Get lineups for a specific match"""
         raise NotImplementedError
 
     @abstractmethod
@@ -288,71 +274,46 @@ class BaseProvider(ABC):
         raise NotImplementedError
 
 
-# --- Match Intelligence Model ---
+# Alias BaseProvider to FootballProvider for 100% backward compatibility
+BaseProvider = FootballProvider
+
+
+# ── MATCH INTELLIGENCE MODEL ───────────────────────────────────────────────────
 @dataclass
 class MatchIntelligence:
-    """
-    Comprehensive intelligence scores for a match (home vs away).
-    All scores are computed from available provider data.
-    Scores are floating-point values; interpretation varies by metric.
-    """
-
+    """Comprehensive intelligence scores for a match"""
     match_id: Optional[int] = None
-
-    # --- Attacking / Defensive ---
     home_attacking_strength: float = 0.0
     away_attacking_strength: float = 0.0
     home_defensive_strength: float = 0.0
     away_defensive_strength: float = 0.0
-
-    # --- Midfield & Passing ---
     home_midfield_control: float = 0.0
     away_midfield_control: float = 0.0
     home_passing_dominance: float = 0.0
     away_passing_dominance: float = 0.0
-
-    # --- Goalkeeper ---
     home_goalkeeper_performance: float = 0.0
     away_goalkeeper_performance: float = 0.0
-
-    # --- Pressing ---
     home_pressing_intensity: float = 0.0
     away_pressing_intensity: float = 0.0
-
-    # --- Set Pieces ---
     home_set_piece_threat: float = 0.0
     away_set_piece_threat: float = 0.0
-
-    # --- Discipline ---
     home_discipline_score: float = 0.0
     away_discipline_score: float = 0.0
-
-    # --- Fatigue ---
     home_fatigue_score: float = 0.0
     away_fatigue_score: float = 0.0
-
-    # --- Substitutions ---
     home_substitution_impact: float = 0.0
     away_substitution_impact: float = 0.0
-
-    # --- Squad Availability ---
     home_player_availability_score: float = 1.0
     away_player_availability_score: float = 1.0
     home_injury_impact: float = 0.0
     away_injury_impact: float = 0.0
     home_suspension_impact: float = 0.0
     away_suspension_impact: float = 0.0
-
-    # --- Formation & Momentum ---
     home_formation_stability: float = 0.0
     away_formation_stability: float = 0.0
     home_momentum_score: float = 0.0
     away_momentum_score: float = 0.0
-
-    # --- Composite confidence ---
     confidence_score: float = 0.0
-
-    # --- Additional engineered ML-only features ---
     home_goalkeeper_strength: float = 0.0
     away_goalkeeper_strength: float = 0.0
     home_passing_strength: float = 0.0
@@ -375,8 +336,4 @@ class MatchIntelligence:
     away_squad_availability: float = 1.0
     home_tactical_stability: float = 0.5
     away_tactical_stability: float = 0.5
-
-    # --- Metadata ---
-    data_completeness: float = 0.0  # 0.0–1.0 fraction of metrics successfully computed
-    sources_used: Optional[List[str]] = None
-    computed_at: Optional[datetime] = None
+    data_completeness: float = 0.0

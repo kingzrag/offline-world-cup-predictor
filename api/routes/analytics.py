@@ -2,10 +2,14 @@
 API routes for prediction analytics and tracking.
 
 Endpoints:
-- GET /api/analytics/accuracy - Get accuracy metrics for betting markets
-- GET /api/analytics/calibration - Get calibration metrics
-- GET /api/analytics/rolling - Get rolling accuracy over time windows
-- POST /api/analytics/evaluate - Trigger evaluation of finished matches
+- GET /api/analytics/overall - Overall model accuracy and totals
+- GET /api/analytics/by-league - Accuracy breakdown per competition
+- GET /api/analytics/monthly - Monthly accuracy trends
+- GET /api/analytics/by-outcome - Home Win, Draw, Away Win accuracy
+- GET /api/analytics/markets - BTTS and Over/Under market accuracy
+- GET /api/analytics/recent - Recent evaluated predictions feed
+- GET /api/analytics/accuracy - Legacy betting market accuracy
+- POST /api/analytics/evaluate - Trigger manual evaluation of finished matches
 """
 
 from datetime import datetime, timezone, timedelta
@@ -22,6 +26,68 @@ from utils.logger import logger
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 
+# ── NEW DEDICATED PREDICTION HISTORY ANALYTICS ENDPOINTS ──────────────────────
+
+@router.get("/overall")
+def get_overall_accuracy(db: Session = Depends(get_db)):
+    """
+    Returns overall model accuracy, total predictions evaluated, correct & incorrect count.
+    """
+    logger.info("Executing GET /api/analytics/overall query...")
+    return prediction_tracking_service.get_overall_accuracy_analytics(db)
+
+
+@router.get("/by-league")
+def get_league_accuracy(db: Session = Depends(get_db)):
+    """
+    Returns prediction accuracy breakdown for every competition.
+    """
+    logger.info("Executing GET /api/analytics/by-league query...")
+    return prediction_tracking_service.get_league_accuracy_analytics(db)
+
+
+@router.get("/monthly")
+def get_monthly_accuracy(db: Session = Depends(get_db)):
+    """
+    Returns monthly accuracy trends (YYYY-MM).
+    """
+    logger.info("Executing GET /api/analytics/monthly query...")
+    return prediction_tracking_service.get_monthly_accuracy_analytics(db)
+
+
+@router.get("/by-outcome")
+def get_outcome_accuracy(db: Session = Depends(get_db)):
+    """
+    Returns breakdown accuracy for Home Win, Draw, and Away Win predictions.
+    """
+    logger.info("Executing GET /api/analytics/by-outcome query...")
+    return prediction_tracking_service.get_outcome_accuracy_analytics(db)
+
+
+@router.get("/markets")
+def get_market_accuracy(db: Session = Depends(get_db)):
+    """
+    Returns accuracy metrics for BTTS and Over/Under 2.5 betting markets.
+    """
+    logger.info("Executing GET /api/analytics/markets query...")
+    return prediction_tracking_service.get_market_accuracy_analytics(db)
+
+
+@router.get("/recent")
+def get_recent_historical_predictions(
+    limit: int = Query(50, ge=1, le=500, description="Max records to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns paginated feed of recently evaluated historical predictions.
+    """
+    logger.info(f"Executing GET /api/analytics/recent query (limit={limit}, offset={offset})...")
+    return prediction_tracking_service.get_recent_historical_predictions(db, limit=limit, offset=offset)
+
+
+# ── EXISTING / LEGACY ANALYTICS ENDPOINTS ──────────────────────────────────────
+
 @router.get("/accuracy")
 def get_accuracy_metrics(
     market_type: Optional[str] = Query(None, description="Market type filter"),
@@ -30,8 +96,6 @@ def get_accuracy_metrics(
 ):
     """
     Get accuracy metrics for betting markets.
-
-    Returns accuracy summary for each market type over the specified time window.
     """
     market_types = [market_type] if market_type else [
         "match_winner",
@@ -61,8 +125,6 @@ def get_calibration_metrics(
 ):
     """
     Get calibration metrics for a market.
-
-    Returns confidence bucket metrics showing predicted vs observed frequencies.
     """
     metrics = (
         db.query(CalibrationMetrics)
@@ -103,8 +165,6 @@ def get_rolling_accuracy(
 ):
     """
     Get rolling accuracy metrics over different time windows.
-
-    Returns accuracy for 30, 90, and 365 day windows.
     """
     query = db.query(RollingAccuracy)
     
@@ -119,159 +179,49 @@ def get_rolling_accuracy(
         RollingAccuracy.window_days
     ).all()
 
-    if not metrics:
-        raise HTTPException(
-            status_code=404,
-            detail="No rolling accuracy metrics found"
-        )
-
-    # Group by market type
-    grouped = {}
-    for m in metrics:
-        if m.market_type not in grouped:
-            grouped[m.market_type] = []
-        grouped[m.market_type].append({
-            "window_days": m.window_days,
-            "total_predictions": m.total_predictions,
-            "correct_predictions": m.correct_predictions,
-            "accuracy": m.accuracy,
-            "avg_confidence": m.avg_confidence,
-            "avg_log_loss": m.avg_log_loss,
-            "calculated_at": m.calculated_at.isoformat() if m.calculated_at else None,
-        })
-
     return {
         "status": "success",
-        "metrics": grouped,
+        "metrics": [
+            {
+                "market_type": m.market_type,
+                "window_days": m.window_days,
+                "total_predictions": m.total_predictions,
+                "correct_predictions": m.correct_predictions,
+                "accuracy": m.accuracy,
+                "avg_confidence": m.avg_confidence,
+                "avg_log_loss": m.avg_log_loss,
+                "calculated_at": m.calculated_at.isoformat() if m.calculated_at else None,
+            }
+            for m in metrics
+        ],
     }
 
 
 @router.post("/evaluate")
-def evaluate_finished_matches(
-    days_back: int = Query(7, ge=1, le=30, description="Number of days to look back"),
+def trigger_evaluation(
+    days: int = Query(7, ge=1, le=365, description="Days to look back for finished matches"),
     db: Session = Depends(get_db),
 ):
     """
-    Trigger evaluation of finished matches.
-
-    Compares stored predictions with actual results for matches that finished
-    within the specified time window.
-    """
-    since = datetime.now(timezone.utc) - timezone.timedelta(days=days_back)
-    
-    evaluated = prediction_tracking_service.evaluate_finished_matches(db, since)
-    
-    return {
-        "status": "success",
-        "evaluated_matches": evaluated,
-        "since": since.isoformat(),
-    }
-
-
-@router.post("/recalculate-calibration")
-def recalculate_calibration(
-    market_type: str = Query(..., description="Market type"),
-    bucket_size: int = Query(10, ge=5, le=20, description="Number of confidence buckets"),
-    db: Session = Depends(get_db),
-):
-    """
-    Recalculate calibration metrics for a market.
-
-    Deletes old calibration data and computes new metrics based on all
-    historical accuracy records.
+    Trigger evaluation of finished matches and compute metrics.
     """
     try:
-        metrics = prediction_tracking_service.compute_calibration_metrics(
-            db, market_type, bucket_size
-        )
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        evaluated_count = prediction_tracking_service.evaluate_finished_matches(db, since=since)
         
+        for market_type in prediction_tracking_service.MARKET_TYPES:
+            try:
+                prediction_tracking_service.compute_calibration_metrics(db, market_type)
+                for window in [30, 90, 365]:
+                    prediction_tracking_service.compute_rolling_accuracy(db, market_type, window)
+            except Exception as e:
+                logger.warning(f"Failed to compute metrics for {market_type}: {e}")
+
         return {
             "status": "success",
-            "market_type": market_type,
-            "buckets_created": len(metrics),
+            "message": f"Successfully evaluated {evaluated_count} finished matches",
+            "evaluated_count": evaluated_count,
         }
     except Exception as e:
-        logger.error(f"Failed to recalculate calibration: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/recalculate-rolling")
-def recalculate_rolling_accuracy(
-    market_type: Optional[str] = Query(None, description="Market type (all if not specified)"),
-    window_days: Optional[int] = Query(None, ge=1, le=365, description="Specific window"),
-    db: Session = Depends(get_db),
-):
-    """
-    Recalculate rolling accuracy metrics.
-
-    Computes rolling accuracy for specified market(s) and window(s).
-    """
-    market_types = [market_type] if market_type else [
-        "match_winner",
-        "asian_handicap",
-        "asian_total",
-        "btts",
-        "clean_sheet",
-        "correct_score",
-    ]
-    
-    windows = [window_days] if window_days else [30, 90, 365]
-    
-    results = []
-    for mt in market_types:
-        for wd in windows:
-            try:
-                rolling = prediction_tracking_service.compute_rolling_accuracy(db, mt, wd)
-                if rolling:
-                    results.append({
-                        "market_type": mt,
-                        "window_days": wd,
-                        "accuracy": rolling.accuracy,
-                    })
-            except Exception as e:
-                logger.error(f"Failed to recalculate rolling accuracy for {mt} ({wd} days): {e}")
-    
-    return {
-        "status": "success",
-        "calculated": len(results),
-        "results": results,
-    }
-
-
-@router.get("/predictions")
-def get_prediction_history(
-    market_type: Optional[str] = Query(None, description="Market type filter"),
-    limit: int = Query(50, ge=1, le=500, description="Max records to return"),
-    db: Session = Depends(get_db),
-):
-    """
-    Get prediction accuracy history.
-
-    Returns historical prediction accuracy records.
-    """
-    query = db.query(PredictionAccuracy)
-    
-    if market_type:
-        query = query.filter(PredictionAccuracy.market_type == market_type)
-    
-    records = query.order_by(PredictionAccuracy.evaluated_at.desc()).limit(limit).all()
-    
-    return {
-        "status": "success",
-        "count": len(records),
-        "records": [
-            {
-                "match_id": r.match_id,
-                "market_type": r.market_type,
-                "predicted_value": r.predicted_value,
-                "actual_value": r.actual_value,
-                "is_correct": r.is_correct,
-                "confidence": r.confidence,
-                "model_version": r.model_version,
-                "source": r.source,
-                "match_date": r.match_date.isoformat() if r.match_date else None,
-                "evaluated_at": r.evaluated_at.isoformat() if r.evaluated_at else None,
-            }
-            for r in records
-        ],
-    }
+        logger.error(f"Failed evaluation job: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Evaluation job failed: {str(e)}")

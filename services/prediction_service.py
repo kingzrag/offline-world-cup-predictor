@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone
 
 from ml.predictor import FootballPredictor
 from models import Match, Prediction, Competition
@@ -7,10 +8,11 @@ from services.model_service import model_service
 from services.prediction_tracking_service import prediction_tracking_service
 from utils.logger import logger
 
+
 class PredictionService:
     """
     Orchestration service for calculating and storing match win probabilities.
-    Routes all ML inference through FootballPredictor (xgboost_model.json).
+    Routes ML inference dynamically across all supported competitions.
     """
 
     def __init__(self):
@@ -23,7 +25,6 @@ class PredictionService:
         """
         logger.info("Initializing bulk match predictions pipeline...")
 
-        # 1. Fetch scheduled/timed matches
         query = db.query(Match).filter(Match.status.in_(["SCHEDULED", "TIMED"]))
         if competition_id:
             query = query.filter(Match.competition_id == competition_id)
@@ -35,21 +36,20 @@ class PredictionService:
 
         for match in scheduled_matches:
             try:
-                # Run prediction via FootballPredictor
+                comp_code = match.competition.code if (match.competition and match.competition.code) else "PL"
                 prediction_res = self.predictor.predict_outcome(
                     db=db,
                     home_team_id=match.home_team_id,
                     away_team_id=match.away_team_id,
                     match_date=match.utc_date,
-                    competition_code=match.competition.code if (match.competition and match.competition.code) else "WC"
+                    competition_code=comp_code
                 )
 
                 logger.info(
-                    f"Generated prediction for {match.home_team.name} vs {match.away_team.name}: "
+                    f"Generated prediction for [{comp_code}] {match.home_team.name} vs {match.away_team.name}: "
                     f"{prediction_res['predicted_outcome']}"
                 )
 
-                # Resolve predicted winner
                 pred_winner_id = None
                 predicted_outcome = prediction_res["predicted_outcome"]
                 if predicted_outcome == "HOME_WIN":
@@ -57,7 +57,6 @@ class PredictionService:
                 elif predicted_outcome == "AWAY_WIN":
                     pred_winner_id = match.away_team_id
 
-                # Upsert Prediction record
                 existing_pred = db.query(Prediction).filter_by(match_id=match.id).first()
                 if not existing_pred:
                     existing_pred = Prediction(
@@ -84,7 +83,6 @@ class PredictionService:
                 logger.error(f"Failed to generate prediction for Match ID {match.id} (API ID {match.api_id}): {str(e)}")
                 continue
 
-        # Commit all calculations atomically
         db.commit()
         logger.info(f"Successfully calculated and committed {len(predictions_created)} match predictions.")
         return predictions_created
@@ -98,7 +96,7 @@ class PredictionService:
     ) -> int:
         """
         Pre-compute expected goals for fixtures and persist on Prediction rows.
-        Runs ML inference offline — never on the request path.
+        Runs ML inference offline.
         """
         if not model_service.is_ready:
             model_service.load_models()
@@ -111,7 +109,6 @@ class PredictionService:
         matches = query.all()
         logger.info(f"Enrichment pipeline: {len(matches)} fixtures to process.")
 
-        # Pre-load competition id → code mapping to avoid an N+1 query inside the loop
         comp_code_map: Dict[int, str] = {
             c.id: c.code
             for c in db.query(Competition).all()
@@ -121,7 +118,7 @@ class PredictionService:
         updated = 0
         for match in matches:
             try:
-                comp_code = comp_code_map.get(match.competition_id, "WC") if match.competition_id else "WC"
+                comp_code = comp_code_map.get(match.competition_id, "PL") if match.competition_id else "PL"
 
                 goals = model_service.predict_goals(
                     db=db,
@@ -146,18 +143,10 @@ class PredictionService:
                 existing_pred.expected_home_goals = goals["expected_home_goals"]
                 existing_pred.expected_away_goals = goals["expected_away_goals"]
                 
-                # Store betting market predictions for tracking
                 self._store_betting_market_predictions(
                     db, match, goals, goals.get("model_version", "unknown")
                 )
                 
-                logger.info(
-                    f"[enrichment-store] match_id={match.id} "
-                    f"{match.home_team.name} vs {match.away_team.name} "
-                    f"stored_xg=({existing_pred.expected_home_goals:.4f}, {existing_pred.expected_away_goals:.4f}) "
-                    f"total_xg={goals['total_expected_goals']:.4f} "
-                    f"goal_model_version={goals.get('model_version', 'unknown')}"
-                )
                 updated += 1
             except Exception as e:
                 logger.error(
@@ -170,7 +159,7 @@ class PredictionService:
         logger.info(f"Enrichment pipeline complete — {updated} fixtures updated.")
         return updated
 
-    def get_predictions_history(self, db: Session, limit: int = 50) -> List[Prediction]:
+    def get_predictions_history(self, db: Session, limit: int = 100) -> List[Prediction]:
         """
         Serving pre-calculated prediction history entries.
         """
@@ -181,12 +170,8 @@ class PredictionService:
     ) -> None:
         """
         Store betting market predictions for tracking.
-
-        Extracts predictions from the goals result and stores them
-        in the betting_market_predictions table.
         """
         try:
-            # Asian Handicap
             ah_label = goals.get("asian_handicap", {}).get("label", "Level (0)")
             prediction_tracking_service.store_betting_market_prediction(
                 db=db,
@@ -199,7 +184,6 @@ class PredictionService:
                 prediction_data=goals.get("asian_handicap"),
             )
 
-            # Asian Total (Over/Under 2.5)
             ou_2_5 = goals.get("over_under", {}).get("2.5", {})
             over_prob = ou_2_5.get("over", 0.5)
             prediction_tracking_service.store_betting_market_prediction(
@@ -213,7 +197,6 @@ class PredictionService:
                 prediction_data=goals.get("over_under"),
             )
 
-            # BTTS
             btts = goals.get("btts", {})
             btts_yes_prob = btts.get("yes", 0.5)
             prediction_tracking_service.store_betting_market_prediction(
@@ -227,7 +210,6 @@ class PredictionService:
                 prediction_data=btts,
             )
 
-            # Clean Sheet
             cs = goals.get("clean_sheet", {})
             home_cs_prob = cs.get("home_clean_sheet", 0.5)
             prediction_tracking_service.store_betting_market_prediction(
@@ -241,7 +223,6 @@ class PredictionService:
                 prediction_data=cs,
             )
 
-            # Correct Score
             most_likely = goals.get("most_likely_score", "1-1")
             top_5 = goals.get("top_5_scorelines", [])
             top_prob = top_5[0].get("probability", 0.0) if top_5 else 0.0
@@ -256,8 +237,6 @@ class PredictionService:
                 prediction_data={"most_likely_score": most_likely, "top_5_scorelines": top_5},
             )
 
-            # Match Winner (1X2)
-            # Get the existing prediction for 1X2
             existing_pred = db.query(Prediction).filter_by(match_id=match.id).first()
             if existing_pred:
                 confidence = max(

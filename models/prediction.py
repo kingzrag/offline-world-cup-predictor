@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, func
 from sqlalchemy.orm import relationship
 from database.base import Base
 
@@ -15,6 +15,12 @@ class Prediction(Base):
     model_version = Column(String(50), nullable=False, default="v1.0")
     expected_home_goals = Column(Float, nullable=True)
     expected_away_goals = Column(Float, nullable=True)
+
+    # Prediction evaluation fields (populated when match finishes)
+    actual_result = Column(String(50), nullable=True)     # e.g., HOME_WIN, AWAY_WIN, DRAW
+    is_correct = Column(Boolean, nullable=True, index=True) # True = Prediction Correct, False = Prediction Incorrect
+    finished_at = Column(DateTime, nullable=True)          # Timestamp when match ended
+    evaluated_at = Column(DateTime, nullable=True)         # Timestamp when accuracy evaluation was computed
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

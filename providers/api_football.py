@@ -31,7 +31,8 @@ import requests
 from utils.logger import logger
 from utils.config import settings
 from providers.base import (
-    BaseProvider,
+    FootballProvider,
+    BaseProvider,  # backward-compat alias
     CompetitionData,
     MatchData,
     TeamData,
@@ -91,7 +92,7 @@ def _parse_af_date(date_str: str) -> Optional[datetime]:
         return None
 
 
-class APIFootballProvider(BaseProvider):
+class APIFootballProvider(FootballProvider):
     """
     API-Football Provider.
 

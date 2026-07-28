@@ -104,3 +104,39 @@ class RollingAccuracy(Base):
     
     # Timestamp
     calculated_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+class HistoricalPredictionRecord(Base):
+    """
+    Permanent immutable record of predictions for completed matches.
+    Used for historical accuracy auditing and performance analytics.
+    """
+    __tablename__ = "prediction_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    match_id = Column(Integer, ForeignKey("matches.id", ondelete="CASCADE"), nullable=False, index=True, unique=True)
+    
+    competition_code = Column(String(20), nullable=False, index=True)
+    competition_name = Column(String(100), nullable=False)
+    home_team = Column(String(100), nullable=False)
+    away_team = Column(String(100), nullable=False)
+    
+    predicted_outcome = Column(String(50), nullable=False) # HOME_WIN, AWAY_WIN, DRAW
+    home_probability = Column(Float, nullable=False)
+    draw_probability = Column(Float, nullable=False)
+    away_probability = Column(Float, nullable=False)
+    prediction_probability = Column(Float, nullable=False) # Highest win/draw probability confidence
+    
+    expected_home_goals = Column(Float, nullable=True)
+    expected_away_goals = Column(Float, nullable=True)
+    
+    actual_result = Column(String(50), nullable=False)     # HOME_WIN, AWAY_WIN, DRAW
+    actual_home_score = Column(Integer, nullable=False)
+    actual_away_score = Column(Integer, nullable=False)
+    is_correct = Column(Boolean, nullable=False, index=True)
+    
+    match_date = Column(DateTime, nullable=False, index=True)
+    recorded_at = Column(DateTime, server_default=func.now(), index=True)
+
+    # Relationship
+    match = relationship("Match")
