@@ -976,6 +976,7 @@ def get_fixtures(
         logger.info(f"GET /api/fixtures  →  Database query returned {len(matches)} matches in {query_ms}ms")
 
         # ── Serialise helpers ─────────────────────────────────────────────────────
+        logger.info(f"GET /api/fixtures  →  Starting serialization of {len(matches)} matches")
         t_serialize_start = time.perf_counter()
         live_statuses  = {"IN_PLAY", "PAUSED"}
         score_statuses = live_statuses | {"FINISHED"}
@@ -983,55 +984,79 @@ def get_fixtures(
         def _team(t):
             if not t:
                 return None
-            return {
-                "id":         t.id,
-                "name":       t.name,
-                "short_name": t.short_name,
-                "tla":        t.tla,
-                "crest_url":  t.crest_url,
-            }
+            try:
+                return {
+                    "id":         t.id,
+                    "name":       t.name,
+                    "short_name": t.short_name,
+                    "tla":        t.tla,
+                    "crest_url":  t.crest_url,
+                }
+            except Exception as team_error:
+                logger.error(f"GET /api/fixtures  →  Error serializing team: {team_error}", exc_info=True)
+                return None
 
         def _live_score(m):
             """Return score dict when data is available, else None."""
-            if m.status in score_statuses and m.home_score is not None and m.away_score is not None:
-                return {
-                    "home":    m.home_score,
-                    "away":    m.away_score,
-                    "is_live": m.status in live_statuses,
-                }
-            return None
+            try:
+                if m.status in score_statuses and m.home_score is not None and m.away_score is not None:
+                    return {
+                        "home":    m.home_score,
+                        "away":    m.away_score,
+                        "is_live": m.status in live_statuses,
+                    }
+                return None
+            except Exception as score_error:
+                logger.error(f"GET /api/fixtures  →  Error serializing live_score for match {m.id}: {score_error}", exc_info=True)
+                return None
 
         def _prediction(m):
-            pred = m.predictions[0] if m.predictions else None
-            if not pred:
+            try:
+                pred = m.predictions[0] if m.predictions else None
+                if not pred:
+                    return None
+                return {
+                    "predicted_outcome": pred.predicted_outcome,
+                    "home_probability": pred.home_probability,
+                    "away_probability": pred.away_probability,
+                    "draw_probability": pred.draw_probability,
+                }
+            except Exception as pred_error:
+                logger.error(f"GET /api/fixtures  →  Error serializing prediction for match {m.id}: {pred_error}", exc_info=True)
                 return None
-            return {
-                "predicted_outcome": pred.predicted_outcome,
-                "home_probability": pred.home_probability,
-                "away_probability": pred.away_probability,
-                "draw_probability": pred.draw_probability,
-            }
 
-        fixtures_out = [
-            {
-                "id":           m.id,
-                "kickoff_time": m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None,
-                "status":       m.status,
-                "stage":        m.stage,
-                "group":        m.group,
-                "venue":        m.home_team.venue if m.home_team else None,
-                "competition":  comp.name,
-                "home_team":    _team(m.home_team),
-                "away_team":    _team(m.away_team),
-                "live_score":   _live_score(m),
-                "winner":       m.winner,
-                "prediction":   _prediction(m),
-                "live_minute":  m.live_minute,
-            }
-            for m in matches
-        ]
+        try:
+            fixtures_out = []
+            for idx, m in enumerate(matches):
+                try:
+                    fixture = {
+                        "id":           m.id,
+                        "kickoff_time": m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None,
+                        "status":       m.status,
+                        "stage":        m.stage,
+                        "group":        m.group,
+                        "venue":        m.home_team.venue if m.home_team else None,
+                        "competition":  comp.name,
+                        "home_team":    _team(m.home_team),
+                        "away_team":    _team(m.away_team),
+                        "live_score":   _live_score(m),
+                        "winner":       m.winner,
+                        "prediction":   _prediction(m),
+                        "live_minute":  m.live_minute,
+                    }
+                    fixtures_out.append(fixture)
+                    if idx < 3:  # Log first 3 matches for debugging
+                        logger.info(f"GET /api/fixtures  →  Serialized match {idx+1}/{len(matches)}: id={m.id}, status={m.status}")
+                except Exception as match_error:
+                    logger.error(f"GET /api/fixtures  →  Error serializing match {m.id} at index {idx}: {match_error}", exc_info=True)
+                    raise
+        except Exception as serialization_error:
+            logger.error(f"GET /api/fixtures  →  Serialization failed: {serialization_error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Serialization failed: {str(serialization_error)}")
+            
         t_serialize_end = time.perf_counter()
         serialize_ms = int((t_serialize_end - t_serialize_start) * 1000)
+        logger.info(f"GET /api/fixtures  →  Serialization completed in {serialize_ms}ms")
 
         t_end = time.perf_counter()
         elapsed_ms = int((t_end - t_start) * 1000)
