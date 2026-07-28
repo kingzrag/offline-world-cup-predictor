@@ -172,6 +172,17 @@ def debug_db_test(request: Request):
         }
 
 
+@app.get("/api/fixtures-test")
+@limiter.limit("10/minute")
+def fixtures_test(request: Request):
+    """Simple test endpoint to verify routing works."""
+    return {
+        "status": "success",
+        "message": "Routing works at main app level",
+        "timestamp": time.time()
+    }
+
+
 @app.get("/debug/simple")
 @limiter.limit("10/minute")
 def debug_simple(request: Request):
