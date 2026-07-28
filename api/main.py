@@ -148,6 +148,30 @@ def health_check(request: Request):
     }
 
 
+@app.get("/debug/db-test")
+@limiter.limit("10/minute")
+def debug_db_test(request: Request):
+    """Simple database test endpoint."""
+    try:
+        from database.connection import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        result = db.execute(text("SELECT 1")).scalar()
+        db.close()
+        return {
+            "status": "success",
+            "db_connection": result == 1,
+            "message": "Database connection successful"
+        }
+    except Exception as e:
+        logger.error(f"Database test failed: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "db_connection": False,
+            "message": str(e)
+        }
+
+
 # Register primary API sub-routers
 app.include_router(matches.router, prefix="/api/v1")
 app.include_router(teams.router, prefix="/api/v1")
