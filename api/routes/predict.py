@@ -813,6 +813,35 @@ def get_h2h(
     }
 
 
+@router.get("/fixtures/minimal")
+def get_fixtures_minimal():
+    """
+    Minimal fixtures endpoint returning mock data to test routing in production.
+    """
+    logger.info("GET /api/fixtures/minimal - Returning mock data")
+    return {
+        "status": "success",
+        "competition": "FIFA World Cup (MOCK DATA)",
+        "count": 1,
+        "fixtures": [{
+            "id": 99999,
+            "kickoff_time": "2026-06-26T04:06:12.691831Z",
+            "status": "TIMED",
+            "stage": "GROUP_STAGE",
+            "group": "A",
+            "venue": "Mock Stadium",
+            "competition": "FIFA World Cup",
+            "home_team": {"id": 103, "name": "Argentina", "short_name": "Argentina", "tla": "ARG", "crest_url": ""},
+            "away_team": {"id": 104, "name": "France", "short_name": "France", "tla": "FRA", "crest_url": ""},
+            "live_score": None,
+            "winner": None,
+            "prediction": {"predicted_outcome": "DRAW", "home_probability": 0.33, "away_probability": 0.33, "draw_probability": 0.34},
+            "live_minute": None,
+        }],
+        "debug": "This is mock data - endpoint is reachable but database access is disabled for debugging"
+    }
+
+
 @router.get("/fixtures", summary="FIFA World Cup fixtures — all statuses with live scores")
 def get_fixtures(
     status:           Optional[str]  = Query(
