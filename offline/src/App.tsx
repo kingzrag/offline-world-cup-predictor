@@ -1940,7 +1940,13 @@ export default function App() {
 
         {/* 2. DEDICATED PREDICTIONS TERMINAL */}
         {activeTab === 'predictions' && (
-          <PredictionFeed />
+          <PredictionFeed
+            matches={sourceMatches}
+            isLoading={isLoadingMatches}
+            favoriteMatchIds={favoriteMatchIds}
+            onToggleFavorite={toggleFavoriteMatch}
+            onViewAnalysis={openMatchAnalysis}
+          />
         )}
 
 

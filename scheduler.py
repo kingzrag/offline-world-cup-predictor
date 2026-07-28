@@ -11,7 +11,15 @@ from services.collection_service import CollectionService
 from services.transfermarkt_service import TransfermarktService
 from utils.logger import logger
 
-SCHEDULED_INTERNATIONAL_COMPETITIONS = [
+from services.prediction_service import PredictionService
+
+SCHEDULED_COMPETITIONS = [
+    "PL",
+    "PD",
+    "SA",
+    "BL1",
+    "FL1",
+    "CL",
     "WC",
     "EC",
     "CA",
@@ -26,12 +34,22 @@ def run_full_provider_pipeline():
     db = SessionLocal()
     try:
         service = CollectionService()
+        pred_service = PredictionService()
         summary = {}
-        for competition_code in SCHEDULED_INTERNATIONAL_COMPETITIONS:
+        for competition_code in SCHEDULED_COMPETITIONS:
             summary[competition_code] = asyncio.run(
                 service.ingest_football_data(db, competition_code)
             )
             db.expire_all()
+        
+        # Generate predictions for all upcoming fixtures across all competitions
+        try:
+            predictions = pred_service.generate_predictions_for_fixtures(db)
+            summary["predictions_generated"] = len(predictions)
+        except Exception as pred_err:
+            logger.warning(f"Prediction generation pipeline failed: {pred_err}")
+            summary["predictions_generated"] = f"failed: {pred_err}"
+
         try:
             summary["SofaScore"] = asyncio.run(service.ingest_sofascore_live(db))
         except Exception as sofascore_err:

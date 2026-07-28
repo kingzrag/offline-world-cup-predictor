@@ -1,652 +1,575 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Heart, Star, Clock, TrendingUp, Activity, Zap } from 'lucide-react';
+import { MatchPrediction } from '../types';
+import { COMPETITION_FILTERS, SUPPORTED_COMPETITIONS } from '../config/competitions';
+import {
+  formatSmartKickoffLocal,
+  isKickoffToday,
+  isKickoffTomorrow,
+} from '../dateTimeUtils';
 
-// ─── Types for backend data structure ───────────────────────────────────────────
-interface FavoriteClub {
-  id: string;
-  name: string;
-  logo?: string;
+// ─── Props ────────────────────────────────────────────────────────────────────
+interface PredictionFeedProps {
+  matches?: MatchPrediction[];
+  isLoading?: boolean;
+  favoriteMatchIds?: string[];
+  onToggleFavorite?: (matchId: string) => void;
+  onViewAnalysis?: (match: MatchPrediction) => void;
 }
 
-interface Competition {
-  id: string;
-  name: string;
-  logo?: string;
-  country?: string;
-}
-
-interface Country {
-  code: string;
-  name: string;
-  flag?: string;
-}
-
-interface SavedFilter {
-  id: string;
-  name: string;
-  count?: number;
-}
-
-interface FilterItem {
-  id: string;
-  label: string;
-  count?: number;
-}
-
-interface MatchData {
-  id: string;
-  competition: string;
-  competitionLogo?: string;
-  homeTeam: string;
-  awayTeam: string;
-  kickoffTime: string;
-  prediction: string;
-  confidence: string;
-  probability: number;
-  expectedGoals: number;
-  modelSignals: string[];
-  simulationCount: number;
-  status: string;
-}
-
-interface Statistics {
-  todayMatches: number;
-  liveMatches: number;
-  upcoming: number;
-  completed: number;
-  highestConfidence: number;
-  averageConfidence: number;
-  lastSync: string;
-}
-
-// ─── Skeleton Loading Components ───────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 const Skeleton = ({ className }: { className?: string }) => (
   <div className={`animate-pulse bg-[#E8E6E1] rounded ${className}`} />
 );
 
-const SidebarSkeleton = () => (
-  <div className="space-y-6">
-    {[1, 2, 3, 4].map((i) => (
-      <div key={i} className="space-y-3">
-        <Skeleton className="h-4 w-24" />
-        <div className="space-y-2 pl-4">
-          {[1, 2, 3].map((j) => (
-            <Skeleton key={j} className="h-3 w-full" />
+// ─── Confidence badge ─────────────────────────────────────────────────────────
+const ConfidenceBadge = ({ confidence }: { confidence: 'High' | 'Medium' | 'Low' }) => {
+  const styles = {
+    High:   'bg-[#3a5c2d]/12 text-[#3a5c2d] border border-[#3a5c2d]/20',
+    Medium: 'bg-[#8B7355]/12 text-[#8B7355] border border-[#8B7355]/20',
+    Low:    'bg-[#9B9B9B]/12 text-[#6B6B6B] border border-[#9B9B9B]/20',
+  };
+  return (
+    <span className={`text-[9px] font-mono uppercase tracking-[0.18em] px-1.5 py-0.5 rounded-sm ${styles[confidence]}`}>
+      {confidence}
+    </span>
+  );
+};
+
+// ─── Live pill ────────────────────────────────────────────────────────────────
+const LivePill = () => (
+  <span className="inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-[0.18em] px-1.5 py-0.5 rounded-sm bg-red-500/10 text-red-500 border border-red-500/20">
+    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+    Live
+  </span>
+);
+
+// ─── Probability bar ──────────────────────────────────────────────────────────
+const ProbBar = ({ probA, probD, probB }: { probA: number; probD: number; probB: number }) => {
+  const total = (probA || 0) + (probD || 0) + (probB || 0) || 100;
+  const a = Math.round((probA / total) * 100);
+  const d = Math.round((probD / total) * 100);
+  const b = 100 - a - d;
+  return (
+    <div className="flex h-1 rounded-full overflow-hidden gap-px">
+      <div className="bg-[#3a5c2d]" style={{ width: `${a}%` }} />
+      <div className="bg-[#8B7355]" style={{ width: `${d}%` }} />
+      <div className="bg-[#B44C2A]" style={{ width: `${b}%` }} />
+    </div>
+  );
+};
+
+// ─── Match card ───────────────────────────────────────────────────────────────
+const MatchCard = ({
+  match,
+  isFavorite,
+  onToggleFavorite,
+  onViewAnalysis,
+}: {
+  match: MatchPrediction;
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
+  onViewAnalysis: (match: MatchPrediction) => void;
+}) => {
+  const isLive = match.status === 'LIVE';
+  const maxProb = Math.max(match.probA ?? 0, match.probD ?? 0, match.probB ?? 0);
+  const kickoff = match.kickoffTime
+    ? formatSmartKickoffLocal(match.kickoffTime)
+    : match.date;
+
+  // Prediction label: humanise HOME_WIN / AWAY_WIN / DRAW
+  const predLabel = (() => {
+    const p = match.prediction?.toUpperCase();
+    if (p === 'HOME_WIN') return match.teamA;
+    if (p === 'AWAY_WIN') return match.teamB;
+    if (p === 'DRAW') return 'Draw';
+    return match.prediction;
+  })();
+
+  return (
+    <div className="border border-[#D4D4D4] rounded bg-white hover:border-[#B8B4AC] transition-all duration-200 flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-[#EFEFEF]">
+        <span className="text-[9px] font-mono uppercase tracking-[0.22em] text-[#6B6B6B]">
+          {match.competition || 'Match'}
+        </span>
+        <div className="flex items-center gap-2">
+          {isLive ? <LivePill /> : <ConfidenceBadge confidence={match.confidence} />}
+          <button
+            onClick={() => onToggleFavorite(match.id)}
+            className="text-[#B8B4AC] hover:text-[#3a5c2d] transition-colors duration-150"
+            title={isFavorite ? 'Remove from bookmarks' : 'Add to bookmarks'}
+          >
+            <Heart
+              className="w-3 h-3"
+              fill={isFavorite ? '#3a5c2d' : 'none'}
+              stroke={isFavorite ? '#3a5c2d' : 'currentColor'}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* Teams */}
+      <div className="px-4 py-3 flex-1">
+        <div className="space-y-1 mb-3">
+          <div className="text-sm font-serif text-[#1C1B17] leading-snug">{match.teamA}</div>
+          <div className="text-[9px] font-mono uppercase tracking-widest text-[#9B9B9B]">vs</div>
+          <div className="text-sm font-serif text-[#1C1B17] leading-snug">{match.teamB}</div>
+        </div>
+
+        {/* Prob bar */}
+        <ProbBar probA={match.probA} probD={match.probD} probB={match.probB} />
+
+        {/* Prob labels */}
+        <div className="flex justify-between mt-1 text-[8px] font-mono text-[#9B9B9B]">
+          <span>{Math.round(match.probA ?? 0)}%</span>
+          <span>{Math.round(match.probD ?? 0)}%</span>
+          <span>{Math.round(match.probB ?? 0)}%</span>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 pb-3">
+        <div className="flex items-center justify-between text-[9px] font-mono text-[#8B8B8B] mb-2.5">
+          <span className="flex items-center gap-1">
+            <Clock className="w-2.5 h-2.5" />
+            {isLive && match.minute != null ? `${match.minute}'` : kickoff}
+          </span>
+          <span className="text-[#3a5c2d] font-semibold">{maxProb.toFixed(0)}%</span>
+        </div>
+
+        {/* Prediction */}
+        {predLabel && (
+          <div className="text-[9px] font-mono text-[#4A4A4A] mb-2.5 truncate">
+            Model: <span className="text-[#1C1B17] font-semibold">{predLabel}</span>
+          </div>
+        )}
+
+        <button
+          onClick={() => onViewAnalysis(match)}
+          className="w-full px-3 py-1.5 text-[8.5px] font-mono uppercase tracking-[0.18em] border border-[#D4D4D4] text-[#1C1B17] rounded hover:bg-[#F7F4EE] hover:border-[#B8B4AC] transition-all duration-150"
+        >
+          Analysis →
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Left sidebar ─────────────────────────────────────────────────────────────
+const LeftSidebar = ({
+  matches,
+  activeFilter,
+  onFilterChange,
+  favoriteCount,
+  isLoading,
+}: {
+  matches: MatchPrediction[];
+  activeFilter: string;
+  onFilterChange: (id: string) => void;
+  favoriteCount: number;
+  isLoading: boolean;
+}) => {
+  // Build per-competition live counts
+  const competitionCounts = useMemo(() => {
+    const counts: Record<string, { total: number; live: number }> = {};
+    for (const m of matches) {
+      const cid = (m.competitionId ?? '').toUpperCase();
+      if (!cid) continue;
+      if (!counts[cid]) counts[cid] = { total: 0, live: 0 };
+      counts[cid].total++;
+      if (m.status === 'LIVE') counts[cid].live++;
+    }
+    return counts;
+  }, [matches]);
+
+  // Only show competitions that have at least 1 match in the feed
+  const activeCompetitions = SUPPORTED_COMPETITIONS.filter(
+    c => competitionCounts[c.id]?.total > 0
+  );
+
+  if (isLoading) {
+    return (
+      <aside className="hidden lg:block w-56 shrink-0 border-r border-[#D4D4D4] pt-8 px-5 space-y-6 min-h-screen">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-20" />
+            {[1, 2, 3].map(j => <Skeleton key={j} className="h-3 w-full mt-1.5" />)}
+          </div>
+        ))}
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="hidden lg:block w-56 shrink-0 border-r border-[#D4D4D4] pt-8 px-5 space-y-6 min-h-screen sticky top-0 overflow-y-auto max-h-screen">
+
+      {/* Quick filters */}
+      <div>
+        <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-3">Quick Filters</h3>
+        <div className="space-y-0.5">
+          {[
+            { id: 'all',       label: 'All Matches',      icon: <Activity className="w-2.5 h-2.5" /> },
+            { id: 'live',      label: 'Live',             icon: <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse inline-block" /> },
+            { id: 'today',     label: 'Today',            icon: <Clock className="w-2.5 h-2.5" /> },
+            { id: 'tomorrow',  label: 'Tomorrow',         icon: <TrendingUp className="w-2.5 h-2.5" /> },
+            { id: 'favorites', label: `Bookmarks (${favoriteCount})`, icon: <Heart className="w-2.5 h-2.5" /> },
+          ].map(f => (
+            <button
+              key={f.id}
+              onClick={() => onFilterChange(f.id)}
+              className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[9.5px] font-mono text-left transition-all duration-150
+                ${activeFilter === f.id
+                  ? 'bg-[#1C1B17] text-[#F7F4EE]'
+                  : 'text-[#4A4A4A] hover:bg-[#F0EDE6]'
+                }`}
+            >
+              <span className={activeFilter === f.id ? 'text-[#F7F4EE]' : 'text-[#8B8B8B]'}>{f.icon}</span>
+              {f.label}
+            </button>
           ))}
         </div>
       </div>
-    ))}
-  </div>
-);
 
-const FeaturedMatchSkeleton = () => (
-  <div className="border border-[#D4D4D4] rounded-lg p-8 space-y-6">
-    <Skeleton className="h-6 w-32" />
-    <div className="space-y-4">
-      <Skeleton className="h-12 w-1/2" />
-      <Skeleton className="h-8 w-16" />
-      <Skeleton className="h-12 w-1/2" />
-    </div>
-    <div className="grid grid-cols-2 gap-4">
-      {[1, 2, 3, 4, 5, 6].map((i) => (
-        <Skeleton key={i} className="h-4 w-full" />
-      ))}
-    </div>
-    <Skeleton className="h-10 w-40" />
-  </div>
-);
-
-const MatchCardSkeleton = () => (
-  <div className="border border-[#D4D4D4] rounded-lg p-6 space-y-4">
-    <Skeleton className="h-4 w-24" />
-    <div className="space-y-3">
-      <Skeleton className="h-8 w-3/4" />
-      <Skeleton className="h-6 w-12" />
-      <Skeleton className="h-8 w-3/4" />
-    </div>
-    <div className="space-y-2">
-      <Skeleton className="h-4 w-1/2" />
-      <Skeleton className="h-4 w-1/3" />
-    </div>
-    <Skeleton className="h-8 w-32" />
-  </div>
-);
-
-const StatisticsSkeleton = () => (
-  <div className="space-y-4">
-    {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-      <div key={i} className="flex justify-between items-center">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-4 w-16" />
-      </div>
-    ))}
-  </div>
-);
-
-// ─── Empty State Components ───────────────────────────────────────────────────
-const EmptyState = ({ message }: { message: string }) => (
-  <div className="flex flex-col items-center justify-center py-20 px-8 border border-dashed border-[#D4D4D4] rounded-lg">
-    <div className="text-[#4A4A4A] text-sm font-serif italic mb-4">No predictions available.</div>
-    <div className="text-[#6B6B6B] text-xs">{message}</div>
-  </div>
-);
-
-const LoadingState = () => (
-  <div className="flex flex-col items-center justify-center py-20">
-    <div className="w-8 h-8 border-2 border-[#8B7355] border-t-transparent rounded-full animate-spin mb-4" />
-    <div className="text-[#6B6B6B] text-xs font-mono uppercase tracking-wider">Loading predictions...</div>
-  </div>
-);
-
-const APIUnavailableState = () => (
-  <div className="flex flex-col items-center justify-center py-20 px-8 border border-dashed border-[#D4D4D4] rounded-lg">
-    <div className="text-[#4A4A4A] text-sm font-serif italic mb-4">Prediction service temporarily unavailable.</div>
-    <div className="text-[#6B6B6B] text-xs">Please check your connection and try again.</div>
-  </div>
-);
-
-// ─── Left Sidebar Component ───────────────────────────────────────────────────
-const LeftSidebar = ({
-  favoriteClubs,
-  favoriteCompetitions,
-  countries,
-  savedFilters,
-  isLoading
-}: {
-  favoriteClubs?: FavoriteClub[];
-  favoriteCompetitions?: Competition[];
-  countries?: Country[];
-  savedFilters?: SavedFilter[];
-  isLoading?: boolean;
-}) => {
-  if (isLoading) {
-    return (
-      <aside className="w-64 border-r border-[#D4D4D4] p-6 space-y-8">
-        <SidebarSkeleton />
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="w-64 border-r border-[#D4D4D4] p-6 space-y-8">
-      {/* Favorites */}
-      <div>
-        <h3 className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] mb-4 pb-2 border-b border-[#D4D4D4]">
-          Favorites
-        </h3>
-        <div className="space-y-2">
-          {favoriteClubs && favoriteClubs.length > 0 ? (
-            favoriteClubs.map((club) => (
-              <div key={club.id} className="flex items-center gap-3 text-sm text-[#1C1B17] font-serif">
-                {club.logo && <span className="text-lg">{club.logo}</span>}
-                <span>{club.name}</span>
-              </div>
-            ))
-          ) : (
-            <div className="text-xs text-[#6B6B6B] italic">[Favorite Club]</div>
-          )}
+      {/* Competitions with matches */}
+      {activeCompetitions.length > 0 && (
+        <div>
+          <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-3">Competitions</h3>
+          <div className="space-y-0.5">
+            {activeCompetitions.map(comp => {
+              const cnt = competitionCounts[comp.id];
+              return (
+                <button
+                  key={comp.id}
+                  onClick={() => onFilterChange(comp.id)}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-[9.5px] font-mono text-left transition-all duration-150
+                    ${activeFilter === comp.id
+                      ? 'bg-[#1C1B17] text-[#F7F4EE]'
+                      : 'text-[#4A4A4A] hover:bg-[#F0EDE6]'
+                    }`}
+                >
+                  <span className="truncate">{comp.shortName}</span>
+                  <span className={`text-[8px] tabular-nums ml-1 shrink-0 ${activeFilter === comp.id ? 'text-[#F7F4EE]/60' : 'text-[#9B9B9B]'}`}>
+                    {cnt.live > 0 ? (
+                      <span className="text-red-400 font-bold">{cnt.live} live</span>
+                    ) : cnt.total}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Favorite Competitions */}
-      <div>
-        <h3 className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] mb-4 pb-2 border-b border-[#D4D4D4]">
-          Favorite Competitions
-        </h3>
-        <div className="space-y-2">
-          {favoriteCompetitions && favoriteCompetitions.length > 0 ? (
-            favoriteCompetitions.map((comp) => (
-              <div key={comp.id} className="flex items-center gap-3 text-sm text-[#1C1B17] font-serif">
-                {comp.logo && <span className="text-lg">{comp.logo}</span>}
-                <span>{comp.name}</span>
-              </div>
-            ))
-          ) : (
-            <div className="text-xs text-[#6B6B6B] italic">[Competition]</div>
-          )}
-        </div>
-      </div>
-
-      {/* Countries */}
-      <div>
-        <h3 className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] mb-4 pb-2 border-b border-[#D4D4D4]">
-          Countries
-        </h3>
-        <div className="space-y-2">
-          {countries && countries.length > 0 ? (
-            countries.map((country) => (
-              <div key={country.code} className="flex items-center gap-3 text-sm text-[#1C1B17] font-serif">
-                {country.flag && <span className="text-lg">{country.flag}</span>}
-                <span>{country.name}</span>
-              </div>
-            ))
-          ) : (
-            <div className="text-xs text-[#6B6B6B] italic">[Country]</div>
-          )}
-        </div>
-      </div>
-
-      {/* Saved Filters */}
-      <div>
-        <h3 className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] mb-4 pb-2 border-b border-[#D4D4D4]">
-          Saved Filters
-        </h3>
-        <div className="space-y-2">
-          {savedFilters && savedFilters.length > 0 ? (
-            savedFilters.map((filter) => (
-              <div key={filter.id} className="flex items-center justify-between text-sm text-[#1C1B17] font-serif">
-                <span>{filter.name}</span>
-                {filter.count !== undefined && (
-                  <span className="text-xs text-[#6B6B6B] font-mono">({filter.count})</span>
-                )}
-              </div>
-            ))
-          ) : (
-            <div className="text-xs text-[#6B6B6B] italic">[Saved Filter]</div>
-          )}
+      {/* Legend */}
+      <div className="pt-4 border-t border-[#EFEFEF]">
+        <div className="space-y-1.5">
+          {[
+            { color: 'bg-[#3a5c2d]', label: 'Home win %' },
+            { color: 'bg-[#8B7355]', label: 'Draw %' },
+            { color: 'bg-[#B44C2A]', label: 'Away win %' },
+          ].map(item => (
+            <div key={item.label} className="flex items-center gap-2">
+              <span className={`w-2 h-1.5 rounded-sm ${item.color}`} />
+              <span className="text-[8.5px] font-mono text-[#9B9B9B]">{item.label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </aside>
   );
 };
 
-// ─── Filter Bar Component ───────────────────────────────────────────────────
+// ─── Right info panel ─────────────────────────────────────────────────────────
+const RightPanel = ({
+  matches,
+  isLoading,
+}: {
+  matches: MatchPrediction[];
+  isLoading: boolean;
+}) => {
+  const stats = useMemo(() => {
+    const live = matches.filter(m => m.status === 'LIVE').length;
+    const today = matches.filter(m => isKickoffToday(m.kickoffTime)).length;
+    const upcoming = matches.filter(m => m.status === 'UPCOMING').length;
+    const completed = matches.filter(m => m.status === 'COMPLETED').length;
+    const confidences = matches.map(m => Math.max(m.probA ?? 0, m.probD ?? 0, m.probB ?? 0)).filter(v => v > 0);
+    const highest = confidences.length ? Math.max(...confidences) : 0;
+    const avg = confidences.length ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0;
+    return { live, today, upcoming, completed, highest, avg };
+  }, [matches]);
+
+  const row = (label: string, value: string | number) => (
+    <div className="flex justify-between items-center py-2 border-b border-[#EFEFEF]">
+      <span className="text-[8.5px] font-mono uppercase tracking-[0.18em] text-[#9B9B9B]">{label}</span>
+      <span className="text-sm font-serif text-[#1C1B17]">{value}</span>
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <aside className="hidden xl:block w-52 shrink-0 border-l border-[#D4D4D4] pt-8 px-5 min-h-screen">
+        {[1, 2, 3, 4, 5].map(i => (
+          <div key={i} className="flex justify-between py-2 border-b border-[#EFEFEF]">
+            <Skeleton className="h-2.5 w-20" />
+            <Skeleton className="h-2.5 w-8" />
+          </div>
+        ))}
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="hidden xl:block w-52 shrink-0 border-l border-[#D4D4D4] pt-8 px-5 min-h-screen sticky top-0 max-h-screen overflow-y-auto">
+      <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-4">Live Stats</h3>
+      {row('Live now', stats.live > 0 ? `🔴 ${stats.live}` : 0)}
+      {row('Today', stats.today)}
+      {row('Upcoming', stats.upcoming)}
+      {row('Completed', stats.completed)}
+      {row('Total', matches.length)}
+      {row('Top confidence', `${stats.highest.toFixed(0)}%`)}
+      {row('Avg confidence', `${stats.avg.toFixed(0)}%`)}
+
+      <div className="mt-4 pt-4 border-t border-[#EFEFEF]">
+        <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-3">Competitions</h3>
+        <div className="space-y-1">
+          {SUPPORTED_COMPETITIONS.slice(0, 8).map(c => (
+            <div key={c.id} className="text-[8.5px] font-mono text-[#4A4A4A] flex items-center gap-1.5">
+              <span className="text-[9px]">{c.country === 'England' ? '🏴󠁧󠁢󠁥󠁮󠁧󠁿' : c.country === 'Spain' ? '🇪🇸' : c.country === 'Germany' ? '🇩🇪' : c.country === 'Italy' ? '🇮🇹' : c.country === 'France' ? '🇫🇷' : c.country === 'Europe' ? '⭐' : '🌍'}</span>
+              {c.shortName}
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+};
+
+// ─── Filter bar ───────────────────────────────────────────────────────────────
 const FilterBar = ({
-  filters,
+  matches,
   activeFilter,
   onFilterChange,
-  isLoading
 }: {
-  filters: FilterItem[];
+  matches: MatchPrediction[];
   activeFilter: string;
-  onFilterChange: (filterId: string) => void;
-  isLoading?: boolean;
+  onFilterChange: (id: string) => void;
 }) => {
-  if (isLoading) {
-    return (
-      <div className="flex gap-3 pb-6 border-b border-[#D4D4D4]">
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-          <Skeleton key={i} className="h-10 w-24 rounded" />
-        ))}
-      </div>
-    );
-  }
+  // Build counts per competition
+  const compCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const match of matches) {
+      const cid = (match.competitionId ?? '').toUpperCase();
+      m[cid] = (m[cid] ?? 0) + 1;
+    }
+    return m;
+  }, [matches]);
+
+  const liveCount = matches.filter(m => m.status === 'LIVE').length;
+  const todayCount = matches.filter(m => isKickoffToday(m.kickoffTime)).length;
+  const tomorrowCount = matches.filter(m => isKickoffTomorrow(m.kickoffTime)).length;
+
+  // Build chip list: core filters + only competitions that have matches
+  const chips = [
+    { id: 'all',       label: 'All',           count: matches.length },
+    { id: 'live',      label: '🔴 Live',        count: liveCount },
+    { id: 'today',     label: 'Today',          count: todayCount },
+    { id: 'tomorrow',  label: 'Tomorrow',       count: tomorrowCount },
+    { id: 'favorites', label: '♥ Bookmarks',    count: undefined },
+    ...COMPETITION_FILTERS
+      .filter(f => !['all','live','today','tomorrow'].includes(f.id))
+      .filter(f => compCounts[(f.id ?? '').toUpperCase()] > 0)
+      .map(f => ({ id: f.id, label: f.label, count: compCounts[(f.id ?? '').toUpperCase()] })),
+  ];
 
   return (
-    <div className="flex gap-3 pb-6 border-b border-[#D4D4D4] overflow-x-auto">
-      {filters.map((filter) => (
+    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+      {chips.map(chip => (
         <button
-          key={filter.id}
-          onClick={() => onFilterChange(filter.id)}
-          className={`px-4 py-2 text-xs font-mono uppercase tracking-wider rounded transition-all duration-200 whitespace-nowrap ${
-            activeFilter === filter.id
+          key={chip.id}
+          onClick={() => onFilterChange(chip.id)}
+          className={`shrink-0 px-3 py-1.5 text-[9px] font-mono uppercase tracking-[0.18em] rounded transition-all duration-150 whitespace-nowrap
+            ${activeFilter === chip.id
               ? 'bg-[#1C1B17] text-[#F7F4EE]'
-              : 'bg-transparent text-[#4A4A4A] hover:bg-[#E8E6E1]'
-          }`}
+              : 'bg-[#F0EDE6] text-[#4A4A4A] hover:bg-[#E8E4DB]'
+            }`}
         >
-          {filter.label}
-          {filter.count !== undefined && ` (${filter.count})`}
+          {chip.label}
+          {chip.count !== undefined && chip.count > 0 && (
+            <span className={`ml-1 ${activeFilter === chip.id ? 'text-white/50' : 'text-[#9B9B9B]'}`}>
+              ({chip.count})
+            </span>
+          )}
         </button>
       ))}
     </div>
   );
 };
 
-// ─── Featured Match Card Component ───────────────────────────────────────────
-const FeaturedMatchCard = ({ match, isLoading }: { match?: MatchData; isLoading?: boolean }) => {
-  if (isLoading) {
-    return <FeaturedMatchSkeleton />;
-  }
-
-  if (!match) {
-    return (
-      <div className="border border-[#D4D4D4] rounded-lg p-8 space-y-6">
-        <div className="text-xs text-[#6B6B6B] font-mono uppercase tracking-wider">[Competition]</div>
-        <div className="space-y-4">
-          <div className="text-2xl font-serif text-[#1C1B17]">[Home Team]</div>
-          <div className="text-sm text-[#4A4A4A] font-mono uppercase">vs</div>
-          <div className="text-2xl font-serif text-[#1C1B17]">[Away Team]</div>
-        </div>
-        <div className="grid grid-cols-2 gap-4 text-xs">
-          <div>
-            <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Kickoff</div>
-            <div className="text-[#1C1B17] font-serif">[Kickoff Time]</div>
-          </div>
-          <div>
-            <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Status</div>
-            <div className="text-[#1C1B17] font-serif">[Match Status]</div>
-          </div>
-          <div>
-            <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Prediction</div>
-            <div className="text-[#1C1B17] font-serif">[Prediction]</div>
-          </div>
-          <div>
-            <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Confidence</div>
-            <div className="text-[#8B7355] font-serif">[Confidence]</div>
-          </div>
-          <div>
-            <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Probability</div>
-            <div className="text-[#1C1B17] font-serif">[Probability]</div>
-          </div>
-          <div>
-            <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Expected Goals</div>
-            <div className="text-[#1C1B17] font-serif">[Expected Goals]</div>
-          </div>
-        </div>
-        <div className="text-xs text-[#6B6B6B] font-mono uppercase tracking-wider">
-          [Model Signals] • [Simulation Count] simulations
-        </div>
-        <button className="px-6 py-3 bg-[#1C1B17] text-[#F7F4EE] text-xs font-mono uppercase tracking-wider rounded hover:bg-[#4A4A4A] transition-colors">
-          View Full Analysis →
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border border-[#D4D4D4] rounded-lg p-8 space-y-6">
-      <div className="text-xs text-[#6B6B6B] font-mono uppercase tracking-wider">{match.competition}</div>
-      <div className="space-y-4">
-        <div className="text-2xl font-serif text-[#1C1B17]">{match.homeTeam}</div>
-        <div className="text-sm text-[#4A4A4A] font-mono uppercase">vs</div>
-        <div className="text-2xl font-serif text-[#1C1B17]">{match.awayTeam}</div>
-      </div>
-      <div className="grid grid-cols-2 gap-4 text-xs">
-        <div>
-          <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Kickoff</div>
-          <div className="text-[#1C1B17] font-serif">{match.kickoffTime}</div>
-        </div>
-        <div>
-          <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Status</div>
-          <div className="text-[#1C1B17] font-serif">{match.status}</div>
-        </div>
-        <div>
-          <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Prediction</div>
-          <div className="text-[#1C1B17] font-serif">{match.prediction}</div>
-        </div>
-        <div>
-          <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Confidence</div>
-          <div className="text-[#8B7355] font-serif">{match.confidence}</div>
-        </div>
-        <div>
-          <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Probability</div>
-          <div className="text-[#1C1B17] font-serif">{match.probability}%</div>
-        </div>
-        <div>
-          <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Expected Goals</div>
-          <div className="text-[#1C1B17] font-serif">{match.expectedGoals}</div>
-        </div>
-      </div>
-      <div className="text-xs text-[#6B6B6B] font-mono uppercase tracking-wider">
-        {match.modelSignals.join(' • ')} • {match.simulationCount.toLocaleString()} simulations
-      </div>
-      <button className="px-6 py-3 bg-[#1C1B17] text-[#F7F4EE] text-xs font-mono uppercase tracking-wider rounded hover:bg-[#4A4A4A] transition-colors">
-        View Full Analysis →
-      </button>
-    </div>
-  );
-};
-
-// ─── Match Card Component ───────────────────────────────────────────────────
-const MatchCard = ({ match, isLoading }: { match?: MatchData; isLoading?: boolean }) => {
-  if (isLoading) {
-    return <MatchCardSkeleton />;
-  }
-
-  if (!match) {
-    return (
-      <div className="border border-[#D4D4D4] rounded-lg p-6 space-y-4">
-        <div className="text-xs text-[#6B6B6B] font-mono uppercase tracking-wider">[League]</div>
-        <div className="space-y-3">
-          <div className="text-lg font-serif text-[#1C1B17]">[Home Team]</div>
-          <div className="text-xs text-[#4A4A4A] font-mono uppercase">vs</div>
-          <div className="text-lg font-serif text-[#1C1B17]">[Away Team]</div>
-        </div>
-        <div className="space-y-2 text-xs">
-          <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Prediction</div>
-          <div className="text-[#1C1B17] font-serif">[Prediction]</div>
-          <div className="text-[#8B7355] font-serif">[Confidence]</div>
-          <div className="text-[#1C1B17] font-serif">[Probability]%</div>
-        </div>
-        <div className="text-xs text-[#6B6B6B] font-mono uppercase tracking-wider">
-          [Expected Goals] • [Status]
-        </div>
-        <button className="px-4 py-2 bg-transparent border border-[#D4D4D4] text-[#1C1B17] text-xs font-mono uppercase tracking-wider rounded hover:bg-[#E8E6E1] transition-colors">
-          View Analysis →
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border border-[#D4D4D4] rounded-lg p-6 space-y-4">
-      <div className="text-xs text-[#6B6B6B] font-mono uppercase tracking-wider">{match.competition}</div>
-      <div className="space-y-3">
-        <div className="text-lg font-serif text-[#1C1B17]">{match.homeTeam}</div>
-        <div className="text-xs text-[#4A4A4A] font-mono uppercase">vs</div>
-        <div className="text-lg font-serif text-[#1C1B17]">{match.awayTeam}</div>
-      </div>
-      <div className="space-y-2 text-xs">
-        <div className="text-[#6B6B6B] font-mono uppercase tracking-wider">Prediction</div>
-        <div className="text-[#1C1B17] font-serif">{match.prediction}</div>
-        <div className="text-[#8B7355] font-serif">{match.confidence}</div>
-        <div className="text-[#1C1B17] font-serif">{match.probability}%</div>
-      </div>
-      <div className="text-xs text-[#6B6B6B] font-mono uppercase tracking-wider">
-        {match.expectedGoals} xG • {match.status}
-      </div>
-      <button className="px-4 py-2 bg-transparent border border-[#D4D4D4] text-[#1C1B17] text-xs font-mono uppercase tracking-wider rounded hover:bg-[#E8E6E1] transition-colors">
-        View Analysis →
-      </button>
-    </div>
-  );
-};
-
-// ─── Right Information Panel Component ───────────────────────────────────────
-const RightInfoPanel = ({ statistics, isLoading }: { statistics?: Statistics; isLoading?: boolean }) => {
-  if (isLoading) {
-    return (
-      <aside className="w-64 border-l border-[#D4D4D4] p-6 space-y-8">
-        <StatisticsSkeleton />
-      </aside>
-    );
-  }
-
-  if (!statistics) {
-    return (
-      <aside className="w-64 border-l border-[#D4D4D4] p-6 space-y-8">
-        <div className="space-y-4">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-            Today's Matches
-          </div>
-          <div className="text-2xl font-serif text-[#1C1B17]">[ ]</div>
-        </div>
-        <div className="space-y-4">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-            Live Matches
-          </div>
-          <div className="text-2xl font-serif text-[#1C1B17]">[ ]</div>
-        </div>
-        <div className="space-y-4">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-            Upcoming
-          </div>
-          <div className="text-2xl font-serif text-[#1C1B17]">[ ]</div>
-        </div>
-        <div className="space-y-4">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-            Completed
-          </div>
-          <div className="text-2xl font-serif text-[#1C1B17]">[ ]</div>
-        </div>
-        <div className="space-y-4">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-            Highest Confidence
-          </div>
-          <div className="text-2xl font-serif text-[#8B7355]">[ ]%</div>
-        </div>
-        <div className="space-y-4">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-            Average Model Confidence
-          </div>
-          <div className="text-2xl font-serif text-[#1C1B17]">[ ]%</div>
-        </div>
-        <div className="space-y-4">
-          <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-            Last Backend Sync
-          </div>
-          <div className="text-xs text-[#6B6B6B] font-mono">[Updated Time]</div>
-        </div>
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="w-64 border-l border-[#D4D4D4] p-6 space-y-8">
-      <div className="space-y-4">
-        <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-          Today's Matches
-        </div>
-        <div className="text-2xl font-serif text-[#1C1B17]">{statistics.todayMatches}</div>
-      </div>
-      <div className="space-y-4">
-        <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-          Live Matches
-        </div>
-        <div className="text-2xl font-serif text-[#8B7355]">{statistics.liveMatches}</div>
-      </div>
-      <div className="space-y-4">
-        <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-          Upcoming
-        </div>
-        <div className="text-2xl font-serif text-[#1C1B17]">{statistics.upcoming}</div>
-      </div>
-      <div className="space-y-4">
-        <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-          Completed
-        </div>
-        <div className="text-2xl font-serif text-[#1C1B17]">{statistics.completed}</div>
-      </div>
-      <div className="space-y-4">
-        <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-          Highest Confidence
-        </div>
-        <div className="text-2xl font-serif text-[#8B7355]">{statistics.highestConfidence}%</div>
-      </div>
-      <div className="space-y-4">
-        <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-          Average Model Confidence
-        </div>
-        <div className="text-2xl font-serif text-[#1C1B17]">{statistics.averageConfidence}%</div>
-      </div>
-      <div className="space-y-4">
-        <div className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A] pb-2 border-b border-[#D4D4D4]">
-          Last Backend Sync
-        </div>
-        <div className="text-xs text-[#6B6B6B] font-mono">{statistics.lastSync}</div>
-      </div>
-    </aside>
-  );
-};
-
-// ─── Main Prediction Feed Component ───────────────────────────────────────────
-const PredictionFeed = () => {
+// ─── Main component ───────────────────────────────────────────────────────────
+const PredictionFeed = ({
+  matches = [],
+  isLoading = false,
+  favoriteMatchIds = [],
+  onToggleFavorite = () => {},
+  onViewAnalysis = () => {},
+}: PredictionFeedProps) => {
   const [activeFilter, setActiveFilter] = useState('all');
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiUnavailable, setApiUnavailable] = useState(false);
 
-  // Placeholder filter items - will be populated from backend
-  const filters: FilterItem[] = [
-    { id: 'all', label: 'All' },
-    { id: 'live', label: 'Live', count: 0 },
-    { id: 'today', label: 'Today', count: 0 },
-    { id: 'tomorrow', label: 'Tomorrow', count: 0 },
-    { id: 'this-week', label: 'This Week', count: 0 },
-    { id: 'high-confidence', label: 'High Confidence', count: 0 },
-    { id: 'favorites', label: 'Favorites', count: 0 },
-    { id: 'bookmarks', label: 'Bookmarks', count: 0 },
-  ];
+  // Filter matches by active filter
+  const displayMatches = useMemo(() => {
+    let list = [...matches].filter(m => {
+      // Always hide very old completed matches
+      if (m.status === 'COMPLETED' && m.finished_at) {
+        const age = Date.now() - new Date(m.finished_at).getTime();
+        if (age > 12 * 60 * 60 * 1000) return false;
+      }
+      return true;
+    });
 
-  // Simulate loading state
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
+    if (activeFilter === 'all') {
+      // pass
+    } else if (activeFilter === 'live') {
+      list = list.filter(m => m.status === 'LIVE');
+    } else if (activeFilter === 'today') {
+      list = list.filter(m => isKickoffToday(m.kickoffTime));
+    } else if (activeFilter === 'tomorrow') {
+      list = list.filter(m => isKickoffTomorrow(m.kickoffTime));
+    } else if (activeFilter === 'favorites') {
+      list = list.filter(m => favoriteMatchIds.includes(m.id));
+    } else {
+      // Competition code
+      list = list.filter(m => (m.competitionId ?? '').toUpperCase() === activeFilter.toUpperCase());
+    }
+
+    // Sort: Live → Upcoming (chronological) → Completed (newest first)
+    return list.sort((a, b) => {
+      const priority = (m: MatchPrediction) =>
+        m.status === 'LIVE' ? 0 : m.status === 'UPCOMING' ? 1 : 2;
+      const pa = priority(a), pb = priority(b);
+      if (pa !== pb) return pa - pb;
+      const ta = new Date(a.kickoffTime ?? a.date ?? 0).getTime();
+      const tb = new Date(b.kickoffTime ?? b.date ?? 0).getTime();
+      return pa === 2 ? tb - ta : ta - tb; // completed: newest first
+    });
+  }, [matches, activeFilter, favoriteMatchIds]);
+
+  // Group by competition for section headers
+  const grouped = useMemo(() => {
+    const order: string[] = [];
+    const map: Record<string, MatchPrediction[]> = {};
+    for (const m of displayMatches) {
+      const key = m.competition || 'Other';
+      if (!map[key]) { order.push(key); map[key] = []; }
+      map[key].push(m);
+    }
+    return order.map(k => ({ competition: k, matches: map[k] }));
+  }, [displayMatches]);
+
+  // Active filter label for empty state
+  const filterLabel = (() => {
+    const chip = COMPETITION_FILTERS.find(f => f.id === activeFilter);
+    return chip?.label ?? activeFilter;
+  })();
 
   return (
-    <div className="min-h-screen bg-[#F7F4EE]">
-      {/* Three-column layout */}
-      <div className="flex">
-        {/* Left Sidebar */}
-        <LeftSidebar isLoading={isLoading} />
-
-        {/* Main Content */}
-        <main className="flex-1 p-8 space-y-8">
-          {/* Editorial Title */}
-          <div className="space-y-2">
-            <h1 className="text-4xl font-serif text-[#1C1B17] tracking-tight">Prediction Feed</h1>
-            <p className="text-sm text-[#4A4A4A] font-serif italic">
-              Predictions updated continuously from live backend data.
-            </p>
+    <div className="min-h-screen bg-[#F7F4EE] flex flex-col">
+      {/* Top bar */}
+      <div className="border-b border-[#D4D4D4] bg-[#F7F4EE] px-6 py-5">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-baseline gap-3 mb-4">
+            <h1 className="text-3xl font-serif text-[#1C1B17] tracking-tight">Prediction Feed</h1>
+            {!isLoading && (
+              <span className="text-xs font-mono text-[#9B9B9B]">
+                {displayMatches.length} match{displayMatches.length !== 1 ? 'es' : ''}
+              </span>
+            )}
           </div>
-
-          {/* Metadata Row */}
-          <div className="flex gap-8 text-xs font-mono text-[#6B6B6B] uppercase tracking-wider">
-            <div>
-              <span className="text-[#4A4A4A]">Total Matches: </span>
-              <span className="text-[#1C1B17]">[Total Matches]</span>
-            </div>
-            <div>
-              <span className="text-[#4A4A4A]">Last Updated: </span>
-              <span className="text-[#1C1B17]">[Last Updated]</span>
-            </div>
-            <div>
-              <span className="text-[#4A4A4A]">Predictions Generated: </span>
-              <span className="text-[#1C1B17]">[Predictions Generated]</span>
-            </div>
-          </div>
-
-          {/* Filter Bar */}
           <FilterBar
-            filters={filters}
+            matches={matches}
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
-            isLoading={isLoading}
           />
+        </div>
+      </div>
 
-          {/* Content based on state */}
+      {/* Body */}
+      <div className="flex flex-1 max-w-7xl mx-auto w-full">
+        {/* Left sidebar */}
+        <LeftSidebar
+          matches={matches}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+          favoriteCount={favoriteMatchIds.length}
+          isLoading={isLoading}
+        />
+
+        {/* Main content */}
+        <main className="flex-1 px-6 py-6 min-w-0">
           {isLoading ? (
-            <LoadingState />
-          ) : apiUnavailable ? (
-            <APIUnavailableState />
-          ) : (
-            <>
-              {/* Featured Match */}
-              <div className="space-y-4">
-                <h2 className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A]">
-                  Featured Prediction
-                </h2>
-                <FeaturedMatchCard isLoading={isLoading} />
-              </div>
-
-              {/* Match Grid */}
-              <div className="space-y-4">
-                <h2 className="text-xs font-mono uppercase tracking-widest text-[#4A4A4A]">
-                  All Predictions
-                </h2>
-                <div className="grid grid-cols-2 gap-6">
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <MatchCard key={i} isLoading={isLoading} />
-                  ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[...Array(9)].map((_, i) => (
+                <div key={i} className="border border-[#D4D4D4] rounded bg-white p-4 space-y-3">
+                  <div className="flex justify-between">
+                    <Skeleton className="h-2.5 w-24" />
+                    <Skeleton className="h-2.5 w-12" />
+                  </div>
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-8" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-1.5 w-full rounded-full" />
+                  <Skeleton className="h-6 w-full" />
                 </div>
-              </div>
-            </>
+              ))}
+            </div>
+          ) : displayMatches.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="text-4xl mb-4">🔍</div>
+              <h3 className="text-lg font-serif text-[#1C1B17] mb-2">No matches found</h3>
+              <p className="text-sm text-[#6B6B6B] font-mono max-w-sm">
+                No predictions available for <strong>{filterLabel}</strong>.<br />
+                Try "All" or a different competition filter.
+              </p>
+              <button
+                onClick={() => setActiveFilter('all')}
+                className="mt-6 px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.2em] bg-[#1C1B17] text-[#F7F4EE] rounded hover:bg-[#3a3a3a] transition-colors"
+              >
+                Show all matches
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {grouped.map(({ competition, matches: compMatches }) => (
+                <section key={competition}>
+                  {/* Section header */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-[9px] font-mono uppercase tracking-[0.28em] text-[#6B6B6B]">
+                      {competition}
+                    </span>
+                    <span className="text-[8px] font-mono text-[#9B9B9B]">({compMatches.length})</span>
+                    <div className="flex-1 h-px bg-[#D4D4D4]" />
+                  </div>
+
+                  {/* Card grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {compMatches.map(m => (
+                      <MatchCard
+                        key={m.id}
+                        match={m}
+                        isFavorite={favoriteMatchIds.includes(m.id)}
+                        onToggleFavorite={onToggleFavorite}
+                        onViewAnalysis={onViewAnalysis}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           )}
         </main>
 
-        {/* Right Information Panel */}
-        <RightInfoPanel isLoading={isLoading} />
+        {/* Right panel */}
+        <RightPanel matches={matches} isLoading={isLoading} />
       </div>
     </div>
   );

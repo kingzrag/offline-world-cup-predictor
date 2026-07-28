@@ -41,7 +41,7 @@ class PredictionService:
                     home_team_id=match.home_team_id,
                     away_team_id=match.away_team_id,
                     match_date=match.utc_date,
-                    competition_code="WC"
+                    competition_code=match.competition.code if (match.competition and match.competition.code) else "WC"
                 )
 
                 logger.info(

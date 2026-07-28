@@ -3,16 +3,24 @@ import { motion, useScroll, useTransform } from 'motion/react';
 
 // ─── Competition data (matches CompetitionSelector exactly) ──────────────────
 const SHELF_ONE = [
-  { name: 'FIFA World Cup',   abbr: 'WC 2026',   logo: '/leagues/world-cup.svg',         alt: 'FIFA World Cup'    },
   { name: 'Premier League',   abbr: 'EPL',        logo: '/leagues/premier-league.svg',    alt: 'Premier League'    },
   { name: 'La Liga',          abbr: 'LIGA',       logo: '/leagues/la-liga-seeklogo.png',  alt: 'La Liga'           },
   { name: 'Bundesliga',       abbr: 'BL 1',       logo: '/leagues/bundesliga.png',        alt: 'Bundesliga'        },
+  { name: 'Serie A',          abbr: 'SA',         logo: '/leagues/serie-a.png',           alt: 'Serie A'           },
+  { name: 'Ligue 1',          abbr: 'L 1',        logo: '/leagues/premier-league.svg',    alt: 'Ligue 1'           },
 ];
 
 const SHELF_TWO = [
   { name: 'Champions League',  abbr: 'UCL',       logo: '/leagues/champions-league.svg',  alt: 'Champions League'  },
   { name: 'Europa League',     abbr: 'UEL',       logo: '/leagues/europa-league.svg',     alt: 'Europa League'     },
-  { name: 'Serie A',           abbr: 'SA',        logo: '/leagues/serie-a.png',            alt: 'Serie A'           },
+  { name: 'UEFA Euro',         abbr: 'EURO',      logo: '/leagues/champions-league.svg',  alt: 'UEFA Euro'         },
+  { name: 'Nations League',    abbr: 'UNL',       logo: '/leagues/champions-league.svg',  alt: 'Nations League'    },
+];
+
+const SHELF_THREE = [
+  { name: 'FIFA World Cup',    abbr: 'WC 2026',   logo: '/leagues/world-cup.svg',         alt: 'FIFA World Cup'    },
+  { name: 'Copa América',      abbr: 'CA',        logo: '/leagues/world-cup.svg',         alt: 'Copa América'      },
+  { name: 'WC Qualifiers',     abbr: 'WCQ',       logo: '/leagues/world-cup.svg',         alt: 'WC Qualifiers'     },
 ];
 
 // ─── Variants ─────────────────────────────────────────────────────────────────
@@ -233,6 +241,97 @@ function getCoverDesign(name: string) {
         textColor: 'text-[#1C1B17]',
         accentColor: '#1E40AF'
       };
+    case 'Ligue 1':
+      return {
+        background: 'bg-[#F8F4EE]',
+        gradient: 'bg-gradient-to-br from-[#FDF9F4] via-[#F8F4EE] to-[#EDEAE4]',
+        overlay: (
+          <>
+            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-[#003189]/10 to-transparent" />
+            <div className="absolute bottom-0 right-0 w-32 h-32 bg-[#EF0107]/8 rounded-full blur-2xl" />
+            <div className="absolute top-8 right-8 w-2 h-2 bg-[#EF0107] rounded-full opacity-50" />
+            <div className="absolute top-8 left-8 w-2 h-2 bg-[#003189] rounded-full opacity-40" />
+            <div className="absolute bottom-12 left-12 w-16 h-0.5 bg-[#003189]/20" />
+          </>
+        ),
+        textColor: 'text-[#1C1B17]',
+        accentColor: '#003189'
+      };
+    case 'UEFA Euro':
+      return {
+        background: 'bg-[#003399]',
+        gradient: 'bg-gradient-to-br from-[#1A4FCC] via-[#003399] to-[#001F66]',
+        overlay: (
+          <>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-[#FFCC00]/10 rounded-full blur-2xl" />
+            <div className="absolute inset-0 opacity-15">
+              {[...Array(12)].map((_, i) => {
+                const angle = (i * 30) * Math.PI / 180;
+                const r = 56;
+                const cx = 90, cy = 90;
+                const x = cx + r * Math.cos(angle);
+                const y = cy + r * Math.sin(angle);
+                return <div key={i} className="absolute w-1 h-1 bg-[#FFCC00] rounded-full" style={{ left: x, top: y }} />;
+              })}
+            </div>
+            <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-[#FFCC00]/6 to-transparent" />
+          </>
+        ),
+        textColor: 'text-white',
+        accentColor: '#FFCC00'
+      };
+    case 'Nations League':
+      return {
+        background: 'bg-[#0A1628]',
+        gradient: 'bg-gradient-to-br from-[#1A2D4F] via-[#0A1628] to-[#060D1A]',
+        overlay: (
+          <>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 bg-[#4A7ABF]/15 rounded-full blur-2xl" />
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-10 left-10 w-1 h-1 bg-white rounded-full" />
+              <div className="absolute top-20 right-16 w-1.5 h-1.5 bg-white rounded-full" />
+              <div className="absolute bottom-20 left-20 w-1 h-1 bg-white rounded-full" />
+              <div className="absolute bottom-12 right-10 w-1 h-1 bg-white rounded-full" />
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1/4 bg-gradient-to-t from-[#0066CC]/8 to-transparent" />
+          </>
+        ),
+        textColor: 'text-white',
+        accentColor: '#4A7ABF'
+      };
+    case 'Copa América':
+      return {
+        background: 'bg-[#0F2027]',
+        gradient: 'bg-gradient-to-br from-[#203A43] via-[#2C5364] to-[#0F2027]',
+        overlay: (
+          <>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-[#FFD700]/10 rounded-full blur-3xl" />
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#00C853]/8 rounded-full blur-2xl" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#FFD700]/6 rounded-full blur-2xl" />
+            <div className="absolute top-8 right-8 w-1.5 h-1.5 bg-[#FFD700] rounded-full opacity-60" />
+            <div className="absolute bottom-12 left-12 w-1 h-1 bg-[#00C853] rounded-full opacity-50" />
+          </>
+        ),
+        textColor: 'text-white',
+        accentColor: '#FFD700'
+      };
+    case 'WC Qualifiers':
+      return {
+        background: 'bg-[#1A1A1A]',
+        gradient: 'bg-gradient-to-br from-[#2A2A2A] via-[#1A1A1A] to-[#111111]',
+        overlay: (
+          <>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-[#D4AF37]/10 rounded-full blur-3xl" />
+            <div className="absolute inset-0 opacity-8">
+              <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-[#D4AF37]/30 to-transparent" />
+              <div className="absolute bottom-1/4 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#D4AF37]/20 to-transparent" />
+            </div>
+            <div className="absolute top-6 right-6 w-1.5 h-1.5 bg-[#D4AF37] rounded-full opacity-40" />
+          </>
+        ),
+        textColor: 'text-[#D4AF37]',
+        accentColor: '#D4AF37'
+      };
     default:
       return {
         background: 'bg-[#F3F0E8]',
@@ -440,7 +539,7 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
             </div>
           </motion.div>
 
-          {/* ── Shelf Two ── */}
+          {/* ── Shelf Two — European cups + International ── */}
           <motion.div 
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -448,37 +547,55 @@ export default function CompetitionArchive({ onNavigate }: CompetitionArchivePro
             transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.5 }}
             className="relative"
           >
-            {/* Realistic floating shelf - mounted to wall */}
             <div className="relative w-[92%] mx-auto">
-              {/* Soft spotlight behind shelf */}
               <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-              
-              {/* Cards sitting on shelf */}
               <div className="flex items-end justify-center gap-10 sm:gap-12 px-20 mb-0">
                 {SHELF_TWO.map((comp, i) => (
                   <CompetitionCover
                     key={comp.name}
                     {...comp}
-                    index={i + 4}
+                    index={i + 5}
                     onNavigate={onNavigate}
                   />
                 ))}
               </div>
-              
-              {/* Tight contact shadow directly under shelf */}
               <div className="absolute bottom-0 left-8 right-8 h-0.5 bg-[#1C1B17]/15 blur-sm" />
-              
-              {/* Larger soft ambient shadow fading onto wall */}
               <div className="absolute -bottom-4 left-12 right-12 h-8 bg-[#1C1B17]/8 blur-2xl rounded-full" />
               <div className="absolute -bottom-2 left-16 right-16 h-4 bg-[#1C1B17]/5 blur-xl rounded-full" />
-              
-              {/* Realistic wooden shelf - 12px thick with bevel */}
               <div className="relative h-[12px] bg-gradient-to-b from-[#C8C2B6] via-[#BEB7AB] to-[#A8A296] rounded-b-sm shadow-[0_4px_12px_rgba(28,27,23,0.18)]">
-                {/* Front bevel highlight */}
                 <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-b from-[#D8D2C6] to-[#C8C2B6]" />
-                {/* Rounded front edge highlight */}
                 <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-t from-[#9A9488] to-[#A8A296] rounded-b-sm" />
-                {/* Darker underside for depth */}
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-t from-[#8A8478] to-transparent rounded-b-sm" />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* ── Shelf Three — World tournaments ── */}
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] as const, delay: 0.6 }}
+            className="relative"
+          >
+            <div className="relative w-[92%] mx-auto">
+              <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+              <div className="flex items-end justify-center gap-10 sm:gap-12 px-20 mb-0">
+                {SHELF_THREE.map((comp, i) => (
+                  <CompetitionCover
+                    key={comp.name}
+                    {...comp}
+                    index={i + 9}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+              <div className="absolute bottom-0 left-8 right-8 h-0.5 bg-[#1C1B17]/15 blur-sm" />
+              <div className="absolute -bottom-4 left-12 right-12 h-8 bg-[#1C1B17]/8 blur-2xl rounded-full" />
+              <div className="absolute -bottom-2 left-16 right-16 h-4 bg-[#1C1B17]/5 blur-xl rounded-full" />
+              <div className="relative h-[12px] bg-gradient-to-b from-[#C8C2B6] via-[#BEB7AB] to-[#A8A296] rounded-b-sm shadow-[0_4px_12px_rgba(28,27,23,0.18)]">
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-b from-[#D8D2C6] to-[#C8C2B6]" />
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-t from-[#9A9488] to-[#A8A296] rounded-b-sm" />
                 <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-t from-[#8A8478] to-transparent rounded-b-sm" />
               </div>
             </div>
