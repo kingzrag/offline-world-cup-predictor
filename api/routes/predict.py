@@ -966,7 +966,11 @@ def get_fixtures(
         # ── Database Fetch ────────────────────────────────────────────────────────
         logger.info(f"GET /api/fixtures  →  Executing database query with limit={limit}")
         t_query_start = time.perf_counter()
-        matches = query.limit(limit).all()
+        try:
+            matches = query.limit(limit).all()
+        except Exception as db_error:
+            logger.error(f"GET /api/fixtures  →  Database query failed: {db_error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Database query failed: {str(db_error)}")
         t_query_end = time.perf_counter()
         query_ms = int((t_query_end - t_query_start) * 1000)
         logger.info(f"GET /api/fixtures  →  Database query returned {len(matches)} matches in {query_ms}ms")
