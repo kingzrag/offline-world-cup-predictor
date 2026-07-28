@@ -1044,6 +1044,21 @@ def get_fixtures(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+@router.get("/debug/no-db", summary="Debug: test without database")
+def debug_no_db():
+    """Minimal test endpoint without database to isolate production issues."""
+    try:
+        logger.info("GET /api/fixtures/debug/no-db - Starting no-database test")
+        return {
+            "status": "success",
+            "message": "This endpoint works without database",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.exception(f"GET /api/fixtures/debug/no-db - FAILED: {e}")
+        raise HTTPException(status_code=500, detail=f"Debug no-db test failed: {str(e)}")
+
+
 @router.get("/debug/test", summary="Debug: minimal test endpoint")
 def debug_test(db: Session = Depends(get_db)):
     """Minimal test endpoint to diagnose production issues."""
