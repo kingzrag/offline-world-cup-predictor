@@ -139,13 +139,29 @@ def global_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 @limiter.limit("100/minute")
 def health_check(request: Request):
-    return {
+    health_data = {
         "status": "healthy",
         "system": "football_prediction_platform_backend",
         "models_loaded": model_service.is_ready,
         "model_versions": model_service.model_versions,
         "timestamp": time.time(),
     }
+    
+    # Add database test for debugging
+    try:
+        from database.connection import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        result = db.execute(text("SELECT 1")).scalar()
+        db.close()
+        health_data["db_test"] = "success"
+        health_data["db_connection"] = result == 1
+    except Exception as e:
+        health_data["db_test"] = "failed"
+        health_data["db_error"] = str(e)
+        logger.error(f"Health check DB test failed: {e}", exc_info=True)
+    
+    return health_data
 
 
 @app.get("/debug/db-test")
