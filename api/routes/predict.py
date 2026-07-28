@@ -1077,6 +1077,123 @@ def get_fixtures(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+@router.get("/debug/test", summary="Debug: minimal test endpoint")
+def debug_test(db: Session = Depends(get_db)):
+    """Minimal test endpoint to diagnose production issues."""
+    try:
+        logger.info("GET /api/fixtures/debug/test - Starting minimal test")
+        
+        # Test 1: Database connection
+        logger.info("GET /api/fixtures/debug/test - Testing database connection")
+        from sqlalchemy import text
+        result = db.execute(text("SELECT 1")).scalar()
+        logger.info(f"GET /api/fixtures/debug/test - DB connection test result: {result}")
+        
+        # Test 2: Competition query
+        logger.info("GET /api/fixtures/debug/test - Testing competition query")
+        from models import Competition
+        comp = db.query(Competition).filter_by(code="WC").first()
+        logger.info(f"GET /api/fixtures/debug/test - Competition query result: {comp.name if comp else 'None'}")
+        
+        # Test 3: Simple match query (no eager loading)
+        logger.info("GET /api/fixtures/debug/test - Testing simple match query")
+        from models import Match
+        match = db.query(Match).first()
+        logger.info(f"GET /api/fixtures/debug/test - Match query result: id={match.id if match else 'None'}")
+        
+        # Test 4: Simple serialization
+        logger.info("GET /api/fixtures/debug/test - Testing simple serialization")
+        if match:
+            simple_data = {"id": match.id, "status": match.status}
+            logger.info(f"GET /api/fixtures/debug/test - Serialization result: {simple_data}")
+        
+        return {
+            "status": "success",
+            "tests": {
+                "db_connection": result == 1,
+                "competition_query": comp is not None,
+                "match_query": match is not None,
+                "serialization": match is not None
+            },
+            "competition": comp.name if comp else None,
+            "match_id": match.id if match else None
+        }
+    except Exception as e:
+        logger.exception(f"GET /api/fixtures/debug/test - FAILED: {e}")
+        raise HTTPException(status_code=500, detail=f"Debug test failed: {str(e)}")
+
+
+@router.get("/debug/test-eager", summary="Debug: test with eager loading")
+def debug_test_eager(db: Session = Depends(get_db)):
+    """Test endpoint with eager loading to diagnose production issues."""
+    try:
+        logger.info("GET /api/fixtures/debug/test-eager - Starting eager loading test")
+        
+        from models import Match, Competition
+        from sqlalchemy.orm import joinedload, selectinload
+        
+        # Test with eager loading
+        logger.info("GET /api/fixtures/debug/test-eager - Testing query with eager loading")
+        comp = db.query(Competition).filter_by(code="WC").first()
+        if not comp:
+            return {"status": "error", "message": "Competition not found"}
+        
+        match = db.query(Match).options(
+            joinedload(Match.home_team),
+            joinedload(Match.away_team),
+            selectinload(Match.predictions)
+        ).filter(Match.competition_id == comp.id).first()
+        
+        logger.info(f"GET /api/fixtures/debug/test-eager - Match with eager loading: id={match.id if match else 'None'}")
+        
+        if match:
+            logger.info(f"GET /api/fixtures/debug/test-eager - Home team: {match.home_team.name if match.home_team else 'None'}")
+            logger.info(f"GET /api/fixtures/debug/test-eager - Away team: {match.away_team.name if match.away_team else 'None'}")
+            logger.info(f"GET /api/fixtures/debug/test-eager - Predictions count: {len(match.predictions) if match.predictions else 0}")
+        
+        return {
+            "status": "success",
+            "match_found": match is not None,
+            "home_team": match.home_team.name if match and match.home_team else None,
+            "away_team": match.away_team.name if match and match.away_team else None,
+            "predictions_count": len(match.predictions) if match and match.predictions else 0
+        }
+    except Exception as e:
+        logger.exception(f"GET /api/fixtures/debug/test-eager - FAILED: {e}")
+        raise HTTPException(status_code=500, detail=f"Debug eager loading test failed: {str(e)}")
+
+
+@router.get("/debug/test-limit1", summary="Debug: test with limit=1")
+def debug_test_limit1(db: Session = Depends(get_db)):
+    """Test endpoint with limit=1 to diagnose production issues."""
+    try:
+        logger.info("GET /api/fixtures/debug/test-limit1 - Starting limit=1 test")
+        
+        from models import Match, Competition
+        from sqlalchemy.orm import joinedload, selectinload
+        
+        comp = db.query(Competition).filter_by(code="WC").first()
+        if not comp:
+            return {"status": "error", "message": "Competition not found"}
+        
+        matches = db.query(Match).options(
+            joinedload(Match.home_team),
+            joinedload(Match.away_team),
+            selectinload(Match.predictions)
+        ).filter(Match.competition_id == comp.id).limit(1).all()
+        
+        logger.info(f"GET /api/fixtures/debug/test-limit1 - Query returned {len(matches)} matches")
+        
+        return {
+            "status": "success",
+            "count": len(matches),
+            "match_ids": [m.id for m in matches]
+        }
+    except Exception as e:
+        logger.exception(f"GET /api/fixtures/debug/test-limit1 - FAILED: {e}")
+        raise HTTPException(status_code=500, detail=f"Debug limit=1 test failed: {str(e)}")
+
+
 @router.get("/debug/live-sync", summary="Debug: live sync state and current DB scores")
 def debug_live_sync(db: Session = Depends(get_db)):
     """
