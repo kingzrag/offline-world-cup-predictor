@@ -899,15 +899,10 @@ def get_fixtures(
         logger.info(f"GET /api/fixtures  →  Found competition: {comp.name} (id={comp.id})")
 
         # ── Build query ───────────────────────────────────────────────────────────
-        # Eagerly load predictions, home_team, and away_team in one single batch to avoid N+1 queries.
-        # We use joinedload for home/away teams (one-to-one) and selectinload for predictions (one-to-many/collection).
+        # Simplified query without complex sorting to diagnose timeout issue
+        logger.info(f"GET /api/fixtures  →  Building simplified query")
         query = (
             db.query(Match)
-            .options(
-                joinedload(Match.home_team),
-                joinedload(Match.away_team),
-                selectinload(Match.predictions)
-            )
             .filter(Match.competition_id == comp.id)
         )
 
@@ -932,36 +927,8 @@ def get_fixtures(
             # Default to only showing 2026 World Cup fixtures
             query = query.filter(extract('year', Match.utc_date) >= 2026)
 
-        # ── SQL-Side Sorting ──────────────────────────────────────────────────────
-        # Replicates Python sorting logic:
-        # Tier 0: Live matches (status IN_PLAY, PAUSED)
-        # Tier 1: Upcoming 2026+ matches (status != FINISHED and year >= 2026)
-        # Tier 2: Finished 2026+ matches (status == FINISHED and year >= 2026)
-        # Tier 3: Historical matches (year < 2026)
-        m_year = extract('year', Match.utc_date)
-        tier_case = case(
-            (Match.status.in_({"IN_PLAY", "PAUSED"}), 0),
-            ((m_year >= 2026) & (Match.status != "FINISHED"), 1),
-            ((m_year >= 2026) & (Match.status == "FINISHED"), 2),
-            else_=3
-        )
-        
-        # Within Tier 0 and 1, sort ascending by kickoff date.
-        # Within Tier 2 and 3, sort descending by kickoff date.
-        asc_date = case(
-            (tier_case.in_({0, 1}), Match.utc_date),
-            else_=None
-        )
-        desc_date = case(
-            (tier_case.in_({2, 3}), Match.utc_date),
-            else_=None
-        )
-
-        query = query.order_by(
-            tier_case.asc(),
-            asc_date.asc(),
-            desc_date.desc()
-        )
+        # Simple ordering by date instead of complex tier-based sorting
+        query = query.order_by(Match.utc_date.desc())
 
         # ── Database Fetch ────────────────────────────────────────────────────────
         logger.info(f"GET /api/fixtures  →  Executing database query with limit={limit}")
