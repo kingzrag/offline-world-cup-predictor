@@ -33,10 +33,15 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def get_db() -> Generator[Session, None, None]:
     """
     Dependency generator for FastAPI routes to retrieve a db session.
-    Ensures that session is closed after execution.
+    Ensures that session is closed after execution and transactions are rolled back on errors.
     """
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error, transaction rolled back: {e}", exc_info=True)
+        raise
     finally:
         db.close()
