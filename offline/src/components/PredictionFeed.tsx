@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { Heart, Star, Clock, TrendingUp, Activity, Zap } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Heart, Star, Clock, TrendingUp, Activity, Zap, Lock, CalendarOff, Archive } from 'lucide-react';
 import { MatchPrediction } from '../types';
-import { COMPETITION_FILTERS, SUPPORTED_COMPETITIONS } from '../config/competitions';
+import { COMPETITION_FILTERS, PRIMARY_COMPETITIONS, getCompetitionById } from '../config/competitions';
 import {
   formatSmartKickoffLocal,
   isKickoffToday,
@@ -15,6 +15,7 @@ interface PredictionFeedProps {
   favoriteMatchIds?: string[];
   onToggleFavorite?: (matchId: string) => void;
   onViewAnalysis?: (match: MatchPrediction) => void;
+  initialFilter?: string;
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -59,7 +60,7 @@ const ProbBar = ({ probA, probD, probB }: { probA: number; probD: number; probB:
   );
 };
 
-// ─── Match card ───────────────────────────────────────────────────────────────
+// ─── Match Card ───────────────────────────────────────────────────────────────
 const MatchCard = ({
   match,
   isFavorite,
@@ -69,85 +70,71 @@ const MatchCard = ({
   match: MatchPrediction;
   isFavorite: boolean;
   onToggleFavorite: (id: string) => void;
-  onViewAnalysis: (match: MatchPrediction) => void;
+  onViewAnalysis: (m: MatchPrediction) => void;
 }) => {
-  const isLive = match.status === 'LIVE';
-  const maxProb = Math.max(match.probA ?? 0, match.probD ?? 0, match.probB ?? 0);
-  const kickoff = match.kickoffTime
-    ? formatSmartKickoffLocal(match.kickoffTime)
-    : match.date;
-
-  // Prediction label: humanise HOME_WIN / AWAY_WIN / DRAW
-  const predLabel = (() => {
-    const p = match.prediction?.toUpperCase();
-    if (p === 'HOME_WIN') return match.teamA;
-    if (p === 'AWAY_WIN') return match.teamB;
-    if (p === 'DRAW') return 'Draw';
-    return match.prediction;
-  })();
+  const highestProb = Math.max(match.probA, match.probD, match.probB);
 
   return (
-    <div className="border border-[#D4D4D4] rounded bg-white hover:border-[#B8B4AC] transition-all duration-200 flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-[#EFEFEF]">
-        <span className="text-[9px] font-mono uppercase tracking-[0.22em] text-[#6B6B6B]">
-          {match.competition || 'Match'}
-        </span>
-        <div className="flex items-center gap-2">
-          {isLive ? <LivePill /> : <ConfidenceBadge confidence={match.confidence} />}
+    <div className="bg-[#F7F4EE] border border-[#D4D4D4] rounded p-4 hover:border-[#1C1B17] transition-all duration-200 flex flex-col justify-between group">
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-[#6B6B6B] truncate">
+            {match.competition || match.stage}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {match.status === 'LIVE' ? (
+            <LivePill />
+          ) : (
+            <ConfidenceBadge confidence={match.confidence} />
+          )}
           <button
-            onClick={() => onToggleFavorite(match.id)}
-            className="text-[#B8B4AC] hover:text-[#3a5c2d] transition-colors duration-150"
-            title={isFavorite ? 'Remove from bookmarks' : 'Add to bookmarks'}
+            onClick={e => { e.stopPropagation(); onToggleFavorite(match.id); }}
+            className="text-[#9B9B9B] hover:text-[#1C1B17] transition-colors p-0.5"
+            aria-label="Bookmark"
           >
-            <Heart
-              className="w-3 h-3"
-              fill={isFavorite ? '#3a5c2d' : 'none'}
-              stroke={isFavorite ? '#3a5c2d' : 'currentColor'}
-            />
+            <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-[#1C1B17] text-[#1C1B17]' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Teams */}
-      <div className="px-4 py-3 flex-1">
-        <div className="space-y-1 mb-3">
-          <div className="text-sm font-serif text-[#1C1B17] leading-snug">{match.teamA}</div>
-          <div className="text-[9px] font-mono uppercase tracking-widest text-[#9B9B9B]">vs</div>
-          <div className="text-sm font-serif text-[#1C1B17] leading-snug">{match.teamB}</div>
+      {/* Teams & Scores */}
+      <div className="space-y-2 mb-4">
+        <div className="flex items-center justify-between font-serif text-base text-[#1C1B17]">
+          <span className="truncate">{match.teamA}</span>
+          {match.liveScore && match.status !== 'UPCOMING' && (
+            <span className="font-mono text-sm font-bold ml-2 shrink-0">{match.liveScore.home}</span>
+          )}
         </div>
+        <div className="flex items-center justify-between font-serif text-base text-[#1C1B17]">
+          <span className="truncate">{match.teamB}</span>
+          {match.liveScore && match.status !== 'UPCOMING' && (
+            <span className="font-mono text-sm font-bold ml-2 shrink-0">{match.liveScore.away}</span>
+          )}
+        </div>
+      </div>
 
-        {/* Prob bar */}
+      {/* Probabilities */}
+      <div className="space-y-1.5 mb-4">
         <ProbBar probA={match.probA} probD={match.probD} probB={match.probB} />
-
-        {/* Prob labels */}
-        <div className="flex justify-between mt-1 text-[8px] font-mono text-[#9B9B9B]">
-          <span>{Math.round(match.probA ?? 0)}%</span>
-          <span>{Math.round(match.probD ?? 0)}%</span>
-          <span>{Math.round(match.probB ?? 0)}%</span>
+        <div className="flex justify-between text-[8.5px] font-mono text-[#6B6B6B] px-0.5">
+          <span>{match.teamACode} {match.probA}%</span>
+          <span>Draw {match.probD}%</span>
+          <span>{match.teamBCode} {match.probB}%</span>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="px-4 pb-3">
-        <div className="flex items-center justify-between text-[9px] font-mono text-[#8B8B8B] mb-2.5">
-          <span className="flex items-center gap-1">
-            <Clock className="w-2.5 h-2.5" />
-            {isLive && match.minute != null ? `${match.minute}'` : kickoff}
-          </span>
-          <span className="text-[#3a5c2d] font-semibold">{maxProb.toFixed(0)}%</span>
-        </div>
-
-        {/* Prediction */}
-        {predLabel && (
-          <div className="text-[9px] font-mono text-[#4A4A4A] mb-2.5 truncate">
-            Model: <span className="text-[#1C1B17] font-semibold">{predLabel}</span>
-          </div>
-        )}
-
+      <div className="pt-3 border-t border-[#EFEFEF] flex items-center justify-between text-[9px] font-mono text-[#6B6B6B]">
+        <span className="truncate">
+          {match.status === 'LIVE'
+            ? `🔴 ${match.minute ? match.minute + "'" : 'Live'}`
+            : formatSmartKickoffLocal(match.kickoffTime) || match.date}
+        </span>
         <button
           onClick={() => onViewAnalysis(match)}
-          className="w-full px-3 py-1.5 text-[8.5px] font-mono uppercase tracking-[0.18em] border border-[#D4D4D4] text-[#1C1B17] rounded hover:bg-[#F7F4EE] hover:border-[#B8B4AC] transition-all duration-150"
+          className="text-[#1C1B17] font-bold tracking-wider hover:underline uppercase shrink-0 ml-2"
         >
           Analysis →
         </button>
@@ -156,8 +143,8 @@ const MatchCard = ({
   );
 };
 
-// ─── Left sidebar ─────────────────────────────────────────────────────────────
-const LeftSidebar = ({
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+const Sidebar = ({
   matches,
   activeFilter,
   onFilterChange,
@@ -170,7 +157,6 @@ const LeftSidebar = ({
   favoriteCount: number;
   isLoading: boolean;
 }) => {
-  // Build per-competition live counts
   const competitionCounts = useMemo(() => {
     const counts: Record<string, { total: number; live: number }> = {};
     for (const m of matches) {
@@ -182,11 +168,6 @@ const LeftSidebar = ({
     }
     return counts;
   }, [matches]);
-
-  // Only show competitions that have at least 1 match in the feed
-  const activeCompetitions = SUPPORTED_COMPETITIONS.filter(
-    c => competitionCounts[c.id]?.total > 0
-  );
 
   if (isLoading) {
     return (
@@ -203,7 +184,6 @@ const LeftSidebar = ({
 
   return (
     <aside className="hidden lg:block w-56 shrink-0 border-r border-[#D4D4D4] pt-8 px-5 space-y-6 min-h-screen sticky top-0 overflow-y-auto max-h-screen">
-
       {/* Quick filters */}
       <div>
         <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-3">Quick Filters</h3>
@@ -231,56 +211,42 @@ const LeftSidebar = ({
         </div>
       </div>
 
-      {/* Competitions with matches */}
-      {activeCompetitions.length > 0 && (
-        <div>
-          <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-3">Competitions</h3>
-          <div className="space-y-0.5">
-            {activeCompetitions.map(comp => {
-              const cnt = competitionCounts[comp.id];
-              return (
-                <button
-                  key={comp.id}
-                  onClick={() => onFilterChange(comp.id)}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-[9.5px] font-mono text-left transition-all duration-150
-                    ${activeFilter === comp.id
-                      ? 'bg-[#1C1B17] text-[#F7F4EE]'
-                      : 'text-[#4A4A4A] hover:bg-[#F0EDE6]'
-                    }`}
-                >
-                  <span className="truncate">{comp.shortName}</span>
-                  <span className={`text-[8px] tabular-nums ml-1 shrink-0 ${activeFilter === comp.id ? 'text-[#F7F4EE]/60' : 'text-[#9B9B9B]'}`}>
-                    {cnt.live > 0 ? (
-                      <span className="text-red-400 font-bold">{cnt.live} live</span>
-                    ) : cnt.total}
+      {/* Competitions */}
+      <div>
+        <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-3">Competitions</h3>
+        <div className="space-y-0.5">
+          {PRIMARY_COMPETITIONS.map(comp => {
+            const cnt = competitionCounts[comp.id] ?? { total: 0, live: 0 };
+            return (
+              <button
+                key={comp.id}
+                onClick={() => onFilterChange(comp.id)}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-[9.5px] font-mono text-left transition-all duration-150
+                  ${activeFilter === comp.id
+                    ? 'bg-[#1C1B17] text-[#F7F4EE]'
+                    : 'text-[#4A4A4A] hover:bg-[#F0EDE6]'
+                  }`}
+              >
+                <span className="truncate">{comp.name}</span>
+                {cnt.total > 0 ? (
+                  <span className={`ml-1 text-[8.5px] ${activeFilter === comp.id ? 'text-white/60' : 'text-[#9B9B9B]'}`}>
+                    {cnt.live > 0 ? `🔴 ${cnt.live}` : cnt.total}
                   </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Legend */}
-      <div className="pt-4 border-t border-[#EFEFEF]">
-        <div className="space-y-1.5">
-          {[
-            { color: 'bg-[#3a5c2d]', label: 'Home win %' },
-            { color: 'bg-[#8B7355]', label: 'Draw %' },
-            { color: 'bg-[#B44C2A]', label: 'Away win %' },
-          ].map(item => (
-            <div key={item.label} className="flex items-center gap-2">
-              <span className={`w-2 h-1.5 rounded-sm ${item.color}`} />
-              <span className="text-[8.5px] font-mono text-[#9B9B9B]">{item.label}</span>
-            </div>
-          ))}
+                ) : (
+                  <span className={`ml-1 text-[7.5px] ${activeFilter === comp.id ? 'text-white/40' : 'text-[#BBB]'}`}>
+                    0
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </aside>
   );
 };
 
-// ─── Right info panel ─────────────────────────────────────────────────────────
+// ─── Right Panel ──────────────────────────────────────────────────────────────
 const RightPanel = ({
   matches,
   isLoading,
@@ -289,20 +255,25 @@ const RightPanel = ({
   isLoading: boolean;
 }) => {
   const stats = useMemo(() => {
-    const live = matches.filter(m => m.status === 'LIVE').length;
-    const today = matches.filter(m => isKickoffToday(m.kickoffTime)).length;
-    const upcoming = matches.filter(m => m.status === 'UPCOMING').length;
-    const completed = matches.filter(m => m.status === 'COMPLETED').length;
-    const confidences = matches.map(m => Math.max(m.probA ?? 0, m.probD ?? 0, m.probB ?? 0)).filter(v => v > 0);
-    const highest = confidences.length ? Math.max(...confidences) : 0;
-    const avg = confidences.length ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0;
+    let live = 0, today = 0, upcoming = 0, completed = 0;
+    let highest = 0, sum = 0;
+    for (const m of matches) {
+      if (m.status === 'LIVE') live++;
+      else if (m.status === 'COMPLETED') completed++;
+      else upcoming++;
+      if (isKickoffToday(m.kickoffTime)) today++;
+      const top = Math.max(m.probA, m.probD, m.probB);
+      if (top > highest) highest = top;
+      sum += top;
+    }
+    const avg = matches.length > 0 ? sum / matches.length : 0;
     return { live, today, upcoming, completed, highest, avg };
   }, [matches]);
 
-  const row = (label: string, value: string | number) => (
+  const row = (label: string, value: React.ReactNode) => (
     <div className="flex justify-between items-center py-2 border-b border-[#EFEFEF]">
-      <span className="text-[8.5px] font-mono uppercase tracking-[0.18em] text-[#9B9B9B]">{label}</span>
-      <span className="text-sm font-serif text-[#1C1B17]">{value}</span>
+      <span className="text-[9px] font-mono text-[#6B6B6B] uppercase tracking-wider">{label}</span>
+      <span className="text-[9.5px] font-mono font-bold text-[#1C1B17]">{value}</span>
     </div>
   );
 
@@ -331,12 +302,12 @@ const RightPanel = ({
       {row('Avg confidence', `${stats.avg.toFixed(0)}%`)}
 
       <div className="mt-4 pt-4 border-t border-[#EFEFEF]">
-        <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-3">Competitions</h3>
+        <h3 className="text-[8.5px] font-mono uppercase tracking-[0.28em] text-[#9B9B9B] mb-3">Supported Competitions</h3>
         <div className="space-y-1">
-          {SUPPORTED_COMPETITIONS.slice(0, 8).map(c => (
-            <div key={c.id} className="text-[8.5px] font-mono text-[#4A4A4A] flex items-center gap-1.5">
-              <span className="text-[9px]">{c.country === 'England' ? '🏴󠁧󠁢󠁥󠁮󠁧󠁿' : c.country === 'Spain' ? '🇪🇸' : c.country === 'Germany' ? '🇩🇪' : c.country === 'Italy' ? '🇮🇹' : c.country === 'France' ? '🇫🇷' : c.country === 'Europe' ? '⭐' : '🌍'}</span>
-              {c.shortName}
+          {PRIMARY_COMPETITIONS.slice(0, 8).map(c => (
+            <div key={c.id} className="text-[8.5px] font-mono text-[#4A4A4A] flex items-center justify-between">
+              <span className="truncate">{c.name}</span>
+              <span className="text-[8px] text-[#9B9B9B] shrink-0">{c.shortName}</span>
             </div>
           ))}
         </div>
@@ -355,7 +326,6 @@ const FilterBar = ({
   activeFilter: string;
   onFilterChange: (id: string) => void;
 }) => {
-  // Build counts per competition
   const compCounts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const match of matches) {
@@ -369,7 +339,6 @@ const FilterBar = ({
   const todayCount = matches.filter(m => isKickoffToday(m.kickoffTime)).length;
   const tomorrowCount = matches.filter(m => isKickoffTomorrow(m.kickoffTime)).length;
 
-  // Build chip list: core filters + only competitions that have matches
   const chips = [
     { id: 'all',       label: 'All',           count: matches.length },
     { id: 'live',      label: '🔴 Live',        count: liveCount },
@@ -378,7 +347,6 @@ const FilterBar = ({
     { id: 'favorites', label: '♥ Bookmarks',    count: undefined },
     ...COMPETITION_FILTERS
       .filter(f => !['all','live','today','tomorrow'].includes(f.id))
-      .filter(f => compCounts[(f.id ?? '').toUpperCase()] > 0)
       .map(f => ({ id: f.id, label: f.label, count: compCounts[(f.id ?? '').toUpperCase()] })),
   ];
 
@@ -413,8 +381,15 @@ const PredictionFeed = ({
   favoriteMatchIds = [],
   onToggleFavorite = () => {},
   onViewAnalysis = () => {},
+  initialFilter = 'all',
 }: PredictionFeedProps) => {
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState(initialFilter);
+
+  useEffect(() => {
+    if (initialFilter) {
+      setActiveFilter(initialFilter);
+    }
+  }, [initialFilter]);
 
   // Filter matches by active filter
   const displayMatches = useMemo(() => {
@@ -466,37 +441,35 @@ const PredictionFeed = ({
     return order.map(k => ({ competition: k, matches: map[k] }));
   }, [displayMatches]);
 
-  // Active filter label for empty state
+  // Metadata for current active filter
+  const currentCompConfig = getCompetitionById(activeFilter);
   const filterLabel = (() => {
     const chip = COMPETITION_FILTERS.find(f => f.id === activeFilter);
     return chip?.label ?? activeFilter;
   })();
 
   return (
-    <div className="min-h-screen bg-[#F7F4EE] flex flex-col">
-      {/* Top bar */}
-      <div className="border-b border-[#D4D4D4] bg-[#F7F4EE] px-6 py-5">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-baseline gap-3 mb-4">
-            <h1 className="text-3xl font-serif text-[#1C1B17] tracking-tight">Prediction Feed</h1>
-            {!isLoading && (
-              <span className="text-xs font-mono text-[#9B9B9B]">
-                {displayMatches.length} match{displayMatches.length !== 1 ? 'es' : ''}
-              </span>
-            )}
-          </div>
-          <FilterBar
-            matches={matches}
-            activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
-          />
+    <div className="min-h-screen bg-[#F6F4EF] text-[#1C1B17] pt-20 px-4 sm:px-6 lg:px-8">
+      {/* Header bar */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 mb-4">
+          <h1 className="text-2xl sm:text-3xl font-serif tracking-tight">
+            Prediction Feed
+            <span className="ml-3 text-xs font-mono font-normal text-[#6B6B6B]">
+              {displayMatches.length} {displayMatches.length === 1 ? 'match' : 'matches'}
+            </span>
+          </h1>
         </div>
+        <FilterBar
+          matches={matches}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+        />
       </div>
 
-      {/* Body */}
-      <div className="flex flex-1 max-w-7xl mx-auto w-full">
-        {/* Left sidebar */}
-        <LeftSidebar
+      {/* Main layout: Sidebar + Feed + Right Panel */}
+      <div className="max-w-7xl mx-auto flex gap-6 pb-20">
+        <Sidebar
           matches={matches}
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
@@ -504,35 +477,68 @@ const PredictionFeed = ({
           isLoading={isLoading}
         />
 
-        {/* Main content */}
-        <main className="flex-1 px-6 py-6 min-w-0">
+        {/* Center feed */}
+        <main className="flex-1 min-w-0">
           {isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {[...Array(9)].map((_, i) => (
-                <div key={i} className="border border-[#D4D4D4] rounded bg-white p-4 space-y-3">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="bg-[#F7F4EE] border border-[#D4D4D4] rounded p-4 space-y-3">
                   <div className="flex justify-between">
-                    <Skeleton className="h-2.5 w-24" />
-                    <Skeleton className="h-2.5 w-12" />
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-12" />
                   </div>
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-8" />
-                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-5 w-2/3" />
                   <Skeleton className="h-1.5 w-full rounded-full" />
                   <Skeleton className="h-6 w-full" />
                 </div>
               ))}
             </div>
           ) : displayMatches.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="text-4xl mb-4">🔍</div>
-              <h3 className="text-lg font-serif text-[#1C1B17] mb-2">No matches found</h3>
-              <p className="text-sm text-[#6B6B6B] font-mono max-w-sm">
-                No predictions available for <strong>{filterLabel}</strong>.<br />
-                Try "All" or a different competition filter.
-              </p>
+            <div className="flex flex-col items-center justify-center py-20 px-6 text-center bg-[#F7F4EE] border border-[#D4D4D4] rounded-lg">
+              {currentCompConfig?.status === 'NO_CURRENT_FIXTURES' ? (
+                <>
+                  <div className="p-3 bg-amber-500/10 text-amber-700 rounded-full mb-3">
+                    <CalendarOff className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-serif text-[#1C1B17] mb-1">Season fixtures not available yet</h3>
+                  <p className="text-xs text-[#6B6B6B] font-mono max-w-md mb-6 leading-relaxed">
+                    <strong>{currentCompConfig.name}</strong> fixtures for the upcoming season have not been published by the data provider yet.
+                  </p>
+                </>
+              ) : currentCompConfig?.status === 'API_RESTRICTED' ? (
+                <>
+                  <div className="p-3 bg-blue-500/10 text-blue-700 rounded-full mb-3">
+                    <Lock className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-serif text-[#1C1B17] mb-1">Data provider access required</h3>
+                  <p className="text-xs text-[#6B6B6B] font-mono max-w-md mb-6 leading-relaxed">
+                    Live fixture ingestion for <strong>{currentCompConfig.name}</strong> requires an upgraded data provider tier.
+                  </p>
+                </>
+              ) : currentCompConfig?.status === 'HISTORICAL' ? (
+                <>
+                  <div className="p-3 bg-zinc-500/10 text-zinc-700 rounded-full mb-3">
+                    <Archive className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-serif text-[#1C1B17] mb-1">Historical Tournament</h3>
+                  <p className="text-xs text-[#6B6B6B] font-mono max-w-md mb-6 leading-relaxed">
+                    <strong>{currentCompConfig.name}</strong> match data is archived.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-3xl mb-3">🔍</div>
+                  <h3 className="text-lg font-serif text-[#1C1B17] mb-1">No matches found</h3>
+                  <p className="text-xs text-[#6B6B6B] font-mono max-w-sm mb-6">
+                    No active predictions available for <strong>{filterLabel}</strong> right now.
+                  </p>
+                </>
+              )}
+
               <button
                 onClick={() => setActiveFilter('all')}
-                className="mt-6 px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.2em] bg-[#1C1B17] text-[#F7F4EE] rounded hover:bg-[#3a3a3a] transition-colors"
+                className="px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.2em] bg-[#1C1B17] text-[#F7F4EE] rounded hover:bg-[#3a3a3a] transition-colors"
               >
                 Show all matches
               </button>

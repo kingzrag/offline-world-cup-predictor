@@ -1,21 +1,17 @@
-import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { DOMESTIC_LEAGUES, EUROPEAN_COMPETITIONS } from '../config/competitions';
 
-const competitions = [
-  { name: 'FIFA World Cup', logo: '/leagues/world-cup.svg', alt: 'FIFA World Cup' },
-  { name: 'Premier League', logo: '/leagues/premier-league.svg', alt: 'Premier League' },
-  { name: 'La Liga', logo: '/leagues/la-liga-seeklogo.png', alt: 'La Liga' },
-  { name: 'Bundesliga', logo: '/leagues/bundesliga.png', alt: 'Bundesliga' },
-  { name: 'Champions League', logo: '/leagues/champions-league.svg', alt: 'Champions League' },
-  { name: 'Europa League', logo: '/leagues/europa-league.svg', alt: 'Europa League' },
-  { name: 'Serie A', logo: '/leagues/serie-a.svg', alt: 'Serie A' },
+const primaryCompetitions = [
+  ...DOMESTIC_LEAGUES.slice(0, 5).map(c => ({ name: c.name, logo: c.logo, alt: c.name, id: c.id })),
+  ...EUROPEAN_COMPETITIONS.map(c => ({ name: c.name, logo: c.logo, alt: c.name, id: c.id })),
 ];
 
 interface CompetitionSelectorProps {
   isFloating?: boolean;
+  onSelectCompetition?: (compId: string) => void;
 }
 
-export default function CompetitionSelector({ isFloating = false }: CompetitionSelectorProps) {
+export default function CompetitionSelector({ onSelectCompetition }: CompetitionSelectorProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -24,12 +20,13 @@ export default function CompetitionSelector({ isFloating = false }: CompetitionS
       className="bg-white/50 backdrop-blur-md border border-[#1C1B17]/8 rounded-xl shadow-[0_8px_30px_rgba(28,27,23,0.03)] overflow-hidden transition-all duration-300 hover:shadow-[0_12px_40px_rgba(28,27,23,0.06)] hover:border-[#1C1B17]/15"
     >
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 divide-x divide-[#1C1B17]/6">
-        {competitions.map((comp, index) => (
+        {primaryCompetitions.map((comp, index) => (
           <motion.div
             key={comp.name}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 + index * 0.05, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            onClick={() => onSelectCompetition?.(comp.id)}
             className="relative group px-4 py-4 flex flex-col items-center justify-center cursor-pointer hover:bg-[#1C1B17]/2 transition-all duration-300"
             whileHover={{ y: -3 }}
           >

@@ -1,6 +1,8 @@
 // ─── Supported Competitions Configuration ───────────────────────────────────────
 // Single source of truth for all football competitions supported by the platform.
-// Adding a new competition requires only adding an entry here.
+
+export type CompetitionStatus = 'SUPPORTED' | 'NO_CURRENT_FIXTURES' | 'API_RESTRICTED' | 'HISTORICAL';
+export type CompetitionCategory = 'Domestic' | 'European' | 'International';
 
 export interface CompetitionConfig {
   id: string;
@@ -9,11 +11,14 @@ export interface CompetitionConfig {
   logo: string;
   country: string;
   type: 'League' | 'Cup' | 'International';
+  category: CompetitionCategory;
+  status: CompetitionStatus;
+  statusText?: string;
   season?: string;
 }
 
 export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
-  // Domestic Leagues
+  // ── Domestic Leagues (Primary Current Competitions) ─────────────────────────
   {
     id: 'PL',
     name: 'Premier League',
@@ -21,7 +26,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/premier-league.svg',
     country: 'England',
     type: 'League',
-    season: '2024-25',
+    category: 'Domestic',
+    status: 'SUPPORTED',
+    season: '2026-27',
   },
   {
     id: 'PD',
@@ -30,7 +37,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/la-liga-seeklogo.png',
     country: 'Spain',
     type: 'League',
-    season: '2024-25',
+    category: 'Domestic',
+    status: 'SUPPORTED',
+    season: '2026-27',
   },
   {
     id: 'SA',
@@ -39,7 +48,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/serie-a.png',
     country: 'Italy',
     type: 'League',
-    season: '2024-25',
+    category: 'Domestic',
+    status: 'SUPPORTED',
+    season: '2026-27',
   },
   {
     id: 'BL1',
@@ -48,7 +59,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/bundesliga.png',
     country: 'Germany',
     type: 'League',
-    season: '2024-25',
+    category: 'Domestic',
+    status: 'SUPPORTED',
+    season: '2026-27',
   },
   {
     id: 'FL1',
@@ -57,25 +70,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/premier-league.svg',
     country: 'France',
     type: 'League',
-    season: '2024-25',
-  },
-  {
-    id: 'MLS',
-    name: 'Major League Soccer',
-    shortName: 'MLS',
-    logo: '/leagues/premier-league.svg',
-    country: 'United States',
-    type: 'League',
-    season: '2024',
-  },
-  {
-    id: 'BSA',
-    name: 'Brasileirão Série A',
-    shortName: 'Brasileirão',
-    logo: '/leagues/premier-league.svg',
-    country: 'Brazil',
-    type: 'League',
-    season: '2024',
+    category: 'Domestic',
+    status: 'SUPPORTED',
+    season: '2026-27',
   },
   {
     id: 'DED',
@@ -84,10 +81,35 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/premier-league.svg',
     country: 'Netherlands',
     type: 'League',
-    season: '2024-25',
+    category: 'Domestic',
+    status: 'SUPPORTED',
+    season: '2026-27',
+  },
+  {
+    id: 'BSA',
+    name: 'Brasileirão Série A',
+    shortName: 'Brasileirão',
+    logo: '/leagues/premier-league.svg',
+    country: 'Brazil',
+    type: 'League',
+    category: 'Domestic',
+    status: 'SUPPORTED',
+    season: '2026',
+  },
+  {
+    id: 'MLS',
+    name: 'Major League Soccer',
+    shortName: 'MLS',
+    logo: '/leagues/premier-league.svg',
+    country: 'United States',
+    type: 'League',
+    category: 'Domestic',
+    status: 'API_RESTRICTED',
+    statusText: 'Data provider access required',
+    season: '2026',
   },
 
-  // European Competitions
+  // ── European Club Competitions ──────────────────────────────────────────────
   {
     id: 'CL',
     name: 'UEFA Champions League',
@@ -95,7 +117,10 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/champions-league.svg',
     country: 'Europe',
     type: 'Cup',
-    season: '2024-25',
+    category: 'European',
+    status: 'NO_CURRENT_FIXTURES',
+    statusText: 'Season fixtures not available yet',
+    season: '2025-26',
   },
   {
     id: 'EL',
@@ -104,57 +129,13 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/europa-league.svg',
     country: 'Europe',
     type: 'Cup',
-    season: '2024-25',
-  },
-  {
-    id: 'ECL',
-    name: 'UEFA Conference League',
-    shortName: 'UECL',
-    logo: '/leagues/europa-league.svg',
-    country: 'Europe',
-    type: 'Cup',
-    season: '2024-25',
+    category: 'European',
+    status: 'API_RESTRICTED',
+    statusText: 'Data provider access required',
+    season: '2025-26',
   },
 
-  // Domestic Cups
-  {
-    id: 'FAC',
-    name: 'FA Cup',
-    shortName: 'FA Cup',
-    logo: '/leagues/premier-league.svg',
-    country: 'England',
-    type: 'Cup',
-    season: '2024-25',
-  },
-  {
-    id: 'CDR',
-    name: 'Copa del Rey',
-    shortName: 'Copa del Rey',
-    logo: '/leagues/la-liga-seeklogo.png',
-    country: 'Spain',
-    type: 'Cup',
-    season: '2024-25',
-  },
-  {
-    id: 'DFB',
-    name: 'DFB-Pokal',
-    shortName: 'DFB Pokal',
-    logo: '/leagues/bundesliga.png',
-    country: 'Germany',
-    type: 'Cup',
-    season: '2024-25',
-  },
-  {
-    id: 'CIT',
-    name: 'Coppa Italia',
-    shortName: 'Coppa Italia',
-    logo: '/leagues/serie-a.png',
-    country: 'Italy',
-    type: 'Cup',
-    season: '2024-25',
-  },
-
-  // International Competitions
+  // ── Historical / International Competitions (Hidden from main current sections) ──
   {
     id: 'WC',
     name: 'FIFA World Cup',
@@ -162,6 +143,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/world-cup.svg',
     country: 'International',
     type: 'International',
+    category: 'International',
+    status: 'HISTORICAL',
+    statusText: 'Historical',
     season: '2026',
   },
   {
@@ -171,6 +155,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/champions-league.svg',
     country: 'Europe',
     type: 'International',
+    category: 'International',
+    status: 'HISTORICAL',
+    statusText: 'Historical',
     season: '2024',
   },
   {
@@ -180,6 +167,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/world-cup.svg',
     country: 'South America',
     type: 'International',
+    category: 'International',
+    status: 'HISTORICAL',
+    statusText: 'Historical',
     season: '2024',
   },
   {
@@ -189,6 +179,9 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/champions-league.svg',
     country: 'Europe',
     type: 'International',
+    category: 'International',
+    status: 'HISTORICAL',
+    statusText: 'Historical',
     season: '2024-25',
   },
   {
@@ -198,9 +191,24 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     logo: '/leagues/world-cup.svg',
     country: 'International',
     type: 'International',
+    category: 'International',
+    status: 'HISTORICAL',
+    statusText: 'Historical',
     season: '2024-26',
   },
 ];
+
+// Helper: Get primary current competitions (Domestic + European, excluding historical tournaments)
+export const PRIMARY_COMPETITIONS = SUPPORTED_COMPETITIONS.filter(c => c.status !== 'HISTORICAL');
+
+// Helper: Get domestic leagues
+export const DOMESTIC_LEAGUES = PRIMARY_COMPETITIONS.filter(c => c.category === 'Domestic');
+
+// Helper: Get European club competitions
+export const EUROPEAN_COMPETITIONS = PRIMARY_COMPETITIONS.filter(c => c.category === 'European');
+
+// Helper: Get historical competitions
+export const HISTORICAL_COMPETITIONS = SUPPORTED_COMPETITIONS.filter(c => c.status === 'HISTORICAL');
 
 // Helper function to get competition by ID
 export function getCompetitionById(id: string): CompetitionConfig | undefined {
@@ -217,15 +225,15 @@ export function getCompetitionByName(name: string): CompetitionConfig | undefine
   );
 }
 
-// Dynamic Competition Filters builder (returns filters for active competitions only)
+// Dynamic Competition Filters builder (returns filters for current primary competitions)
 export const COMPETITION_FILTERS = [
   { id: 'all', label: 'All Matches', icon: '🏆' },
   { id: 'live', label: 'LIVE', icon: '🔴' },
   { id: 'today', label: 'Today', icon: '📅' },
   { id: 'tomorrow', label: 'Tomorrow', icon: '📆' },
-  ...SUPPORTED_COMPETITIONS.map(c => ({
+  ...PRIMARY_COMPETITIONS.map(c => ({
     id: c.id,
     label: c.name,
-    icon: c.country === 'England' ? '🏴󠁧󠁢󠁥󠁮󠁧󠁿' : c.country === 'Spain' ? '🇪🇸' : c.country === 'Germany' ? '🇩🇪' : c.country === 'Italy' ? '🇮🇹' : c.country === 'France' ? '🇫🇷' : c.country === 'Europe' ? '⭐' : '🌍',
+    icon: c.country === 'England' ? '🏴󠁧󠁢󠁥󠁮󠁧󠁿' : c.country === 'Spain' ? '🇪🇸' : c.country === 'Germany' ? '🇩🇪' : c.country === 'Italy' ? '🇮🇹' : c.country === 'France' ? '🇫🇷' : c.country === 'Netherlands' ? '🇳🇱' : c.country === 'Brazil' ? '🇧🇷' : c.country === 'Europe' ? '⭐' : '⚽',
   }))
 ];

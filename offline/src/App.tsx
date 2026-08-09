@@ -323,6 +323,7 @@ export default function App() {
   const [sourceMatches, setSourceMatches] = useState<MatchPrediction[]>([]);
   const [isLoadingMatches, setIsLoadingMatches] = useState<boolean>(true);
   const [matchError, setMatchError] = useState<string | null>(null);
+  const [selectedCompFilter, setSelectedCompFilter] = useState<string>('all');
 
   // Infinite scrolling state
   const [currentLimit, setCurrentLimit] = useState<number>(30);
@@ -606,6 +607,15 @@ export default function App() {
     } catch (e) {
       window.scrollTo(0, 0);
     }
+  };
+
+  const handleNavigateToComp = (compId?: string) => {
+    if (compId) {
+      setSelectedCompFilter(compId.toLowerCase());
+    } else {
+      setSelectedCompFilter('all');
+    }
+    navigateTo('predictions');
   };
 
   // Synchronize on browser history popstate actions and reset scroll
@@ -1853,7 +1863,7 @@ export default function App() {
             />
 
             {/* ── COMPETITION ARCHIVE SECTION ──────────────────────────────── */}
-            <CompetitionArchive onNavigate={() => navigateTo('predictions')} />
+            <CompetitionArchive onNavigate={handleNavigateToComp} />
 
             {/* ── THE MODEL section — Apple keynote editorial light block ───── */}
             <motion.section
@@ -1946,6 +1956,7 @@ export default function App() {
             favoriteMatchIds={favoriteMatchIds}
             onToggleFavorite={toggleFavoriteMatch}
             onViewAnalysis={openMatchAnalysis}
+            initialFilter={selectedCompFilter}
           />
         )}
 

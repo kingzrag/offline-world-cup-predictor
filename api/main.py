@@ -251,7 +251,16 @@ async def run_live_match_sync():
             try:
                 service = CollectionService()
                 # First, ingest from football-data.org as before
-                fd_summary = await service.ingest_matches(db, "WC")
+                # Sync all active domestic league competitions for live score/status updates
+                LIVE_SYNC_COMPETITIONS = ["PL", "PD", "SA", "BL1", "FL1", "DED", "BSA", "WC"]
+                fd_summary = {"matches": 0, "updated_count": 0}
+                for _sync_code in LIVE_SYNC_COMPETITIONS:
+                    try:
+                        _s = await service.ingest_matches(db, _sync_code)
+                        fd_summary["matches"] = fd_summary.get("matches", 0) + _s.get("matches", 0)
+                        fd_summary["updated_count"] = fd_summary.get("updated_count", 0) + _s.get("updated_count", 0)
+                    except Exception as _sync_err:
+                        logger.warning(f"Live sync: ingest_matches({_sync_code}) failed: {_sync_err}")
                 logger.info(
                     f"Football-Data sync completed - processed={fd_summary.get('matches', 0)} "
                     f"updated={fd_summary.get('updated_count', 0)} "
@@ -342,14 +351,28 @@ async def run_odds_sync():
         await asyncio.sleep(300)  # 5 minutes
 
 
+# Active domestic league competitions for daily data sync
+ACTIVE_LEAGUE_COMPETITIONS = [
+    "PL",   # Premier League
+    "PD",   # La Liga
+    "SA",   # Serie A
+    "BL1",  # Bundesliga
+    "FL1",  # Ligue 1
+    "DED",  # Eredivisie
+    "BSA",  # Brasileirão
+]
+
+# International competitions for daily data sync (CL excluded: 2024-25 season complete, 2025-26 not yet published)
 SCHEDULED_INTERNATIONAL_COMPETITIONS = [
     "WC",
     "EC",
     "CA",
     "UNL",
-    "OLY",
     "WCQ",
 ]
+
+# Combined list for the daily full-pipeline scheduler
+SCHEDULED_ALL_COMPETITIONS = ACTIVE_LEAGUE_COMPETITIONS + SCHEDULED_INTERNATIONAL_COMPETITIONS
 
 
 async def run_daily_scheduler():
@@ -380,7 +403,7 @@ async def run_daily_scheduler():
             try:
                 service = CollectionService()
                 scheduler_summary = {}
-                for competition_code in SCHEDULED_INTERNATIONAL_COMPETITIONS:
+                for competition_code in SCHEDULED_ALL_COMPETITIONS:
                     logger.info(
                         f"Scheduler: Running automated provider pipeline for {competition_code}..."
                     )

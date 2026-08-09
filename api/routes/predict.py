@@ -14,7 +14,7 @@ All ML inference goes through the ModelService singleton.
 """
 
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -91,7 +91,7 @@ class PredictRequest(BaseModel):
 class BatchMatchItem(BaseModel):
     home_team: str = Field(..., example="Brazil")
     away_team: str = Field(..., example="Germany")
-    competition_code: Optional[str] = Field(default="WC")
+    competition_code: Optional[str] = Field(default="ALL")
     match_id: Optional[str] = Field(
         default=None,
         description="Optional client fixture id echoed back for reliable frontend mapping",
@@ -409,7 +409,7 @@ def predict_batch(
                 db=db,
                 home_team_name=item.home_team,
                 away_team_name=item.away_team,
-                competition_code=item.competition_code or "WC",
+                competition_code=item.competition_code or "ALL",
             )
             latency_ms = round((time.perf_counter() - t0) * 1000, 1)
             logger.info(
@@ -842,7 +842,7 @@ def get_fixtures_minimal():
     }
 
 
-@router.get("/fixtures", summary="FIFA World Cup fixtures — all statuses with live scores")
+@router.get("/fixtures", summary="Football fixtures — multi-competition support with live scores")
 def get_fixtures(
     status:           Optional[str]  = Query(
         None,
@@ -874,11 +874,11 @@ def get_fixtures(
     ),
     show_historical:  bool           = Query(
         False,
-        description="Whether to include historical matches (year < 2026).",
+        description="Whether to include historical finished matches.",
     ),
     competition_code: str            = Query(
-        "WC",
-        description="Competition code to query. Defaults to WC (FIFA World Cup).",
+        "ALL",
+        description="Competition code to query ('ALL' for all active competitions, or 'PL', 'PD', 'SA', 'BL1', 'FL1', 'CL', 'DED', 'BSA', 'MLS', 'WC'). Defaults to ALL.",
     ),
     limit:            int            = Query(
         200, ge=1, le=500,
@@ -887,24 +887,19 @@ def get_fixtures(
     db: Session = Depends(get_db),
 ):
     """
-    Returns FIFA World Cup fixtures sourced directly from the database
-    populated via football-data.org.
+    Returns football fixtures sourced directly from the database
+    with support for all active competitions or single competition filtering.
 
     **Fields per fixture:**
     - `home_team` / `away_team` — id, name, short_name, tla, crest_url
+    - `competition` / `competition_code` / `competition_id` — competition metadata
     - `kickoff_time` — ISO-8601 UTC string
     - `status` — TIMED | SCHEDULED | IN_PLAY | PAUSED | FINISHED | POSTPONED
-    - `stage` — tournament round (GROUP_STAGE, ROUND_OF_16 …)
-    - `group` — group letter (GROUP_A … GROUP_L), null for knockout rounds
-    - `venue` — stadium name from the home team record
-    - `live_score` — `{home, away, is_live}` when IN_PLAY or PAUSED;
-                     actual final score when FINISHED; null otherwise
+    - `live_score` — `{home, away, is_live}` when IN_PLAY, PAUSED, or FINISHED
     - `winner` — HOME_TEAM | AWAY_TEAM | DRAW | null
-
-    Results are ordered by kick-off time ascending.
     """
     from models import Match, Competition
-    from sqlalchemy import asc, desc, case, extract
+    from sqlalchemy import asc, desc, case, extract, or_
     from sqlalchemy.orm import joinedload, selectinload
 
     t_start = time.perf_counter()
@@ -912,52 +907,79 @@ def get_fixtures(
     logger.info(f"GET /api/fixtures  →  competition_code={competition_code}")
 
     try:
-        # ── Resolve competition ───────────────────────────────────────────────────
-        logger.info(f"GET /api/fixtures  →  Querying competition: {competition_code.upper()}")
-        comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
-        if not comp:
-            logger.error(f"GET /api/fixtures  →  Competition '{competition_code}' not found in database")
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"Competition '{competition_code}' not found in the database. "
-                    "Run the data collection pipeline first: "
-                    "POST /api/v1/predictions/collect?competition_code=WC"
-                ),
-            )
-        logger.info(f"GET /api/fixtures  →  Found competition: {comp.name} (id={comp.id})")
+        comp_code_str = competition_code if isinstance(competition_code, str) else "ALL"
+        is_all = comp_code_str.upper() == "ALL"
+        comp = None
+
+        if not is_all:
+            logger.info(f"GET /api/fixtures  →  Querying competition: {comp_code_str.upper()}")
+            comp = db.query(Competition).filter_by(code=comp_code_str.upper()).first()
+            if not comp:
+                logger.info(f"GET /api/fixtures  →  Competition '{comp_code_str}' has no records in database")
+                return {
+                    "status":      "success",
+                    "competition": comp_code_str.upper(),
+                    "count":       0,
+                    "fixtures":    [],
+                }
+            logger.info(f"GET /api/fixtures  →  Found competition: {comp.name} (id={comp.id})")
 
         # ── Build query ───────────────────────────────────────────────────────────
-        # Simplified query without complex sorting to diagnose timeout issue
-        logger.info(f"GET /api/fixtures  →  Building simplified query")
         query = (
             db.query(Match)
-            .filter(Match.competition_id == comp.id)
+            .options(joinedload(Match.competition), joinedload(Match.home_team), joinedload(Match.away_team), selectinload(Match.predictions))
         )
 
-        if status:
+        show_hist_bool = show_historical if isinstance(show_historical, bool) else False
+
+        if not is_all:
+            query = query.filter(Match.competition_id == comp.id)
+        else:
+            # For ALL current feed, exclude World Cup if finished and show_historical is False
+            if not show_hist_bool:
+                wc_comp = db.query(Competition).filter_by(code="WC").first()
+                if wc_comp:
+                    query = query.filter(Match.competition_id != wc_comp.id)
+
+        if isinstance(status, str) and status:
             query = query.filter(Match.status == status.upper())
 
-        if stage:
+        if isinstance(stage, str) and stage:
             query = query.filter(Match.stage == stage.upper())
 
-        if group:
+        if isinstance(group, str) and group:
             query = query.filter(Match.group == group.upper())
 
-        if date_from:
+        if isinstance(date_from, date):
             query = query.filter(Match.utc_date >= datetime.combine(date_from, datetime.min.time()))
 
-        if date_to:
+        if isinstance(date_to, date):
             query = query.filter(Match.utc_date <= datetime.combine(date_to, datetime.max.time()))
 
-        if year:
+        if isinstance(year, int):
             query = query.filter(extract('year', Match.utc_date) == year)
-        elif not show_historical:
-            # Default to only showing 2026 World Cup fixtures
-            query = query.filter(extract('year', Match.utc_date) >= 2026)
+        elif not show_hist_bool:
+            # Current feed: prioritize IN_PLAY, PAUSED, SCHEDULED, TIMED, or recent matches
+            now_utc = datetime.utcnow()
+            yesterday = now_utc - timedelta(hours=24)
+            query = query.filter(
+                or_(
+                    Match.status.in_(["IN_PLAY", "PAUSED", "SCHEDULED", "TIMED"]),
+                    Match.utc_date >= yesterday
+                )
+            )
 
-        # Simple ordering by date instead of complex tier-based sorting
-        query = query.order_by(Match.utc_date.desc())
+        # Ordering: Live (0) -> Upcoming chronologically (1 asc) -> Finished desc (2 desc)
+        m_year = extract("year", Match.utc_date)
+        tier_case = case(
+            (Match.status.in_({"IN_PLAY", "PAUSED"}), 0),
+            (Match.status.in_({"SCHEDULED", "TIMED"}), 1),
+            (Match.status == "FINISHED", 2),
+            else_=3,
+        )
+        asc_date  = case((tier_case.in_({0, 1}), Match.utc_date), else_=None)
+        desc_date = case((tier_case.in_({2, 3}), Match.utc_date), else_=None)
+        query = query.order_by(tier_case.asc(), asc_date.asc(), desc_date.desc())
 
         # ── Database Fetch ────────────────────────────────────────────────────────
         logger.info(f"GET /api/fixtures  →  Executing database query with limit={limit}")
@@ -1025,24 +1047,27 @@ def get_fixtures(
             fixtures_out = []
             for idx, m in enumerate(matches):
                 try:
+                    c_name = m.competition.name if m.competition else (comp.name if comp else "All Competitions")
+                    c_code = m.competition.code if m.competition else (competition_code.upper())
+                    c_id   = m.competition.id if m.competition else None
                     fixture = {
-                        "id":           m.id,
-                        "kickoff_time": m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None,
-                        "status":       m.status,
-                        "stage":        m.stage,
-                        "group":        m.group,
-                        "venue":        m.home_team.venue if m.home_team else None,
-                        "competition":  comp.name,
-                        "home_team":    _team(m.home_team),
-                        "away_team":    _team(m.away_team),
-                        "live_score":   _live_score(m),
-                        "winner":       m.winner,
-                        "prediction":   _prediction(m),
-                        "live_minute":  m.live_minute,
+                        "id":               m.id,
+                        "kickoff_time":     m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None,
+                        "status":           m.status,
+                        "stage":            m.stage,
+                        "group":            m.group,
+                        "venue":            m.home_team.venue if m.home_team else None,
+                        "competition":      c_name,
+                        "competition_code": c_code,
+                        "competition_id":   c_code,
+                        "home_team":        _team(m.home_team),
+                        "away_team":        _team(m.away_team),
+                        "live_score":       _live_score(m),
+                        "winner":           m.winner,
+                        "prediction":       _prediction(m),
+                        "live_minute":      m.live_minute,
                     }
                     fixtures_out.append(fixture)
-                    if idx < 3:  # Log first 3 matches for debugging
-                        logger.info(f"GET /api/fixtures  →  Serialized match {idx+1}/{len(matches)}: id={m.id}, status={m.status}")
                 except Exception as match_error:
                     logger.error(f"GET /api/fixtures  →  Error serializing match {m.id} at index {idx}: {match_error}", exc_info=True)
                     raise
@@ -1052,19 +1077,13 @@ def get_fixtures(
             
         t_serialize_end = time.perf_counter()
         serialize_ms = int((t_serialize_end - t_serialize_start) * 1000)
-        logger.info(f"GET /api/fixtures  →  Serialization completed in {serialize_ms}ms")
 
         t_end = time.perf_counter()
         elapsed_ms = int((t_end - t_start) * 1000)
 
-        logger.info(
-            f"/fixtures completed in {elapsed_ms}ms "
-            f"(query={query_ms}ms serialize={serialize_ms}ms)"
-        )
-
         return {
             "status":      "success",
-            "competition": comp.name,
+            "competition": comp.name if comp else "All Competitions",
             "count":       len(fixtures_out),
             "fixtures":    fixtures_out,
         }
@@ -1288,7 +1307,7 @@ def api_health():
 
 @router.get("/fixtures-enriched", summary="Fixtures with pre-computed Poisson markets for all matches")
 def get_fixtures_enriched(
-    competition_code: str = Query("WC", description="Competition code"),
+    competition_code: str = Query("ALL", description="Competition code ('ALL' for all active competitions, or 'PL', 'PD', 'SA', 'BL1', 'FL1', 'CL', 'DED', 'BSA', 'MLS', 'WC'). Defaults to ALL."),
     limit: int = Query(200, ge=1, le=500, description="Max fixtures to return"),
     year: Optional[int] = Query(None, description="Filter by kickoff year, e.g. 2026"),
     show_historical: bool = Query(False, description="Include historical matches"),
@@ -1299,58 +1318,75 @@ def get_fixtures_enriched(
 
     Enrichment is read from pre-computed Prediction rows (expected goals) or the
     in-memory cache populated by /predict-batch. ML inference is never run here.
-
-    Response-level cache (TTL=5 min) keyed on (competition_code, limit, year,
-    show_historical) ensures that repeated homepage loads never re-run the
-    Poisson engine loop — they get a pre-built dict in microseconds.
-
-    Live matches (IN_PLAY / PAUSED) bypass the response cache so the live
-    Poisson state is always fresh.
     """
     from models import Match, Competition
-    from sqlalchemy import extract
+    from sqlalchemy import extract, or_
     from sqlalchemy.orm import joinedload, selectinload
 
     t_start = time.perf_counter()
 
     try:
+        comp_code_str = competition_code if isinstance(competition_code, str) else "ALL"
+        is_all = comp_code_str.upper() == "ALL"
+        comp = None
+
+        if not is_all:
+            comp = db.query(Competition).filter_by(code=comp_code_str.upper()).first()
+            if not comp:
+                return {
+                    "status":      "success",
+                    "competition": comp_code_str.upper(),
+                    "count":       0,
+                    "elapsed_ms":  0,
+                    "fixtures":    [],
+                }
+
+        show_hist_bool = show_historical if isinstance(show_historical, bool) else False
+
         # ── Response-level cache check ────────────────────────────────────────────
-        _cache_key = f"{competition_code.upper()}|{limit}|{year}|{show_historical}"
+        _cache_key = f"{comp_code_str.upper()}|{limit}|{year}|{show_hist_bool}"
         _now_ts = time.time()
         if _cache_key in _fixtures_enriched_cache:
             _cached_resp, _expiry = _fixtures_enriched_cache[_cache_key]
             if _now_ts < _expiry:
-                # Return cached response — avoid all DB + Poisson work
                 _cache_ms = round((time.perf_counter() - t_start) * 1000, 2)
                 logger.info(
-                    f"GET /fixtures-enriched CACHE HIT {competition_code.upper()} "
+                    f"GET /fixtures-enriched CACHE HIT {comp_code_str.upper()} "
                     f"{_cached_resp.get('count', '?')} fixtures in {_cache_ms}ms"
                 )
                 return _cached_resp
-        # Stale or missing — evict and rebuild
         _fixtures_enriched_cache.pop(_cache_key, None)
-
-        comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
-        if not comp:
-            raise HTTPException(status_code=404, detail=f"Competition '{competition_code}' not found.")
 
         query = (
             db.query(Match)
-            .options(joinedload(Match.home_team), joinedload(Match.away_team), selectinload(Match.predictions))
-            .filter(Match.competition_id == comp.id)
+            .options(joinedload(Match.competition), joinedload(Match.home_team), joinedload(Match.away_team), selectinload(Match.predictions))
         )
 
-        if year:
+        if not is_all:
+            query = query.filter(Match.competition_id == comp.id)
+        else:
+            if not show_hist_bool:
+                wc_comp = db.query(Competition).filter_by(code="WC").first()
+                if wc_comp:
+                    query = query.filter(Match.competition_id != wc_comp.id)
+
+        if isinstance(year, int):
             query = query.filter(extract("year", Match.utc_date) == year)
-        elif not show_historical:
-            query = query.filter(extract("year", Match.utc_date) >= 2026)
+        elif not show_hist_bool:
+            now_utc = datetime.utcnow()
+            yesterday = now_utc - timedelta(hours=24)
+            query = query.filter(
+                or_(
+                    Match.status.in_(["IN_PLAY", "PAUSED", "SCHEDULED", "TIMED"]),
+                    Match.utc_date >= yesterday
+                )
+            )
 
         from sqlalchemy import case
-        m_year = extract("year", Match.utc_date)
         tier_case = case(
             (Match.status.in_({"IN_PLAY", "PAUSED"}), 0),
-            ((m_year >= 2026) & (Match.status != "FINISHED"), 1),
-            ((m_year >= 2026) & (Match.status == "FINISHED"), 2),
+            (Match.status.in_({"SCHEDULED", "TIMED"}), 1),
+            (Match.status == "FINISHED", 2),
             else_=3,
         )
         asc_date  = case((tier_case.in_({0, 1}), Match.utc_date), else_=None)
@@ -1362,7 +1398,6 @@ def get_fixtures_enriched(
         query_time_ms = round((t_query - t_start) * 1000, 2)
 
         # ── Bulk-load injury/suspension data for all teams in fixture set ──────────
-        # Collects all unique team IDs, then fires 4 queries total (no N+1).
         from models import Injury, Suspension
         from collections import defaultdict
 
@@ -1373,8 +1408,8 @@ def get_fixtures_enriched(
             if _m.away_team_id:
                 _team_ids.add(_m.away_team_id)
 
-        _inj_map: dict  = defaultdict(list)   # team_id → ["Player (desc)", …]
-        _susp_map: dict = defaultdict(list)   # team_id → ["Player (reason)", …]
+        _inj_map: dict  = defaultdict(list)
+        _susp_map: dict = defaultdict(list)
 
         if _team_ids:
             for _i in db.query(Injury).filter(Injury.team_id.in_(_team_ids)).all():
@@ -1384,11 +1419,9 @@ def get_fixtures_enriched(
                 _reason = _s.suspension_reason or "Suspended"
                 _susp_map[_s.team_id].append(f"{_s.player_name} ({_reason})")
 
-        # Deduplicate while preserving order
         def _dedup(lst: list) -> list:
             return list(dict.fromkeys(lst))
 
-        # ── Serialise helpers ──────────────────────────────────────────────────────
         def _team(t):
             if not t:
                 return None
@@ -1412,7 +1445,6 @@ def get_fixtures_enriched(
         enrichment_source_counts = {"finished_score": 0, "stored_prediction": 0, "live_prediction": 0, "cache": 0, "missing": 0}
 
         for m in matches:
-            # ── Base fixture fields ───────────────────────────────────────────────
             kt = m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None
 
             home_t = m.home_team
@@ -1432,7 +1464,6 @@ def get_fixtures_enriched(
                     "draw_probability":   stored_pred.draw_probability,
                 }
 
-            # ── Compute enrichment ────────────────────────────────────────────────
             enrichment = None
             if home_t and away_t:
                 try:
@@ -1445,24 +1476,17 @@ def get_fixtures_enriched(
                             most_likely_score=f"{m.home_score}-{m.away_score}",
                         )
                         enrichment_source_counts["finished_score"] += 1
-                        logger.debug(
-                            f"[fixtures-enriched] match_id={m.id} source=finished_score "
-                            f"{home_t.name} vs {away_t.name} xg=({h_xg:.2f},{a_xg:.2f})"
-                        )
                     elif (
                         stored_pred
                         and stored_pred.expected_home_goals is not None
                         and stored_pred.expected_away_goals is not None
                     ):
-                        # Check if match is LIVE - use live prediction
                         if m.status in ("IN_PLAY", "PAUSED"):
                             try:
-                                # Calculate strength difference from FIFA rankings
                                 strength_diff = 0.0
                                 if home_t.fifa_ranking and away_t.fifa_ranking:
-                                    strength_diff = away_t.fifa_ranking - home_t.fifa_ranking  # Lower FIFA = stronger
+                                    strength_diff = away_t.fifa_ranking - home_t.fifa_ranking
                                     
-                                # Get live prediction
                                 live_pred = get_live_prediction(
                                     current_minute=m.current_minute or 0,
                                     current_home_score=m.current_home_score or 0,
@@ -1474,8 +1498,6 @@ def get_fixtures_enriched(
                                     strength_diff=strength_diff,
                                 )
                                 
-                                # Build enrichment from live prediction
-                                # Transform Asian handicap to match frontend expectations
                                 live_ah = live_pred["markets"]["asian_handicap"]
                                 transformed_ah = _transform_asian_handicap(live_ah)
                                 enrichment = {
@@ -1496,64 +1518,54 @@ def get_fixtures_enriched(
                                     "live_metadata": live_pred["metadata"],
                                 }
                                 enrichment_source_counts["live_prediction"] += 1
-                                logger.debug(
-                                    f"[fixtures-enriched] match_id={m.id} source=live_prediction "
-                                    f"{home_t.name} vs {away_t.name} "
-                                    f"minute={m.current_minute}"
-                                )
                             except Exception as live_exc:
-                                logger.warning(f"[fixtures-enriched] Live prediction failed for match {m.id}: {live_exc}, falling back to stored prediction")
-                                # Fall back to stored prediction
                                 h_xg = float(stored_pred.expected_home_goals)
                                 a_xg = float(stored_pred.expected_away_goals)
                                 enrichment = _build_enrichment_from_xg(h_xg, a_xg)
                                 enrichment_source_counts["stored_prediction"] += 1
                         else:
-                            # Not live - use stored prediction
                             h_xg = float(stored_pred.expected_home_goals)
                             a_xg = float(stored_pred.expected_away_goals)
-                            enrichment = _build_enrichment_from_xg(
-                                h_xg,
-                                a_xg,
-                            )
+                            enrichment = _build_enrichment_from_xg(h_xg, a_xg)
                             enrichment_source_counts["stored_prediction"] += 1
-                            logger.debug(
-                                f"[fixtures-enriched] match_id={m.id} source=stored_prediction "
-                                f"{home_t.name} vs {away_t.name} xg=({h_xg:.2f},{a_xg:.2f})"
-                            )
                     else:
+                        m_comp_code = m.competition.code if m.competition else competition_code
                         enrichment = _lookup_cached_enrichment(
                             m.id,
                             home_t.name,
                             away_t.name,
-                            competition_code,
+                            m_comp_code,
                             cache_now,
                         )
                         if enrichment is not None:
                             enrichment_source_counts["cache"] += 1
-                            logger.debug(f"[fixtures-enriched] match_id={m.id} source=cache")
                         else:
                             enrichment_source_counts["missing"] += 1
-                            logger.debug(f"[fixtures-enriched] match_id={m.id} source=missing")
                 except Exception as exc:
                     logger.warning(f"[fixtures-enriched] enrichment failed for match {m.id}: {exc}")
                     errors += 1
 
+            c_name = m.competition.name if m.competition else (comp.name if comp else "All Competitions")
+            c_code = m.competition.code if m.competition else (competition_code.upper())
+            c_id   = m.competition.id if m.competition else None
+
             fixture = {
-                "id":            m.id,
-                "kickoff_time":  kt,
-                "status":        m.status,
-                "stage":         m.stage,
-                "group":         m.group,
-                "venue":         home_t.venue if home_t else None,
-                "competition":   comp.name,
-                "home_team":     _team(home_t),
-                "away_team":     _team(away_t),
-                "live_score":    live_score,
-                "winner":        m.winner,
-                "live_minute":   m.live_minute,
-                "prediction":    fixture_pred,
-                "enrichment":    enrichment,  # null if teams unknown
+                "id":               m.id,
+                "kickoff_time":     kt,
+                "status":           m.status,
+                "stage":            m.stage,
+                "group":            m.group,
+                "venue":            home_t.venue if home_t else None,
+                "competition":      c_name,
+                "competition_code": c_code,
+                "competition_id":   c_code,
+                "home_team":        _team(home_t),
+                "away_team":        _team(away_t),
+                "live_score":       live_score,
+                "winner":           m.winner,
+                "live_minute":      m.live_minute,
+                "prediction":       fixture_pred,
+                "enrichment":       enrichment,
             }
             fixtures_out.append(fixture)
 
@@ -1563,27 +1575,16 @@ def get_fixtures_enriched(
 
         has_live = enrichment_source_counts["live_prediction"] > 0
 
-        logger.info(
-            f"GET /fixtures-enriched {competition_code.upper()} {len(fixtures_out)} fixtures "
-            f"in {total_time_ms}ms (Q={query_time_ms}ms E={enrichment_time_ms}ms Err={errors} "
-            f"fs={enrichment_source_counts['finished_score']} sp={enrichment_source_counts['stored_prediction']} "
-            f"live={enrichment_source_counts['live_prediction']} "
-            f"cache={enrichment_source_counts['cache']} miss={enrichment_source_counts['missing']})"
-        )
-
         response = {
             "status":      "success",
-            "competition": comp.name,
+            "competition": comp.name if comp else "All Competitions",
             "count":       len(fixtures_out),
             "elapsed_ms":  int(total_time_ms),
             "fixtures":    fixtures_out,
         }
 
-        # Cache response unless there are live matches (live state changes every minute)
         if not has_live:
             _fixtures_enriched_cache[_cache_key] = (response, _now_ts + FIXTURES_ENRICHED_CACHE_TTL)
-        else:
-            logger.info(f"[fixtures-enriched] {enrichment_source_counts['live_prediction']} live match(es) — skipping response cache")
 
         return response
     except Exception as e:

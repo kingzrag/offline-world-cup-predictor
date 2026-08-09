@@ -271,7 +271,9 @@ export interface BackendFixture {
   stage: string | null;                 // GROUP_STAGE | ROUND_OF_16 | QUARTER_FINALS …
   group: string | null;                 // GROUP_A … GROUP_L, null for knockouts
   venue: string | null;                 // home team's stadium
-  competition: string | null;
+  competition: string | null;           // Competition name
+  competition_code: string | null;      // Competition code e.g. PL, SA, CL, WC
+  competition_id: string | null;        // Competition code (alias)
   home_team: BackendFixtureTeam | null;
   away_team: BackendFixtureTeam | null;
   live_score: BackendFixtureLiveScore | null;  // populated for IN_PLAY, PAUSED, FINISHED
@@ -550,7 +552,7 @@ export async function getH2h(
 /**
  * GET /fastapi/fixtures?status=&stage=&group=&date_from=&date_to=&limit=&competition_code=
  *
- * Defaults: competition_code=WC, limit=200
+ * Defaults: competition_code=ALL, limit=200
  * All parameters are optional.
  */
 export async function getFixtures(
@@ -595,7 +597,7 @@ export async function getFixtures(
 /**
  * GET /fastapi/fixtures-enriched?status=&stage=&group=&date_from=&date_to=&limit=&competition_code=
  *
- * Defaults: competition_code=WC, limit=200
+ * Defaults: competition_code=ALL, limit=200
  * All parameters are optional.
  */
 export async function getFixturesEnriched(
@@ -780,9 +782,10 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     finishedAt = (f as any).finished_at || new Date().toISOString();
   }
 
-  // Extract competition信息 from API response
-  const competitionName = (f as any).competition || "FIFA World Cup";
-  const competitionId = (f as any).competition_id || "WC";
+  // Extract competition info from API response
+  const competitionName = f.competition || (f as any).competition_name || "Football Match";
+  const competitionCode = f.competition_code || f.competition_id || (f as any).competition_code || "";
+  const competitionId = competitionCode;
   const competitionLogo = (f as any).competition_logo || null;
   const competitionCountry = (f as any).competition_country || "International";
   const competitionType = (f as any).competition_type || "International";
@@ -1144,7 +1147,7 @@ async function enrichMatchesIndividually(
     const chunk = pending.slice(i, i + concurrency);
     const settled = await Promise.allSettled(
       chunk.map(async (match) => {
-        const resp = await predictMatch(match.teamA, match.teamB, "WC", signal);
+        const resp = await predictMatch(match.teamA, match.teamB, match.competitionId || "ALL", signal);
         return { id: match.id, base: match, prediction: resp.prediction };
       })
     );
@@ -1205,15 +1208,16 @@ export async function loadFixturesInstant(
   year?: number,
   showHistorical?: boolean,
   signal?: AbortSignal,
-  limit: number = 30
+  limit: number = 200,
+  competitionCode: string = "ALL"
 ): Promise<MatchPrediction[]> {
   const t0 = performance.now();
 
-  console.log("[perf] ► fixtures fetch start");
+  console.log(`[perf] ► fixtures fetch start (competition_code=${competitionCode})`);
   let fixtures: (BackendFixture | BackendFixtureEnriched)[] = [];
   try {
     const fixturesResponse = await getFixturesEnriched({
-      competition_code: "WC",
+      competition_code: competitionCode,
       limit,
       year,
       show_historical: showHistorical,
@@ -1223,7 +1227,7 @@ export async function loadFixturesInstant(
     console.warn("[api] getFixturesEnriched failed, falling back to standard getFixtures:", err?.message);
     if (signal?.aborted) throw err;
     const fixturesResponse = await getFixtures({
-      competition_code: "WC",
+      competition_code: competitionCode,
       limit,
       year,
       show_historical: showHistorical,
@@ -1326,7 +1330,7 @@ export async function enrichPredictionsInBackground(
     const batchPayload = chunk.map(m => ({
       home_team: m.teamA,
       away_team: m.teamB,
-      competition_code: "WC",
+      competition_code: m.competitionId || "ALL",
       match_id: m.id,
     }));
 
@@ -1536,10 +1540,10 @@ export async function refreshLiveScoresInto(
 export async function refreshFixturesFromApi(
   existing: MatchPrediction[],
   showHistorical?: boolean,
-  limit: number = 30
+  limit: number = 200
 ): Promise<MatchPrediction[]> {
   const fixturesResponse = await getFixtures({
-    competition_code: "WC",
+    competition_code: "ALL",
     limit,
     show_historical: showHistorical,
   });
@@ -1555,8 +1559,8 @@ export async function refreshFixturesFromApi(
  */
 export async function getLiveFixtures(): Promise<MatchPrediction[]> {
   const [inPlay, paused] = await Promise.all([
-    getFixtures({ status: "IN_PLAY",  competition_code: "WC", limit: 50 }),
-    getFixtures({ status: "PAUSED",   competition_code: "WC", limit: 50 }),
+    getFixtures({ status: "IN_PLAY",  competition_code: "ALL", limit: 50 }),
+    getFixtures({ status: "PAUSED",   competition_code: "ALL", limit: 50 }),
   ]);
   const fixtures = [...(inPlay.fixtures || []), ...(paused.fixtures || [])];
   return fixtures.map(mapFixtureToPrediction);
