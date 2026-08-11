@@ -326,7 +326,7 @@ export default function App() {
   const [selectedCompFilter, setSelectedCompFilter] = useState<string>('all');
 
   // Infinite scrolling state
-  const [currentLimit, setCurrentLimit] = useState<number>(30);
+  const [currentLimit, setCurrentLimit] = useState<number>(200);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
 
@@ -458,7 +458,7 @@ export default function App() {
     if (isLoadingMore || !hasMore) return;
     
     setIsLoadingMore(true);
-    const newLimit = currentLimit + 30;
+    const newLimit = currentLimit + 50;
     
     try {
       const controller = new AbortController();
@@ -680,7 +680,7 @@ export default function App() {
       const clientHeight = window.innerHeight;
       
       // Load more when user is 200px from bottom
-      if (scrollHeight - scrollTop - clientHeight < 200 && hasMore && !isLoadingMore && activeTab === 'home') {
+      if (scrollHeight - scrollTop - clientHeight < 200 && hasMore && !isLoadingMore && (activeTab === 'home' || activeTab === 'predictions')) {
         loadMoreFixtures();
       }
     };
