@@ -45,19 +45,21 @@ import { MOCK_MATCHES } from "./data";
 //
 // IMPORTANT: All API paths should NOT include /api prefix. The BASE should include it.
 // This ensures consistent routing regardless of environment.
+const DEFAULT_PROD_API_URL = "https://offline-world-cup-predictor.onrender.com/api";
+
 let rawApiBase: string = (import.meta as any).env.PROD
-  ? ((import.meta as any).env.VITE_API_URL as string) ?? ""
+  ? ((import.meta as any).env.VITE_API_URL as string) || DEFAULT_PROD_API_URL
   : "/fastapi";
 
 // Ensure BASE always ends with /api for production, or /fastapi for development
-// If VITE_API_URL doesn't include /api, append it automatically
-if ((import.meta as any).env.PROD && rawApiBase && !rawApiBase.endsWith('/api')) {
-  if (rawApiBase.endsWith('/')) {
-    rawApiBase = rawApiBase + 'api';
-  } else {
-    rawApiBase = rawApiBase + '/api';
+if ((import.meta as any).env.PROD && rawApiBase) {
+  if (!rawApiBase.endsWith('/api')) {
+    if (rawApiBase.endsWith('/')) {
+      rawApiBase = rawApiBase + 'api';
+    } else {
+      rawApiBase = rawApiBase + '/api';
+    }
   }
-  console.warn(`[api] VITE_API_URL didn't include /api suffix. Auto-appended. New BASE: "${rawApiBase}"`);
 }
 
 export const API_BASE: string = rawApiBase;
@@ -67,12 +69,6 @@ console.info(
   `[api] Resolved API base: "${API_BASE}" ` +
   `(${(import.meta as any).env.PROD ? "production → direct backend" : "development → Express proxy"})`
 );
-if ((import.meta as any).env.PROD && !API_BASE) {
-  console.error(
-    "[api] VITE_API_URL is not set — prediction requests will fail. " +
-    "Set it in Vercel → Environment Variables (e.g. https://your-backend.onrender.com/api)"
-  );
-}
 
 /** @internal – used by every apiFetch call below */
 const BASE = API_BASE;

@@ -839,7 +839,7 @@ export default function App() {
   const handleSimulateResult = async (correct: boolean, isHighConf: boolean) => {
     try {
       setPerfLoading(true);
-      const res = await fetch("/api/model-performance/update", {
+      const res = await fetch(`${API_BASE}/model-performance/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ correct, is_high_confidence: isHighConf })
@@ -914,7 +914,7 @@ export default function App() {
   const handleResetPerformance = async () => {
     try {
       setPerfLoading(true);
-      const res = await fetch("/api/model-performance/reset", { method: "POST" });
+      const res = await fetch(`${API_BASE}/model-performance/reset`, { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         setPerformanceData(data);
@@ -1099,7 +1099,7 @@ export default function App() {
     setAiMatchLoading(true);
 
     try {
-      const response = await fetch('/api/match-summary', {
+      const response = await fetch(`${API_BASE}/match-summary`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1220,7 +1220,7 @@ export default function App() {
     setAiInsightLoading(insight.id);
 
     try {
-      const response = await fetch('/api/intelligence-explain', {
+      const response = await fetch(`${API_BASE}/intelligence-explain`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

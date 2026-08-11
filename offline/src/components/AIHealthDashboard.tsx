@@ -16,7 +16,9 @@ import {
   Lightning
 } from '@phosphor-icons/react';
 
-const API_BASE = '/api/ai';
+import { API_BASE as MAIN_API_BASE } from '../api';
+
+const API_BASE = `${MAIN_API_BASE}/ai`;
 
 interface ServiceStatus {
   status: 'healthy' | 'warning' | 'offline';

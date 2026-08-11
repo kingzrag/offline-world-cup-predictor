@@ -63,22 +63,24 @@ def get_allowed_origins():
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8080",
+        "https://offline-world-cup-predictor-5e4g9xmid-kingzrags-projects.vercel.app",
         "https://offline-world-cup-predictor-4qw0p16ch-kingzrags-projects.vercel.app",
         "https://offline-world-cup-predictor.vercel.app",
     ]
     
-    # Add production Vercel domain if specified
-    vercel_domain = os.getenv("VERCEL_DOMAIN")
-    if vercel_domain:
-        default_origins.append(f"https://{vercel_domain}")
-        default_origins.append(f"https://www.{vercel_domain}")
+    # Add production/preview Vercel domain if specified via env vars
+    for env_var in ["VERCEL_DOMAIN", "VERCEL_URL"]:
+        v_url = os.getenv(env_var)
+        if v_url:
+            v_url = v_url.replace("https://", "").replace("http://", "").strip("/")
+            default_origins.append(f"https://{v_url}")
+            default_origins.append(f"https://www.{v_url}")
     
     return default_origins
 
 ALLOWED_ORIGINS = get_allowed_origins()
 
-# Regex to match all Vercel preview deployments
-# Matches: https://*.vercel.app and https://*.vercel.app/*
+# Regex to match all Vercel preview and project deployments (*.vercel.app)
 ALLOWED_ORIGIN_REGEX = r"https://.*\.vercel\.app"
 
 app.add_middleware(
