@@ -1319,7 +1319,7 @@ def get_fixtures_enriched(
     Enrichment is read from pre-computed Prediction rows (expected goals) or the
     in-memory cache populated by /predict-batch. ML inference is never run here.
     """
-    from models import Match, Competition
+    from models import Match, Competition, Prediction
     from sqlalchemy import extract, or_, text
     from sqlalchemy.orm import joinedload
 
@@ -1372,14 +1372,18 @@ def get_fixtures_enriched(
             f"show_historical={show_hist_bool} cache_check_ms={round((t_cache_done - t_start)*1000,1)}"
         )
 
-        # ── Build query ───────────────────────────────────────────────────────────
+        # ── Build main matches query (NO predictions join — fetched separately below) ──
+        # FIX: Neither selectinload nor joinedload works well on Render free-tier:
+        #   - selectinload fires a 2nd round-trip that hangs on cold DB
+        #   - joinedload with 200 rows creates a massive JOIN result set (200 × N rows)
+        # Solution: fetch predictions in one targeted bulk query after the main fetch,
+        # then build a dict keyed by match_id — O(1) lookup per fixture, zero JOIN bloat.
         query = (
             db.query(Match)
             .options(
                 joinedload(Match.competition),
                 joinedload(Match.home_team),
                 joinedload(Match.away_team),
-                joinedload(Match.predictions),
             )
         )
 
@@ -1388,7 +1392,7 @@ def get_fixtures_enriched(
         else:
             if not show_hist_bool:
                 ACTIVE_COMPETITION_CODES = {
-                    "PL", "PD", "SA", "BL1", "FL1", "DED", "BSA", "CL", 
+                    "PL", "PD", "SA", "BL1", "FL1", "DED", "BSA", "CL",
                     "WC", "EC", "CA", "UNL", "CNL"
                 }
                 active_comps = (
@@ -1433,6 +1437,34 @@ def get_fixtures_enriched(
         logger.info(
             f"[fixtures-enriched] STAGE query_done rows={len(matches)} "
             f"query_ms={query_time_ms} total_elapsed_ms={round((t_query_end - t_start)*1000,1)}"
+        )
+
+        # ── Bulk-fetch predictions in one targeted query (no JOIN, no row explosion) ──
+        # Fetches only the 6 columns we use; keyed by match_id for O(1) lookup.
+        _match_ids = [m.id for m in matches]
+        _pred_map: dict = {}
+        if _match_ids:
+            _preds = (
+                db.query(
+                    Prediction.match_id,
+                    Prediction.predicted_outcome,
+                    Prediction.home_probability,
+                    Prediction.away_probability,
+                    Prediction.draw_probability,
+                    Prediction.expected_home_goals,
+                    Prediction.expected_away_goals,
+                )
+                .filter(Prediction.match_id.in_(_match_ids))
+                .all()
+            )
+            # Keep only the FIRST prediction per match (most recent wins if dupes exist)
+            for _p in _preds:
+                if _p.match_id not in _pred_map:
+                    _pred_map[_p.match_id] = _p
+        t_pred_end = time.perf_counter()
+        logger.info(
+            f"[fixtures-enriched] STAGE predictions_done count={len(_pred_map)} "
+            f"elapsed_ms={round((t_pred_end - t_start)*1000,1)}"
         )
 
         # ── Bulk-load injury/suspension data for all teams in fixture set ──────────
@@ -1496,7 +1528,7 @@ def get_fixtures_enriched(
             if m.status in score_statuses and m.home_score is not None and m.away_score is not None:
                 live_score = {"home": m.home_score, "away": m.away_score, "is_live": m.status in live_statuses}
 
-            stored_pred = m.predictions[0] if m.predictions else None
+            stored_pred = _pred_map.get(m.id)  # O(1) dict lookup, no DB query
             fixture_pred = None
             if stored_pred:
                 fixture_pred = {
