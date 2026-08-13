@@ -1320,8 +1320,8 @@ def get_fixtures_enriched(
     in-memory cache populated by /predict-batch. ML inference is never run here.
     """
     from models import Match, Competition
-    from sqlalchemy import extract, or_
-    from sqlalchemy.orm import joinedload, selectinload
+    from sqlalchemy import extract, or_, text
+    from sqlalchemy.orm import joinedload
 
     t_start = time.perf_counter()
 
@@ -1357,18 +1357,48 @@ def get_fixtures_enriched(
                 return _cached_resp
         _fixtures_enriched_cache.pop(_cache_key, None)
 
+        # ── DB statement timeout guard ────────────────────────────────────────────
+        # Prevents a slow production DB (Render free-tier) from holding the
+        # connection open indefinitely. After 10 s the DB raises QueryCanceled
+        # and the endpoint returns 500 instead of hanging for 30+ seconds.
+        try:
+            db.execute(text("SET LOCAL statement_timeout = '10000'"))
+        except Exception as _sto_err:
+            logger.debug(f"[fixtures-enriched] statement_timeout not set: {_sto_err}")
+
+        t_cache_done = time.perf_counter()
+        logger.info(
+            f"[fixtures-enriched] START comp={comp_code_str.upper()} limit={limit} "
+            f"show_historical={show_hist_bool} cache_check_ms={round((t_cache_done - t_start)*1000,1)}"
+        )
+
+        # ── Build query ───────────────────────────────────────────────────────────
         query = (
             db.query(Match)
-            .options(joinedload(Match.competition), joinedload(Match.home_team), joinedload(Match.away_team), selectinload(Match.predictions))
+            .options(
+                joinedload(Match.competition),
+                joinedload(Match.home_team),
+                joinedload(Match.away_team),
+                joinedload(Match.predictions),
+            )
         )
 
         if not is_all:
             query = query.filter(Match.competition_id == comp.id)
         else:
             if not show_hist_bool:
-                wc_comp = db.query(Competition).filter_by(code="WC").first()
-                if wc_comp:
-                    query = query.filter(Match.competition_id != wc_comp.id)
+                ACTIVE_COMPETITION_CODES = {
+                    "PL", "PD", "SA", "BL1", "FL1", "DED", "BSA", "CL", 
+                    "WC", "EC", "CA", "UNL", "CNL"
+                }
+                active_comps = (
+                    db.query(Competition.id)
+                    .filter(Competition.code.in_(ACTIVE_COMPETITION_CODES))
+                    .all()
+                )
+                active_comp_ids = [row[0] for row in active_comps]
+                if active_comp_ids:
+                    query = query.filter(Match.competition_id.in_(active_comp_ids))
 
         if isinstance(year, int):
             query = query.filter(extract("year", Match.utc_date) == year)
@@ -1393,9 +1423,17 @@ def get_fixtures_enriched(
         desc_date = case((tier_case.in_({2, 3}), Match.utc_date), else_=None)
         query = query.order_by(tier_case.asc(), asc_date.asc(), desc_date.desc())
 
+        t_query_start = time.perf_counter()
+        logger.info(f"[fixtures-enriched] STAGE query_start elapsed_ms={round((t_query_start - t_start)*1000,1)}")
+
         matches = query.limit(limit).all()
-        t_query = time.perf_counter()
-        query_time_ms = round((t_query - t_start) * 1000, 2)
+
+        t_query_end = time.perf_counter()
+        query_time_ms = round((t_query_end - t_query_start) * 1000, 2)
+        logger.info(
+            f"[fixtures-enriched] STAGE query_done rows={len(matches)} "
+            f"query_ms={query_time_ms} total_elapsed_ms={round((t_query_end - t_start)*1000,1)}"
+        )
 
         # ── Bulk-load injury/suspension data for all teams in fixture set ──────────
         from models import Injury, Suspension
@@ -1418,6 +1456,9 @@ def get_fixtures_enriched(
             for _s in db.query(Suspension).filter(Suspension.team_id.in_(_team_ids)).all():
                 _reason = _s.suspension_reason or "Suspended"
                 _susp_map[_s.team_id].append(f"{_s.player_name} ({_reason})")
+
+        t_inj_done = time.perf_counter()
+        logger.info(f"[fixtures-enriched] STAGE injuries_done teams={len(_team_ids)} elapsed_ms={round((t_inj_done - t_start)*1000,1)}")
 
         def _dedup(lst: list) -> list:
             return list(dict.fromkeys(lst))
@@ -1444,9 +1485,10 @@ def get_fixtures_enriched(
         errors = 0
         enrichment_source_counts = {"finished_score": 0, "stored_prediction": 0, "live_prediction": 0, "cache": 0, "missing": 0}
 
+        t_enrich_start = time.perf_counter()
+
         for m in matches:
             kt = m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None
-
             home_t = m.home_team
             away_t = m.away_team
 
@@ -1470,17 +1512,9 @@ def get_fixtures_enriched(
                     if m.status == "FINISHED" and m.home_score is not None and m.away_score is not None:
                         h_xg = float(m.home_score)
                         a_xg = float(m.away_score)
-                        enrichment = _build_enrichment_from_xg(
-                            h_xg,
-                            a_xg,
-                            most_likely_score=f"{m.home_score}-{m.away_score}",
-                        )
+                        enrichment = _build_enrichment_from_xg(h_xg, a_xg, most_likely_score=f"{m.home_score}-{m.away_score}")
                         enrichment_source_counts["finished_score"] += 1
-                    elif (
-                        stored_pred
-                        and stored_pred.expected_home_goals is not None
-                        and stored_pred.expected_away_goals is not None
-                    ):
+                    elif stored_pred and stored_pred.expected_home_goals is not None and stored_pred.expected_away_goals is not None:
                         if m.status in ("IN_PLAY", "PAUSED"):
                             try:
                                 strength_diff = 0.0
@@ -1518,7 +1552,7 @@ def get_fixtures_enriched(
                                     "live_metadata": live_pred["metadata"],
                                 }
                                 enrichment_source_counts["live_prediction"] += 1
-                            except Exception as live_exc:
+                            except Exception:
                                 h_xg = float(stored_pred.expected_home_goals)
                                 a_xg = float(stored_pred.expected_away_goals)
                                 enrichment = _build_enrichment_from_xg(h_xg, a_xg)
@@ -1530,13 +1564,7 @@ def get_fixtures_enriched(
                             enrichment_source_counts["stored_prediction"] += 1
                     else:
                         m_comp_code = m.competition.code if m.competition else competition_code
-                        enrichment = _lookup_cached_enrichment(
-                            m.id,
-                            home_t.name,
-                            away_t.name,
-                            m_comp_code,
-                            cache_now,
-                        )
+                        enrichment = _lookup_cached_enrichment(m.id, home_t.name, away_t.name, m_comp_code, cache_now)
                         if enrichment is not None:
                             enrichment_source_counts["cache"] += 1
                         else:
@@ -1544,10 +1572,10 @@ def get_fixtures_enriched(
                 except Exception as exc:
                     logger.warning(f"[fixtures-enriched] enrichment failed for match {m.id}: {exc}")
                     errors += 1
+                    enrichment = None
 
             c_name = m.competition.name if m.competition else (comp.name if comp else "All Competitions")
             c_code = m.competition.code if m.competition else (competition_code.upper())
-            c_id   = m.competition.id if m.competition else None
 
             fixture = {
                 "id":               m.id,
@@ -1570,10 +1598,15 @@ def get_fixtures_enriched(
             fixtures_out.append(fixture)
 
         t_end = time.perf_counter()
-        enrichment_time_ms = round((t_end - t_query) * 1000, 2)
+        enrichment_time_ms = round((t_end - t_enrich_start) * 1000, 2)
         total_time_ms = round((t_end - t_start) * 1000, 2)
-
         has_live = enrichment_source_counts["live_prediction"] > 0
+
+        logger.info(
+            f"[fixtures-enriched] DONE comp={comp_code_str.upper()} count={len(fixtures_out)} "
+            f"errors={errors} total_ms={total_time_ms} query_ms={query_time_ms} "
+            f"enrich_ms={enrichment_time_ms} sources={enrichment_source_counts}"
+        )
 
         response = {
             "status":      "success",
