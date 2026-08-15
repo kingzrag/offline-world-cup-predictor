@@ -45,7 +45,7 @@ import { MOCK_MATCHES } from "./data";
 //
 // IMPORTANT: All API paths should NOT include /api prefix. The BASE should include it.
 // This ensures consistent routing regardless of environment.
-const DEFAULT_PROD_API_URL = "https://offline-world-cup-predictor.onrender.com/api";
+const DEFAULT_PROD_API_URL = "https://offline-world-cup-predictor-lgzw.onrender.com/api";
 
 let rawApiBase: string = (import.meta as any).env.PROD
   ? ((import.meta as any).env.VITE_API_URL as string) || DEFAULT_PROD_API_URL
