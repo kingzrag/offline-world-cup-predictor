@@ -15,13 +15,20 @@ try:
     pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "1800"))
     connect_timeout = int(os.getenv("DB_CONNECT_TIMEOUT", "5"))
     
+    connect_args = {}
+    if "postgresql" in settings.DATABASE_URL:
+        connect_args["connect_timeout"] = connect_timeout
+        if "sslmode=" not in settings.DATABASE_URL and "localhost" not in settings.DATABASE_URL and "127.0.0.1" not in settings.DATABASE_URL:
+            connect_args["sslmode"] = "require"
+
     engine = create_engine(
         settings.DATABASE_URL,
         pool_size=pool_size,
         max_overflow=max_overflow,
         pool_recycle=pool_recycle,
-        pool_timeout=10,
+        pool_timeout=5,
         pool_pre_ping=True,
+        connect_args=connect_args,
         echo=False
     )
         
