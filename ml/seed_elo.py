@@ -64,12 +64,16 @@ def _seed_team_metadata(db: Session) -> None:
     Updates teams.fifa_ranking and teams.squad_market_value for every
     team in TEAM_DATA that already exists in the teams table.
     Only updates rows where the column is currently NULL.
+    Uses 1 bulk query to load teams into memory instead of 65 N+1 ILIKE queries.
     """
+    all_teams = db.query(Team).all()
+    teams_by_name = {t.name.lower(): t for t in all_teams if t.name}
+
     updated = 0
     skipped = 0
 
     for team_name, (fifa_rank, squad_mv) in TEAM_DATA.items():
-        team = db.query(Team).filter(Team.name.ilike(team_name)).first()
+        team = teams_by_name.get(team_name.lower())
         if not team:
             skipped += 1
             continue

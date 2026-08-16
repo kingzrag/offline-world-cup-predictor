@@ -54,6 +54,11 @@ class OddsService:
                 odds = self._request(f"sports/{sport_key}/odds", {"regions": "eu", "markets": "h2h"})
                 logger.info(f"Fetched {len(odds)} upcoming matches from sport key: {sport_key}")
                 all_odds.extend(odds)
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code in (401, 429):
+                    logger.warning(f"Odds API usage quota reached/unauthorized ({e.response.status_code}) — stopping odds fetch loop.")
+                    break
+                logger.error(f"Failed to fetch odds for sport key {sport_key}: {e}")
             except Exception as e:
                 logger.error(f"Failed to fetch odds for sport key {sport_key}: {e}")
                 

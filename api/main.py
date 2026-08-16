@@ -266,6 +266,7 @@ async def run_live_match_sync():
                         fd_summary["updated_count"] = fd_summary.get("updated_count", 0) + _s.get("updated_count", 0)
                     except Exception as _sync_err:
                         logger.warning(f"Live sync: ingest_matches({_sync_code}) failed: {_sync_err}")
+                    await asyncio.sleep(0.05)  # Yield to event loop between competitions
                 logger.info(
                     f"Football-Data sync completed - processed={fd_summary.get('matches', 0)} "
                     f"updated={fd_summary.get('updated_count', 0)} "
