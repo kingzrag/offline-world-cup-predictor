@@ -63,8 +63,11 @@ def get_allowed_origins():
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8080",
+        "https://offline-world-cup-predictor-f0uf6e116-kingrazgs-projects.vercel.app",
         "https://offline-world-cup-predictor-5e4g9xmid-kingzrags-projects.vercel.app",
         "https://offline-world-cup-predictor-4qw0p16ch-kingzrags-projects.vercel.app",
+        "https://offline-world-cup-predictor-kingrazgs-projects.vercel.app",
+        "https://offline-world-cup-predictor-kingzrags-projects.vercel.app",
         "https://offline-world-cup-predictor.vercel.app",
     ]
     

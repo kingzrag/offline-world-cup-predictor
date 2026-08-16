@@ -58,10 +58,13 @@ export function EditorialHero({
     const EDITORIAL_BASE = '/editorial';
     fetch(`${EDITORIAL_BASE}/manifest.json`)
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const contentType = r.headers.get('content-type') || '';
+        if (!r.ok || contentType.includes('text/html')) {
+          return null;
+        }
         return r.json();
       })
-      .then((manifest: Array<{ id: string; title: string; cover: string; left: string; right: string }>) => {
+      .then((manifest: Array<{ id: string; title: string; cover: string; left: string; right: string }> | null) => {
         if (Array.isArray(manifest) && manifest.length > 0) {
           const available: EditorialHeroSet[] = manifest.map((entry) => ({
             id: entry.id,
@@ -73,8 +76,8 @@ export function EditorialHero({
           setEditorialHeroes(available);
         }
       })
-      .catch((err) => {
-        console.warn('[EditorialHero] Could not fetch remote manifest.json, using built-in editorial sets:', err.message);
+      .catch(() => {
+        // Silent fallback to built-in editorial sets
       });
   }, []);
 

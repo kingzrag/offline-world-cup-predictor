@@ -9,6 +9,7 @@ import { useViewportSnap } from './hooks/useViewportSnap';
 import { 
   getPredictions, 
   loadFixturesInstant,
+  loadFixturesProgressive,
   enrichPredictionsInBackground,
   refreshFixturesFromApi,
   refreshLiveScoresInto,
@@ -369,17 +370,23 @@ export default function App() {
         const attemptStart = performance.now();
 
         try {
-          // ── Phase 1: render fixtures instantly (no ML inference) ────────────
-          console.log(`[App] Attempt ${attempt} → loading fixtures instantly...`);
-          const fixtures = await loadFixturesInstant(undefined, false, signal, currentLimit);
+          // ── Phase 1: render fixtures progressively (instant initial batch, then background hydration)
+          console.log(`[App] Attempt ${attempt} → loading fixtures progressively...`);
+          const fixtures = await loadFixturesProgressive("ALL", signal, (progressiveMatches, isComplete) => {
+            if (signal.aborted) return;
+            setSourceMatches(sortSourceMatches(progressiveMatches));
+            if (!isComplete) {
+              setIsLoadingMatches(false);
+              setIsBackendConnected(true);
+              setIsRetrying(false);
+              setMatchError(null);
+            }
+          });
           if (signal.aborted) return;
 
-          console.log(`[App] Attempt ${attempt} succeeded: ${fixtures.length} fixtures rendered instantly.`);
+          console.log(`[App] Attempt ${attempt} succeeded: ${fixtures.length} fixtures loaded.`);
           setSourceMatches(sortSourceMatches(fixtures));
           setHasMore(fixtures.length === currentLimit);
-
-          // Load Monte Carlo tournament simulation results in the background
-          // loadTournamentData(); // HIDE TOURNAMENT LOAD
 
           setMatchError(null);
           setIsLoadingMatches(false);
@@ -542,8 +549,8 @@ export default function App() {
       idleInterval = null;
 
       if (hasLive) {
-        console.info("[App] Live matches detected — 15s score polling active");
-        liveInterval = setInterval(refreshLive, 15_000);
+        console.info("[App] Live matches detected — 12s lightweight score polling active");
+        liveInterval = setInterval(refreshLive, 12_000);
       } else {
         console.info("[App] No live matches — 5min idle polling active");
         idleInterval = setInterval(refreshAll, 5 * 60_000);

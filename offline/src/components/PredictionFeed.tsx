@@ -7,6 +7,7 @@ import {
   isKickoffToday,
   isKickoffTomorrow,
 } from '../dateTimeUtils';
+import { loadFixturesProgressive } from '../api';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface PredictionFeedProps {
@@ -385,6 +386,17 @@ const PredictionFeed = ({
 }: PredictionFeedProps) => {
   const [activeFilter, setActiveFilter] = useState(initialFilter);
 
+  const handleFilterChange = (id: string) => {
+    setActiveFilter(id);
+    const isSpecialFilter = ['all', 'live', 'today', 'tomorrow', 'favorites'].includes(id);
+    if (!isSpecialFilter) {
+      console.log(`[PredictionFeed] League-specific tab selected: ${id}`);
+      loadFixturesProgressive(id).catch(err =>
+        console.warn(`[PredictionFeed] Failed loading league ${id}:`, err)
+      );
+    }
+  };
+
   useEffect(() => {
     if (initialFilter) {
       setActiveFilter(initialFilter);
@@ -463,7 +475,7 @@ const PredictionFeed = ({
         <FilterBar
           matches={matches}
           activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
+          onFilterChange={handleFilterChange}
         />
       </div>
 
@@ -472,7 +484,7 @@ const PredictionFeed = ({
         <Sidebar
           matches={matches}
           activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
+          onFilterChange={handleFilterChange}
           favoriteCount={favoriteMatchIds.length}
           isLoading={isLoading}
         />
@@ -537,7 +549,7 @@ const PredictionFeed = ({
               )}
 
               <button
-                onClick={() => setActiveFilter('all')}
+                onClick={() => handleFilterChange('all')}
                 className="px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.2em] bg-[#1C1B17] text-[#F7F4EE] rounded hover:bg-[#3a3a3a] transition-colors"
               >
                 Show all matches

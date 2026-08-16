@@ -9,7 +9,7 @@ class Suspension(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     player_name = Column(String(100), nullable=False)
-    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
     team_name = Column(String(100), nullable=False)
     suspension_reason = Column(String(255), nullable=True)
     matches_remaining = Column(Integer, nullable=True)

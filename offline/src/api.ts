@@ -1471,61 +1471,180 @@ export function mergeLiveScoreUpdate(
  * Lightweight poll — fetches only IN_PLAY/PAUSED fixtures and merges into existing state.
  * Used by the 30-second live refresh interval.
  */
+export interface BackendLiveMatch {
+  id: number;
+  status: string;
+  kickoff_time: string | null;
+  competition: string;
+  competition_code: string;
+  live_minute: number | null;
+  live_score: {
+    home: number;
+    away: number;
+    is_live: boolean;
+  } | null;
+  cards: {
+    home_red: number;
+    away_red: number;
+    home_yellow: number;
+    away_yellow: number;
+  };
+  home_team: {
+    id: number | null;
+    name: string | null;
+    short_name: string | null;
+    tla: string | null;
+    crest_url: string | null;
+  } | null;
+  away_team: {
+    id: number | null;
+    name: string | null;
+    short_name: string | null;
+    tla: string | null;
+    crest_url: string | null;
+  } | null;
+}
+
+/**
+ * GET /api/live
+ * Fast lightweight endpoint returning only currently live matches (5ms).
+ */
+export async function getLiveMatches(competitionCode: string = "ALL"): Promise<BackendLiveMatch[]> {
+  const cacheKey = getCacheKey('/live', { competitionCode });
+  const cached = getCachedData<BackendLiveMatch[]>(cacheKey);
+  if (cached) return cached;
+
+  const qs = new URLSearchParams();
+  if (competitionCode && competitionCode.toUpperCase() !== "ALL") {
+    qs.set("competition_code", competitionCode);
+  }
+  try {
+    const res = await apiFetch<{ status: string; count: number; matches: BackendLiveMatch[] }>(`/live?${qs.toString()}`);
+    const matches = res.matches || [];
+    setCachedData(cacheKey, matches, 8 * 1000); // 8 second cache for live endpoint
+    return matches;
+  } catch (err) {
+    console.warn("[api] GET /live failed:", err);
+    return [];
+  }
+}
+
+/**
+ * loadFixturesProgressive()
+ *
+ * Progressive loading strategy:
+ *   Step 1: Load fast initial batch (limit=30 for ALL, or limit=100 for specific league) -> displays immediately (<1-2s).
+ *   Step 2: Load full 200 matches in background -> hydrates feed progressively.
+ */
+export async function loadFixturesProgressive(
+  competitionCode: string = "ALL",
+  signal?: AbortSignal,
+  onProgress?: (matches: MatchPrediction[], isComplete: boolean) => void
+): Promise<MatchPrediction[]> {
+  const t0 = performance.now();
+  console.log(`[perf] ► progressive load start (comp=${competitionCode})`);
+
+  let initialMatches: MatchPrediction[] = [];
+  try {
+    const fastResp = await getFixturesEnriched({
+      competition_code: competitionCode,
+      limit: competitionCode.toUpperCase() === "ALL" ? 30 : 100,
+      show_historical: false,
+    });
+    initialMatches = (fastResp.fixtures || []).map(mapFixtureToPrediction);
+    const t1 = performance.now();
+    console.log(`[perf] Step 1 fast load: ${(t1 - t0).toFixed(0)} ms (${initialMatches.length} matches)`);
+    if (onProgress) onProgress(initialMatches, false);
+  } catch (err) {
+    console.warn("[api] Progressive Step 1 failed:", err);
+  }
+
+  if (competitionCode.toUpperCase() !== "ALL") {
+    if (onProgress && initialMatches.length > 0) onProgress(initialMatches, true);
+    return initialMatches;
+  }
+
+  try {
+    if (signal?.aborted) return initialMatches;
+    const fullResp = await getFixturesEnriched({
+      competition_code: competitionCode,
+      limit: 200,
+      show_historical: false,
+    });
+    const fullMatches = (fullResp.fixtures || []).map(mapFixtureToPrediction);
+    const t2 = performance.now();
+    console.log(`[perf] Step 2 full load: ${(t2 - t0).toFixed(0)} ms (${fullMatches.length} matches)`);
+    if (onProgress) onProgress(fullMatches, true);
+    return fullMatches;
+  } catch (err) {
+    console.warn("[api] Progressive Step 2 failed:", err);
+    if (onProgress && initialMatches.length > 0) onProgress(initialMatches, true);
+    return initialMatches;
+  }
+}
+
+/**
+ * refreshLiveScoresInto()
+ * Ultra-fast poll — hits /api/live and merges score, minute & status updates into existing matches array.
+ */
 export async function refreshLiveScoresInto(
   existing: MatchPrediction[]
 ): Promise<MatchPrediction[]> {
-  const previouslyLiveIds = new Set(
-    existing.filter(m => m.status === "LIVE").map(m => m.id)
-  );
-
-  const liveFixtures = await getLiveFixtures();
-
-  if (previouslyLiveIds.size > 0) {
-    const stillLiveIds = new Set(liveFixtures.map(f => f.id));
-    const endedCount = [...previouslyLiveIds].filter(id => !stillLiveIds.has(id)).length;
-    if (endedCount > 0) {
-      console.info(
-        `[api] ${endedCount} previously-live match(es) no longer IN_PLAY — running full fixture refresh`
-      );
-      return refreshFixturesFromApi(existing);
+  try {
+    const liveMatches = await getLiveMatches("ALL");
+    if (liveMatches.length === 0) {
+      const fallbackFixtures = await getLiveFixtures();
+      if (fallbackFixtures.length === 0) return existing;
+      const liveMap = new Map(fallbackFixtures.map(f => [f.id, f]));
+      return existing.map(m => {
+        const fresh = liveMap.get(m.id);
+        return fresh ? mergeLiveScoreUpdate(m, fresh) : m;
+      });
     }
-  }
 
-  if (liveFixtures.length === 0) {
-    console.info("[api] refreshLiveScoresInto — no live fixtures in DB");
+    const liveMap = new Map(liveMatches.map(m => [String(m.id), m]));
+    let changeCount = 0;
+
+    const updated = existing.map(match => {
+      const fresh = liveMap.get(match.id);
+      if (!fresh) return match;
+
+      const newHome = fresh.live_score?.home ?? match.liveScore?.home ?? 0;
+      const newAway = fresh.live_score?.away ?? match.liveScore?.away ?? 0;
+      const newMin = fresh.live_minute ?? match.minute;
+      const newStatus = fresh.status === "IN_PLAY" || fresh.status === "PAUSED" ? "LIVE" : match.status;
+
+      const scoreChanged =
+        match.liveScore?.home !== newHome ||
+        match.liveScore?.away !== newAway ||
+        match.minute !== newMin ||
+        match.status !== newStatus;
+
+      if (scoreChanged) {
+        changeCount++;
+        console.info(`[api] Live score updated for ${match.teamA} vs ${match.teamB}: ${newHome}-${newAway} (${newMin}')`);
+      }
+
+      return {
+        ...match,
+        status: newStatus,
+        minute: newMin,
+        liveScore: {
+          home: newHome,
+          away: newAway,
+          is_live: true,
+        },
+      };
+    });
+
+    if (changeCount > 0) {
+      console.info(`[api] refreshLiveScoresInto updated ${changeCount} live match(es)`);
+    }
+    return updated;
+  } catch (err) {
+    console.warn("[api] refreshLiveScoresInto failed:", err);
     return existing;
   }
-
-  const liveById = new Map(liveFixtures.map(m => [m.id, m]));
-  let changeCount = 0;
-
-  const updated = existing.map(match => {
-    const fresh = liveById.get(match.id);
-    if (!fresh) return match;
-
-    const scoreChanged =
-      match.liveScore?.home !== fresh.liveScore?.home ||
-      match.liveScore?.away !== fresh.liveScore?.away ||
-      match.status !== fresh.status ||
-      match.minute !== fresh.minute;
-
-    if (scoreChanged) {
-      changeCount += 1;
-      console.info(
-        `[api] Live score update: ${match.teamA} vs ${match.teamB} ` +
-        `${match.liveScore?.home ?? "?"}-${match.liveScore?.away ?? "?"} → ` +
-        `${fresh.liveScore?.home ?? "?"}-${fresh.liveScore?.away ?? "?"} ` +
-        `(min ${fresh.minute ?? "?"})`
-      );
-    }
-
-    return mergeLiveScoreUpdate(match, fresh);
-  });
-
-  console.info(
-    `[api] refreshLiveScoresInto — ${liveFixtures.length} live fixture(s), ${changeCount} score change(s)`
-  );
-  return updated;
 }
 
 /**

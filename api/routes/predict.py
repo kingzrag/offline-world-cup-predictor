@@ -1305,10 +1305,94 @@ def api_health():
     }
 
 
+@router.get("/live", summary="Lightweight live match score & status polling endpoint")
+def get_live_matches(
+    competition_code: Optional[str] = Query(None, description="Optional filter by competition code"),
+    db: Session = Depends(get_db)
+):
+    """
+    Ultra-fast live matches endpoint for frequent (10-15s) polling.
+    Returns only currently live matches (IN_PLAY, PAUSED) with score, minute, cards, and status.
+    No heavy ML calculations or Poisson distributions. Execution time: ~5ms.
+    """
+    from models import Match, Competition
+    from sqlalchemy.orm import joinedload
+
+    t_start = time.perf_counter()
+    query = (
+        db.query(Match)
+        .options(
+            joinedload(Match.competition),
+            joinedload(Match.home_team),
+            joinedload(Match.away_team),
+        )
+        .filter(Match.status.in_(["IN_PLAY", "PAUSED"]))
+    )
+
+    if competition_code and competition_code.upper() != "ALL":
+        comp = db.query(Competition).filter_by(code=competition_code.upper()).first()
+        if comp:
+            query = query.filter(Match.competition_id == comp.id)
+
+    matches = query.order_by(Match.utc_date.asc()).all()
+
+    out = []
+    for m in matches:
+        home_t = m.home_team
+        away_t = m.away_team
+        kt = m.utc_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if m.utc_date else None
+
+        home_score = m.current_home_score if m.current_home_score is not None else m.home_score
+        away_score = m.current_away_score if m.current_away_score is not None else m.away_score
+
+        out.append({
+            "id": m.id,
+            "status": m.status,
+            "kickoff_time": kt,
+            "competition": m.competition.name if m.competition else "Football Match",
+            "competition_code": m.competition.code if m.competition else "",
+            "live_minute": m.live_minute or m.current_minute,
+            "live_score": {
+                "home": home_score,
+                "away": away_score,
+                "is_live": True,
+            },
+            "cards": {
+                "home_red": m.home_red_cards or 0,
+                "away_red": m.away_red_cards or 0,
+                "home_yellow": m.home_yellow_cards or 0,
+                "away_yellow": m.away_yellow_cards or 0,
+            },
+            "home_team": {
+                "id": home_t.id if home_t else None,
+                "name": home_t.name if home_t else None,
+                "short_name": home_t.short_name if home_t else None,
+                "tla": home_t.tla if home_t else None,
+                "crest_url": home_t.crest_url if home_t else None,
+            } if home_t else None,
+            "away_team": {
+                "id": away_t.id if away_t else None,
+                "name": away_t.name if away_t else None,
+                "short_name": away_t.short_name if away_t else None,
+                "tla": away_t.tla if away_t else None,
+                "crest_url": away_t.crest_url if away_t else None,
+            } if away_t else None,
+        })
+
+    elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    return {
+        "status": "success",
+        "count": len(out),
+        "elapsed_ms": int(elapsed_ms),
+        "matches": out,
+    }
+
+
 @router.get("/fixtures-enriched", summary="Fixtures with pre-computed Poisson markets for all matches")
 def get_fixtures_enriched(
     competition_code: str = Query("ALL", description="Competition code ('ALL' for all active competitions, or 'PL', 'PD', 'SA', 'BL1', 'FL1', 'CL', 'DED', 'BSA', 'MLS', 'WC'). Defaults to ALL."),
     limit: int = Query(200, ge=1, le=500, description="Max fixtures to return"),
+    status: Optional[str] = Query(None, description="Filter status: 'LIVE', 'TODAY', 'UPCOMING', 'FINISHED'"),
     year: Optional[int] = Query(None, description="Filter by kickoff year, e.g. 2026"),
     show_historical: bool = Query(False, description="Include historical matches"),
     db: Session = Depends(get_db),
@@ -1342,9 +1426,10 @@ def get_fixtures_enriched(
                 }
 
         show_hist_bool = show_historical if isinstance(show_historical, bool) else False
+        status_str = status.upper() if status else None
 
         # ── Response-level cache check ────────────────────────────────────────────
-        _cache_key = f"{comp_code_str.upper()}|{limit}|{year}|{show_hist_bool}"
+        _cache_key = f"{comp_code_str.upper()}|{limit}|{status_str}|{year}|{show_hist_bool}"
         _now_ts = time.time()
         if _cache_key in _fixtures_enriched_cache:
             _cached_resp, _expiry = _fixtures_enriched_cache[_cache_key]
@@ -1404,7 +1489,20 @@ def get_fixtures_enriched(
                 if active_comp_ids:
                     query = query.filter(Match.competition_id.in_(active_comp_ids))
 
-        if isinstance(year, int):
+        if status:
+            st = status.upper()
+            if st == "LIVE":
+                query = query.filter(Match.status.in_(["IN_PLAY", "PAUSED"]))
+            elif st == "TODAY":
+                now_utc = datetime.utcnow()
+                start_today = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0)
+                end_today = start_today + timedelta(days=1)
+                query = query.filter(Match.utc_date >= start_today, Match.utc_date < end_today)
+            elif st == "UPCOMING":
+                query = query.filter(Match.status.in_(["SCHEDULED", "TIMED"]))
+            elif st == "FINISHED":
+                query = query.filter(Match.status == "FINISHED")
+        elif isinstance(year, int):
             query = query.filter(extract("year", Match.utc_date) == year)
         elif not show_hist_bool:
             now_utc = datetime.utcnow()
@@ -1648,7 +1746,9 @@ def get_fixtures_enriched(
             "fixtures":    fixtures_out,
         }
 
-        if not has_live:
+        if has_live:
+            _fixtures_enriched_cache[_cache_key] = (response, _now_ts + 10)
+        else:
             _fixtures_enriched_cache[_cache_key] = (response, _now_ts + FIXTURES_ENRICHED_CACHE_TTL)
 
         return response
