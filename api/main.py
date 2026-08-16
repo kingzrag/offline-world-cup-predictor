@@ -252,7 +252,6 @@ async def run_live_match_sync():
             from database.connection import SessionLocal
             from services.collection_service import CollectionService
 
-            db = SessionLocal()
             try:
                 service = CollectionService()
                 # First, ingest from football-data.org as before
@@ -261,9 +260,13 @@ async def run_live_match_sync():
                 fd_summary = {"matches": 0, "updated_count": 0}
                 for _sync_code in LIVE_SYNC_COMPETITIONS:
                     try:
-                        _s = await service.ingest_matches(db, _sync_code)
-                        fd_summary["matches"] = fd_summary.get("matches", 0) + _s.get("matches", 0)
-                        fd_summary["updated_count"] = fd_summary.get("updated_count", 0) + _s.get("updated_count", 0)
+                        _sync_db = SessionLocal()
+                        try:
+                            _s = await service.ingest_matches(_sync_db, _sync_code)
+                            fd_summary["matches"] = fd_summary.get("matches", 0) + _s.get("matches", 0)
+                            fd_summary["updated_count"] = fd_summary.get("updated_count", 0) + _s.get("updated_count", 0)
+                        finally:
+                            _sync_db.close()
                     except Exception as _sync_err:
                         logger.warning(f"Live sync: ingest_matches({_sync_code}) failed: {_sync_err}")
                     await asyncio.sleep(0.05)  # Yield to event loop between competitions
@@ -273,7 +276,11 @@ async def run_live_match_sync():
                 )
 
                 # Now, ingest live data from API-Football
-                af_summary = await service.ingest_api_football_live(db)
+                _af_db = SessionLocal()
+                try:
+                    af_summary = await service.ingest_api_football_live(_af_db)
+                finally:
+                    _af_db.close()
                 logger.info(
                     f"API-Football sync completed - "
                     f"live matches fetched: {af_summary.get('live_matches_fetched', 0)}, "
@@ -296,8 +303,6 @@ async def run_live_match_sync():
             except Exception as e:
                 record_sync_error(str(e))
                 logger.error(f"Live sync failed: {e}", exc_info=True)
-            finally:
-                db.close()
         except asyncio.CancelledError:
             logger.info("Live match sync task cancelled.")
             break
