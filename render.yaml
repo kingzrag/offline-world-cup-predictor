@@ -10,8 +10,6 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: PORT
-        value: 8000
       - key: VERCEL_DOMAIN
         value: offline-world-cup-predictor.vercel.app
       - key: PYTHONUNBUFFERED
