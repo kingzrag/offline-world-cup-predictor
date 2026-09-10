@@ -20,7 +20,9 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-from services.poisson_engine import evaluate_poisson_engine, POISSON_ENGINE_VERSION
+from services.poisson_engine import evaluate_poisson_engine, calculate_elo_1x2, POISSON_ENGINE_VERSION
+from ml.ensemble import ModelPrediction, ensemble_predictor
+
 
 # ── Resolved paths ────────────────────────────────────────────────────────────
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -210,18 +212,20 @@ class ModelService:
     def _get_features(self, db, home_team_id: int, away_team_id: int,
                       match_date, competition_code: str = "WC",
                       match_stage: Optional[str] = None,
-                      match=None) -> Dict[str, float]:
+                      match=None, prediction_mode: str = "PRE_KICKOFF") -> Dict[str, float]:
         from ml.features import extract_ml_features
         return extract_ml_features(
             db, home_team_id, away_team_id, match_date,
             competition_code=competition_code,
             match_stage=match_stage,
             match=match,
+            prediction_mode=prediction_mode,
         )
 
     # ── 1X2 Prediction ────────────────────────────────────────────────────────
     def predict_1x2(self, db, home_team_id: int, away_team_id: int,
-                    match_date=None, competition_code: str = "WC", match=None) -> Dict[str, Any]:
+                    match_date=None, competition_code: str = "WC", match=None,
+                    prediction_mode: str = "PRE_KICKOFF") -> Dict[str, Any]:
         """
         Returns Home Win / Draw / Away Win probabilities using world_cup_predictor.pkl.
         
@@ -258,7 +262,12 @@ class ModelService:
         logger.info(f"[predict_1x2] {_home_name} vs {_away_name} [{competition_code}]")
 
         # Extract ML features from database
-        features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
+        features = self._get_features(
+            db, home_team_id, away_team_id, match_date,
+            competition_code=competition_code,
+            match=match,
+            prediction_mode=prediction_mode,
+        )
 
         # Load model and feature names from bundle
         wc_features: list = self._wc_bundle.get("features", [])
@@ -312,29 +321,10 @@ class ModelService:
 
     # ── Goal Prediction ───────────────────────────────────────────────────────
     def predict_goals(self, db, home_team_id: int, away_team_id: int,
-                      match_date=None, competition_code: str = "WC", match=None) -> Dict[str, Any]:
+                      match_date=None, competition_code: str = "WC", match=None,
+                      prediction_mode: str = "PRE_KICKOFF") -> Dict[str, Any]:
         """
-        Returns expected goals + full betting market suite via Poisson engine.
-        
-        Process:
-        1. Extract ML features from database
-        2. Run XGBoost regressors to predict expected home/away goals
-        3. Clip negative predictions to 0 (goals cannot be negative)
-        4. Run Poisson engine to generate all betting markets from xG
-        5. Return structured response with goals, markets, and metadata
-        
-        Args:
-            db: Database session
-            home_team_id: ID of home team
-            away_team_id: ID of away team
-            match_date: Match date (defaults to now)
-            competition_code: Competition code (defaults to WC)
-            match: Optional match record for feature extraction
-        
-        Returns:
-            Dictionary with expected_home_goals, expected_away_goals, total_expected_goals,
-            over_under markets, btts, most_likely_score, top_5_scorelines, asian_handicap,
-            team_goals, clean_sheet, probability_matrix, outcome_probabilities, and model_version
+        Returns Poisson-based goal and betting-market predictions using world_cup_goal_model.pkl.
         """
         if not self._initialized:
             raise RuntimeError("ModelService not initialised – call load_models() first.")
@@ -686,52 +676,108 @@ class ModelService:
                 ),
             }
 
+        # 1. Model B & C: XGBoost Goal Regressors -> Expected Goals -> Dixon-Coles & Poisson
         result_goals = self.predict_goals(db, home.id, away.id, now, competition_code, match_record)
-        
-        # Get outcome from Poisson probabilities for full consistency!
-        outcome_probs = result_goals["outcome_probabilities"]
-        home_win_p_raw = outcome_probs["home_win_probability"]
-        draw_p_raw = outcome_probs["draw_probability"]
-        away_win_p_raw = outcome_probs["away_win_probability"]
-        
-        # Normalize probabilities to sum exactly to 1
-        home_win_p, draw_p, away_win_p = ModelService.normalize_1x2_probs(
-            home_win_p_raw, draw_p_raw, away_win_p_raw
+        h_xg = result_goals["expected_home_goals"]
+        a_xg = result_goals["expected_away_goals"]
+
+        # Dixon-Coles 1X2 Probabilities (with tau low-score adjustment)
+        dc_matrix = evaluate_poisson_engine(h_xg, a_xg)
+        dc_1x2 = dc_matrix["outcome_probabilities"]
+        pred_dixon_coles = ModelPrediction(
+            model_id="dixon_coles",
+            model_name="Dixon-Coles Model",
+            home_win_probability=dc_1x2["home_win_probability"],
+            draw_probability=dc_1x2["draw_probability"],
+            away_win_probability=dc_1x2["away_win_probability"],
+            expected_home_goals=h_xg,
+            expected_away_goals=a_xg,
+            metadata={"rho": -0.0646}
         )
-        
-        max_p = max(home_win_p, draw_p, away_win_p)
-        if max_p == home_win_p:
-            predicted_result = "HOME_WIN"
-        elif max_p == away_win_p:
-            predicted_result = "AWAY_WIN"
-        else:
-            predicted_result = "DRAW"
-        
-        # Calculate new confidence
-        confidence, confidence_level = ModelService.calculate_confidence(
-            home_win_p, draw_p, away_win_p
+
+        # Pure Poisson 1X2 Probabilities (without tau adjustment)
+        from services.poisson_engine import get_poisson_probability
+        pure_p_home = 0.0
+        pure_p_draw = 0.0
+        pure_p_away = 0.0
+        for h in range(11):
+            ph = get_poisson_probability(max(0.0001, h_xg), h)
+            for a in range(11):
+                pa = get_poisson_probability(max(0.0001, a_xg), a)
+                p = ph * pa
+                if h > a:
+                    pure_p_home += p
+                elif h < a:
+                    pure_p_away += p
+                else:
+                    pure_p_draw += p
+        tot_p = max(1e-6, pure_p_home + pure_p_draw + pure_p_away)
+        pred_poisson = ModelPrediction(
+            model_id="poisson",
+            model_name="Poisson Goal Model",
+            home_win_probability=pure_p_home / tot_p,
+            draw_probability=pure_p_draw / tot_p,
+            away_win_probability=pure_p_away / tot_p,
+            expected_home_goals=h_xg,
+            expected_away_goals=a_xg,
         )
-        
+
+        # 2. Model A: XGBoost 1X2 Classifier (world_cup_predictor.pkl)
+        try:
+            res_1x2 = self.predict_1x2(db, home.id, away.id, now, competition_code, match_record)
+            pred_xgb_1x2 = ModelPrediction(
+                model_id="xgb_1x2",
+                model_name="XGBoost 1X2 Classifier",
+                home_win_probability=res_1x2["home_win_probability"],
+                draw_probability=res_1x2["draw_probability"],
+                away_win_probability=res_1x2["away_win_probability"],
+                metadata={"model_version": res_1x2.get("model_version", "v1.0")}
+            )
+        except Exception as err:
+            logger.warning(f"[predict] XGBoost 1X2 classifier evaluation failed: {err}")
+            pred_xgb_1x2 = ModelPrediction(
+                model_id="xgb_1x2",
+                model_name="XGBoost 1X2 Classifier",
+                home_win_probability=dc_1x2["home_win_probability"],
+                draw_probability=dc_1x2["draw_probability"],
+                away_win_probability=dc_1x2["away_win_probability"],
+            )
+
+        # 3. Model D: Direct Elo Model
+        from ml.features import get_team_elo
+        home_elo = get_team_elo(db, home.name)
+        away_elo = get_team_elo(db, away.name)
+        elo_1x2_probs = calculate_elo_1x2(home_elo, away_elo)
+        pred_elo = ModelPrediction(
+            model_id="elo",
+            model_name="Direct Elo Model",
+            home_win_probability=elo_1x2_probs["home_win_probability"],
+            draw_probability=elo_1x2_probs["draw_probability"],
+            away_win_probability=elo_1x2_probs["away_win_probability"],
+            metadata={"home_elo": home_elo, "away_elo": away_elo, "elo_diff": home_elo - away_elo}
+        )
+
+        # 4. Combine models using EnsemblePredictor with Platt calibration
+        ensemble_res = ensemble_predictor.combine([
+            pred_xgb_1x2,
+            pred_poisson,
+            pred_dixon_coles,
+            pred_elo
+        ])
+
         return {
             "home_team": home.name,
             "away_team": away.name,
             "generated_at": now.isoformat(),
-            # 1X2 predictions
-            "outcome": {
-                "home_win_probability": home_win_p,
-                "draw_probability": draw_p,
-                "away_win_probability": away_win_p,
-                "predicted_result": predicted_result,
-                "confidence": confidence,
-                "confidence_level": confidence_level,
+            # Calibrated Ensemble 1X2 Outcome
+            "outcome": ensemble_res["outcome"],
+            # Expected Goals
+            "goals": result_goals["goals"] if "goals" in result_goals else {
+                "expected_home_goals": h_xg,
+                "expected_away_goals": a_xg,
+                "total_expected_goals": round(h_xg + a_xg, 4),
             },
-            # Goals
-            "goals": {
-                "expected_home_goals": result_goals["expected_home_goals"],
-                "expected_away_goals": result_goals["expected_away_goals"],
-                "total_expected_goals": result_goals["total_expected_goals"],
-            },
-            # Markets (now includes clean_sheet and O/U 0.5–4.5)
+            # Complete Betting Markets (from Dixon-Coles Matrix)
             "markets": {
                 "over_under": result_goals["over_under"],
                 "btts": result_goals["btts"],
@@ -742,21 +788,21 @@ class ModelService:
                 "probability_matrix": result_goals["probability_matrix"],
                 "clean_sheet": result_goals["clean_sheet"],
             },
-            # Backwards compatible model versions (kept at top level)
+            "individual_models": ensemble_res["individual_models"],
             "model_versions": {
-                "wc_model": result_goals["model_version"],
-                "goal_model": result_goals["model_version"],
+                "wc_model": self._wc_bundle.get("version", "v1.0"),
+                "goal_model": self._goal_bundle.get("version", "v1.0"),
+                "ensemble": "Calibrated Multi-Method Ensemble v1.0",
             },
-            # New detailed engine metadata
-            "prediction_engine": "Hybrid Prediction Engine",
-            "winner_engine": POISSON_ENGINE_VERSION,
-            "goal_engine": result_goals["model_version"],
-            "market_engine": "Hybrid Market Engine",
-            # Betting market predictions (if models loaded, otherwise Poisson fallback)
+            "prediction_engine": "Calibrated Multi-Method Ensemble Engine",
+            "winner_engine": "Validation-Weighted Ensemble (DC + Elo + XGB)",
+            "goal_engine": result_goals.get("model_version", "v1.0"),
+            "market_engine": "Dixon-Coles Market Engine",
             "betting_markets": self._predict_betting_markets(
                 db, home.id, away.id, now, competition_code, match_record, result_goals
             ),
         }
+
 
     # ── Betting market predictions with fallback ─────────────────────────────────
     def _predict_betting_markets(
@@ -768,7 +814,12 @@ class ModelService:
         otherwise fall back to Poisson-based predictions from goal model.
         """
         goal_result = goal_result or {}
-        features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
+        features = self._get_features(
+            db, home_team_id, away_team_id, match_date,
+            competition_code=competition_code,
+            match=match,
+            prediction_mode="PRE_KICKOFF",
+        )
         
         result = {
             "asian_handicap": None,

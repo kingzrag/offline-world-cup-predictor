@@ -20,22 +20,84 @@ def get_poisson_probability(lmbda: float, k: int) -> float:
     except OverflowError:
         return 0.0
 
-def calculate_probability_matrix(expected_home_goals: float, expected_away_goals: float, max_goals: int = 10) -> Dict[str, float]:
+def calculate_dixon_coles_tau(h: int, a: int, lam_h: float, lam_a: float, rho: float) -> float:
+    """Calculates Dixon-Coles low-score interdependence adjustment tau."""
+    if rho == 0.0:
+        return 1.0
+    if h == 0 and a == 0:
+        return 1.0 - lam_h * lam_a * rho
+    elif h == 1 and a == 0:
+        return 1.0 + lam_a * rho
+    elif h == 0 and a == 1:
+        return 1.0 + lam_h * rho
+    elif h == 1 and a == 1:
+        return 1.0 - rho
+    return 1.0
+
+def calculate_probability_matrix(
+    expected_home_goals: float,
+    expected_away_goals: float,
+    max_goals: int = 10,
+    rho: float = -0.0646
+) -> Dict[str, float]:
     """
-    Generate joint score probabilities for home and away goals up to max_goals.
-    Returns a dictionary mapping score strings (e.g. "2-1") to probability float (0.0 to 1.0).
+    Generate joint score probabilities for home and away goals up to max_goals,
+    applying Dixon-Coles low-score tau adjustment.
+    Returns a normalized dictionary mapping score strings (e.g. "2-1") to probability float.
     """
     # Ensure non-negative lambdas
     lam_h = max(0.0001, expected_home_goals)
     lam_a = max(0.0001, expected_away_goals)
     
     matrix = {}
+    total_prob = 0.0
     for h in range(max_goals + 1):
         p_h = get_poisson_probability(lam_h, h)
         for a in range(max_goals + 1):
             p_a = get_poisson_probability(lam_a, a)
-            matrix[f"{h}-{a}"] = p_h * p_a
+            tau = calculate_dixon_coles_tau(h, a, lam_h, lam_a, rho)
+            prob = max(0.0, p_h * p_a * tau)
+            matrix[f"{h}-{a}"] = prob
+            total_prob += prob
+            
+    # Normalize probabilities to sum exactly to 1.0
+    if total_prob > 0:
+        for k in matrix:
+            matrix[k] /= total_prob
+            
     return matrix
+
+def calculate_elo_1x2(home_elo: float, away_elo: float) -> Dict[str, float]:
+    """
+    Calculates direct 1X2 win/draw/away probabilities from home and away Elo ratings.
+    """
+    elo_diff = home_elo - away_elo
+    e_h = 1.0 / (1.0 + math.pow(10.0, -elo_diff / 400.0))
+    p_draw = 0.26 * math.exp(-((elo_diff / 150.0) ** 2))
+    p_draw = max(0.10, min(0.35, p_draw))
+    rem = 1.0 - p_draw
+    p_home = rem * e_h
+    p_away = rem * (1.0 - e_h)
+    
+    # Normalize to 4 decimal places
+    h = round(p_home, 4)
+    d = round(p_draw, 4)
+    a = round(p_away, 4)
+    tot = h + d + a
+    diff = 1.0 - tot
+    if h >= d and h >= a:
+        h += diff
+    elif d >= h and d >= a:
+        d += diff
+    else:
+        a += diff
+        
+    return {
+        "home_win_probability": round(h, 4),
+        "draw_probability": round(d, 4),
+        "away_win_probability": round(a, 4)
+    }
+
 
 def calculate_conditional_probability_matrix(
     current_home_score: int,

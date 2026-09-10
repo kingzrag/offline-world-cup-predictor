@@ -15,6 +15,18 @@ features_before.json
 features_after.json
 # Cache directories
 .cache/
+# Generated / local-only data
+data/raw_sources/
+data/processed/
+historical/
+# Model artifacts (non-production)
+models/backups/
+models/candidates/
+models/*_backup.pkl
+models/*_backup_v*.pkl
+# Scratch and reports
+scratch/
+reports/
 # Audit and debug scripts
 audit*.py
 debug*.py

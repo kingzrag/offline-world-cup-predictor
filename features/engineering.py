@@ -190,3 +190,68 @@ def missing_defenders_count(db: Session, team_id: int) -> int:
 def missing_goalkeepers_count(db: Session, team_id: int) -> int:
     """Returns the number of missing goalkeepers."""
     return get_missing_players_by_position(db, team_id)["goalkeepers"]
+
+
+# -------------------------------------------------------------------
+# Phase 2 Feature Engineering & Data Freshness Classes
+# -------------------------------------------------------------------
+import numpy as np
+import pandas as pd
+from datetime import datetime, timezone
+
+class FeatureEngineer:
+    """Standardized feature extraction for model evaluation and production inference."""
+    def extract_baseline_features(self, df: pd.DataFrame):
+        feature_cols = [
+            'elo_diff', 'rest_diff', 'h2h_home_wins', 'h2h_draws',
+            'h2h_away_wins', 'home_form', 'away_form'
+        ]
+        # Fill missing with standard defaults
+        for col in feature_cols:
+            if col not in df.columns:
+                df[col] = 0.0
+        X = df[feature_cols].copy()
+        if 'elo_diff' in X.columns and 'elo_home' in df.columns and 'elo_away' in df.columns:
+            X['elo_diff'] = df['elo_home'] - df['elo_away']
+        X = X.fillna(0.0).values
+        return X, feature_cols
+
+class DataFreshnessTracker:
+    """Monitors data timestamps to prevent stale or post-kickoff data usage."""
+    def check_freshness(self, feature_name: str, source: str, last_updated: datetime, prediction_time: datetime, max_allowed_age_hours: float = 24.0) -> dict:
+        if last_updated is None:
+            return {
+                "feature": feature_name,
+                "source": source,
+                "status": "missing",
+                "is_fresh": False,
+                "age_hours": None
+            }
+        if last_updated.tzinfo is None:
+            last_updated = last_updated.replace(tzinfo=timezone.utc)
+        if prediction_time.tzinfo is None:
+            prediction_time = prediction_time.replace(tzinfo=timezone.utc)
+            
+        age_hours = (prediction_time - last_updated).total_seconds() / 3600.0
+        
+        if age_hours < 0:
+            status = "future_leakage_risk"
+            is_fresh = False
+        elif age_hours <= max_allowed_age_hours:
+            status = "valid"
+            is_fresh = True
+        else:
+            status = "stale"
+            is_fresh = False
+            
+        return {
+            "feature": feature_name,
+            "source": source,
+            "last_updated": last_updated.isoformat(),
+            "prediction_timestamp": prediction_time.isoformat(),
+            "age_hours": round(age_hours, 2),
+            "max_allowed_age_hours": max_allowed_age_hours,
+            "status": status,
+            "is_fresh": is_fresh
+        }
+

@@ -24,6 +24,11 @@ from models.prediction_tracking import (
     RollingAccuracy,
 )
 
+from models.team_alias import TeamAlias
+from models.season import Season
+from models.feature_snapshot import FeatureSnapshot
+from models.data_freshness import DataFreshness
+
 __all__ = [
     "Base",
     "Competition",
@@ -49,4 +54,8 @@ __all__ = [
     "PredictionAccuracy",
     "CalibrationMetrics",
     "RollingAccuracy",
+    "TeamAlias",
+    "Season",
+    "FeatureSnapshot",
+    "DataFreshness",
 ]

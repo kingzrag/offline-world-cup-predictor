@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     ODDS_API_KEY: str = Field(default="")
     API_FOOTBALL_KEY: str = Field(default="")
     OPENROUTER_API_KEY: str = Field(default="")
+    # TheSportsDB free key = "123" per official docs; override via env
+    THESPORTSDB_API_KEY: str = Field(default="123")
+
+    # --- Live Polling ---
+    # Configurable polling interval; default 300s (5 min) to avoid quota exhaustion
+    LIVE_POLL_INTERVAL_SECONDS: int = Field(default=300)
 
     # --- Database ---
     DATABASE_HOST: str = Field(default_factory=lambda: "db" if is_running_in_docker() else "localhost")

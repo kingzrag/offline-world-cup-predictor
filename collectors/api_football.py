@@ -9,7 +9,9 @@ class APIFootballCollector:
         self.api_key = api_key
         self.base_url = "https://v3.football.api-sports.io"
         self.headers = {
-            "x-apisports-key": self.api_key
+            "x-apisports-key": self.api_key,
+            "x-rapidapi-key": self.api_key,
+            "x-rapidapi-host": "v3.football.api-sports.io",
         }
 
     async def _request(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -19,7 +21,10 @@ class APIFootballCollector:
             if response.status_code != 200:
                 logger.error(f"APIFootball API responded with status {response.status_code}: {response.text}")
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            if data.get("errors"):
+                logger.warning(f"APIFootball API error on endpoint '{endpoint}': {data['errors']}")
+            return data
         except httpx.HTTPError as e:
             logger.error(f"APIFootball API error: {e}")
             raise

@@ -430,6 +430,7 @@ def extract_ml_features(
     competition_code: str = "WC",
     match_stage: str = None,
     match: Match = None,
+    prediction_mode: str = "PRE_KICKOFF",
 ) -> dict:
     """
     Generates all predictive match features for the home and away team pair, with live data integration!
@@ -781,6 +782,29 @@ def extract_ml_features(
         if match.away_red_cards:
             away_red_cards = match.away_red_cards
         red_card_diff = home_red_cards - away_red_cards
+
+    # Hard assertion for PRE_KICKOFF mode: in-play/live features must be strictly neutral
+    if prediction_mode == "PRE_KICKOFF":
+        if current_minute != 0:
+            raise ValueError(
+                f"Invalid in-play state in PRE_KICKOFF mode: current_minute={current_minute}. "
+                f"Live features must be neutral (0) for pre-kickoff predictions."
+            )
+        if current_score_diff != 0:
+            raise ValueError(
+                f"Invalid in-play state in PRE_KICKOFF mode: current_score_diff={current_score_diff}. "
+                f"Live features must be neutral (0) for pre-kickoff predictions."
+            )
+        if home_red_cards != 0 or away_red_cards != 0:
+            raise ValueError(
+                f"Invalid in-play state in PRE_KICKOFF mode: home_red_cards={home_red_cards}, away_red_cards={away_red_cards}. "
+                f"Live features must be neutral (0) for pre-kickoff predictions."
+            )
+        if time_remaining != 90:
+            raise ValueError(
+                f"Invalid in-play state in PRE_KICKOFF mode: time_remaining={time_remaining}. "
+                f"Live features must be neutral (90) for pre-kickoff predictions."
+            )
 
     # ------------------------------------------------------------
     # NEW: SOFASCORE INTELLIGENCE FEATURES!

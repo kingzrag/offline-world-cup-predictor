@@ -50,6 +50,7 @@ from providers.base import (
 # Competition map: our code → API-Football league ID
 # ---------------------------------------------------------------------------
 _AF_COMPETITION_MAP: Dict[str, int] = {
+    # International Tournaments
     "WC": 1,
     "EC": 4,
     "CA": 9,
@@ -62,6 +63,27 @@ _AF_COMPETITION_MAP: Dict[str, int] = {
     "WCQE": 31,
     "WCQA": 26,
     "WCQC": 30,
+    # European Top 5 & Domestic Leagues
+    "PL": 39,
+    "PD": 140,
+    "SA": 135,
+    "BL1": 78,
+    "FL1": 61,
+    "DED": 88,
+    "PPL": 94,
+    "BEL": 144,
+    "TUR": 203,
+    "MLS": 253,
+    "BSA": 71,
+    # European Cups
+    "CL": 2,
+    "EL": 3,
+    "ECL": 848,
+    # Domestic Cups
+    "FAC": 45,
+    "CDR": 143,
+    "DFB": 81,
+    "CIT": 137,
 }
 
 _AF_BASE_URL = "https://v3.football.api-sports.io"
@@ -113,6 +135,7 @@ class APIFootballProvider(FootballProvider):
             logger.info(f"{self.name}: Provider enabled with API key")
             self.enabled = True
             self._headers = {
+                "x-apisports-key": key.strip(),
                 "x-rapidapi-host": "v3.football.api-sports.io",
                 "x-rapidapi-key": key.strip(),
             }
@@ -153,7 +176,7 @@ class APIFootballProvider(FootballProvider):
     async def get_competitions(self) -> List[CompetitionData]:
         if not self.enabled:
             return []
-        data = self._get("leagues", {"type": "Cup", "current": "true"})
+        data = self._get("leagues", {"current": "true"})
         if not data:
             return []
         competitions = []
