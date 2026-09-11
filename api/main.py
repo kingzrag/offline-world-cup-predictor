@@ -17,23 +17,10 @@ from database.connection import engine
 from services.model_service import model_service
 from utils.logger import logger
 
-# Automatically bootstrap schema: Alembic migrations first, then create_all fallback.
-# Note: Alembic migrations disabled due to startup timeout issues. Using create_all fallback.
-try:
-    from database.migrate import verify_matches_schema
-
-    logger.info("Skipping Alembic migrations - using create_all fallback")
-    # run_migrations()
-    # verify_matches_schema()
-
-    logger.info("Initializing database schema tables creation (create_all fallback)...")
-    Base.metadata.create_all(bind=engine)
-    verify_matches_schema()
-    logger.info("Database schema sync completed successfully.")
-except Exception as err:
-    logger.error(
-        f"Critical: Database migration or schema sync failed: {err}", exc_info=True
-    )
+# NOTE: Base.metadata.create_all() and verify_matches_schema() have been intentionally
+# moved into startup_event() below. Running them here (at module import time) would block
+# uvicorn from binding to the port if Supabase is slow — causing a 120s hang with 0 bytes.
+# They now run AFTER uvicorn is already listening, so the server is always reachable.
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -563,6 +550,21 @@ async def startup_event():
     logger.info(f"STARTUP: ALLOWED_ORIGIN_REGEX: {ALLOWED_ORIGIN_REGEX}")
     logger.info(f"STARTUP: VERCEL_DOMAIN: {os.getenv('VERCEL_DOMAIN', 'NOT SET')}")
     
+    # ── Bootstrap database schema (create_all + schema verification) ───────────
+    # IMPORTANT: This runs here (after uvicorn has bound to the port) rather than at
+    # module import time. Moving it here prevents the 120s cold-start hang where
+    # Base.metadata.create_all() would block uvicorn from starting if Supabase was slow.
+    try:
+        from database.migrate import verify_matches_schema
+        logger.info("STARTUP: Initializing database schema (create_all + verify)...")
+        Base.metadata.create_all(bind=engine)
+        verify_matches_schema()
+        logger.info("STARTUP: Database schema sync completed successfully ✓")
+    except Exception as err:
+        logger.error(
+            f"STARTUP: Database schema sync failed (non-fatal): {err}", exc_info=True
+        )
+
     # ── Test database connection ───────────────────────────────────────────────
     try:
         from database.connection import SessionLocal
