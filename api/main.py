@@ -216,9 +216,14 @@ app.include_router(ai_router)
 
 async def run_live_match_sync():
     """
-    Poll football-data.org and API-Football every 30 seconds
-    so live scores stay current during matches.
+    Poll football-data.org and API-Football periodically for live matches.
+    Only runs if ENABLE_LIVE_SYNC is true to preserve event-loop bandwidth on web workers.
     """
+    enable_live = os.getenv("ENABLE_LIVE_SYNC", "false").lower() == "true"
+    if not enable_live:
+        logger.info("Live match sync background task disabled (ENABLE_LIVE_SYNC=false).")
+        return
+
     from services.live_sync_state import (
         mark_task_initialized,
         record_sync_complete,
@@ -227,8 +232,8 @@ async def run_live_match_sync():
     )
 
     mark_task_initialized()
-    logger.info("Live match sync background task initialized (30s interval).")
-    await asyncio.sleep(5)  # let startup finish before first sync
+    logger.info("Live match sync background task initialized.")
+    await asyncio.sleep(15)  # let startup finish before first sync
 
     while True:
         started_at = datetime.now(timezone.utc)
@@ -239,57 +244,40 @@ async def run_live_match_sync():
             from database.connection import SessionLocal
             from services.collection_service import CollectionService
 
-            try:
+            def _sync_worker():
                 service = CollectionService()
-                # First, ingest from football-data.org as before
-                # Sync all active domestic league competitions for live score/status updates
-                LIVE_SYNC_COMPETITIONS = ["PL", "PD", "SA", "BL1", "FL1", "DED", "BSA", "WC"]
                 fd_summary = {"matches": 0, "updated_count": 0}
-                for _sync_code in LIVE_SYNC_COMPETITIONS:
+                # Only sync WC and active competitions in live loop
+                for sync_code in ["WC"]:
                     try:
-                        _sync_db = SessionLocal()
-                        try:
-                            _s = await service.ingest_matches(_sync_db, _sync_code)
-                            fd_summary["matches"] = fd_summary.get("matches", 0) + _s.get("matches", 0)
-                            fd_summary["updated_count"] = fd_summary.get("updated_count", 0) + _s.get("updated_count", 0)
-                        finally:
-                            _sync_db.close()
-                    except Exception as _sync_err:
-                        logger.warning(f"Live sync: ingest_matches({_sync_code}) failed: {_sync_err}")
-                    await asyncio.sleep(0.05)  # Yield to event loop between competitions
-                logger.info(
-                    f"Football-Data sync completed - processed={fd_summary.get('matches', 0)} "
-                    f"updated={fd_summary.get('updated_count', 0)} "
-                )
+                        with SessionLocal() as db:
+                            # Run async or sync in worker thread
+                            import asyncio as a
+                            loop = a.new_event_loop()
+                            a.set_event_loop(loop)
+                            try:
+                                s = loop.run_until_complete(service.ingest_matches(db, sync_code))
+                                fd_summary["matches"] += s.get("matches", 0)
+                                fd_summary["updated_count"] += s.get("updated_count", 0)
+                            finally:
+                                loop.close()
+                    except Exception as err:
+                        logger.warning(f"Live sync worker: ingest_matches({sync_code}) failed: {err}")
 
-                # Now, ingest live data from API-Football
-                _af_db = SessionLocal()
-                try:
-                    af_summary = await service.ingest_api_football_live(_af_db)
-                finally:
-                    _af_db.close()
-                logger.info(
-                    f"API-Football sync completed - "
-                    f"live matches fetched: {af_summary.get('live_matches_fetched', 0)}, "
-                    f"matches updated: {af_summary.get('matches_updated', 0)}, "
-                    f"red cards found: {af_summary.get('red_cards_found', 0)}, "
-                    f"minutes updated: {af_summary.get('minutes_updated', 0)}, "
-                    f"statistics updated: {af_summary.get('statistics_updated', 0)}, "
-                    f"lineups updated: {af_summary.get('lineups_updated', 0)}, "
-                    f"events updated: {af_summary.get('events_updated', 0)}"
-                )
+                with SessionLocal() as db:
+                    import asyncio as a
+                    loop = a.new_event_loop()
+                    a.set_event_loop(loop)
+                    try:
+                        af_summary = loop.run_until_complete(service.ingest_api_football_live(db))
+                    finally:
+                        loop.close()
 
-                # Combine all summaries
-                combined_summary = {
-                    **fd_summary,
-                    **af_summary,
-                }
+                return {**fd_summary, **af_summary}
 
-                record_sync_complete(started_at, combined_summary)
+            summary = await asyncio.to_thread(_sync_worker)
+            record_sync_complete(started_at, summary)
 
-            except Exception as e:
-                record_sync_error(str(e))
-                logger.error(f"Live sync failed: {e}", exc_info=True)
         except asyncio.CancelledError:
             logger.info("Live match sync task cancelled.")
             break
@@ -297,7 +285,7 @@ async def run_live_match_sync():
             record_sync_error(str(e))
             logger.error(f"Live sync unexpected error: {e}", exc_info=True)
 
-        await asyncio.sleep(30)
+        await asyncio.sleep(60)
 
 
 async def run_odds_sync():
@@ -550,33 +538,7 @@ async def startup_event():
     logger.info(f"STARTUP: ALLOWED_ORIGIN_REGEX: {ALLOWED_ORIGIN_REGEX}")
     logger.info(f"STARTUP: VERCEL_DOMAIN: {os.getenv('VERCEL_DOMAIN', 'NOT SET')}")
     
-    # ── Bootstrap database schema (create_all + schema verification) ───────────
-    # IMPORTANT: This runs here (after uvicorn has bound to the port) rather than at
-    # module import time. Moving it here prevents the 120s cold-start hang where
-    # Base.metadata.create_all() would block uvicorn from starting if Supabase was slow.
-    try:
-        from database.migrate import verify_matches_schema
-        logger.info("STARTUP: Initializing database schema (create_all + verify)...")
-        Base.metadata.create_all(bind=engine)
-        verify_matches_schema()
-        logger.info("STARTUP: Database schema sync completed successfully ✓")
-    except Exception as err:
-        logger.error(
-            f"STARTUP: Database schema sync failed (non-fatal): {err}", exc_info=True
-        )
-
-    # ── Test database connection ───────────────────────────────────────────────
-    try:
-        from database.connection import SessionLocal
-        from sqlalchemy import text
-        test_db = SessionLocal()
-        test_db.execute(text("SELECT 1"))
-        test_db.close()
-        logger.info("STARTUP: Database connection successful ✓")
-    except Exception as e:
-        logger.error(f"STARTUP: Database connection FAILED: {e}", exc_info=True)
-
-    # ── Load ML models once at startup ───────────────────────────────────────
+    # ── Load ML models immediately at startup ────────────────────────────────
     try:
         logger.info("Startup: loading ML models via ModelService...")
         model_service.load_models()
@@ -585,57 +547,43 @@ async def startup_event():
         logger.info(f"STARTUP: Model versions: {model_service.model_versions}")
     except Exception as e:
         logger.error(f"Startup: FAILED to load ML models — {e}", exc_info=True)
-        # Do NOT crash the server; predictions will return 503 until fixed.
 
-    # ── Seed ELO ratings if the table is empty ────────────────────────────────
-    try:
-        logger.info("Startup: checking team_elo table for seed data …")
-        from database.connection import SessionLocal
-        from ml.seed_elo import seed_elo_ratings
-
-        _db = SessionLocal()
+    # ── Background Database Bootstrap (Schema + Seed) ────────────────────────
+    # Run in background task so Uvicorn immediately binds and begins serving HTTP requests
+    async def _async_db_init():
         try:
-            seed_elo_ratings(_db)
-        finally:
-            _db.close()
-    except Exception as e:
-        logger.error(f"Startup: ELO seed step failed — {e}", exc_info=True)
+            from database.migrate import verify_matches_schema
+            logger.info("STARTUP: Initializing database schema (create_all + verify)...")
+            await asyncio.to_thread(Base.metadata.create_all, bind=engine)
+            await asyncio.to_thread(verify_matches_schema)
+            logger.info("STARTUP: Database schema sync completed successfully ✓")
+        except Exception as err:
+            logger.error(
+                f"STARTUP: Database schema sync failed (non-fatal): {err}", exc_info=True
+            )
 
-    # ── Bootstrap predictions for any TIMED fixtures missing predictions ───────
-    # DISABLED: Long-running process causing startup timeout. Predictions will be generated by scheduler.
-    # try:
-    #     logger.info("Startup: bootstrapping predictions for upcoming fixtures...")
-    #     from database.connection import SessionLocal
-    #     from services.prediction_service import PredictionService
+        try:
+            logger.info("Startup: checking team_elo table for seed data …")
+            from database.connection import SessionLocal
+            from ml.seed_elo import seed_elo_ratings
 
-    #     async def _bootstrap_predictions():
-    #         await asyncio.sleep(10)  # allow all startup tasks to settle first
-    #         _db = SessionLocal()
-    #         try:
-    #             pred_service = PredictionService()
-    #             preds = pred_service.generate_predictions_for_fixtures(_db)
-    #             logger.info(
-    #                 f"Startup: bootstrap predictions complete — {len(preds)} predictions upserted."
-    #             )
-    #             enriched = pred_service.generate_enrichment_for_fixtures(_db)
-    #             logger.info(
-    #                 f"Startup: bootstrap enrichment complete — {enriched} fixtures enriched."
-    #             )
-    #         except Exception as _e:
-    #             logger.error(
-    #                 f"Startup: prediction bootstrap failed — {_e}", exc_info=True
-    #             )
-    #         finally:
-    #             _db.close()
+            def _seed():
+                with SessionLocal() as _db:
+                    seed_elo_ratings(_db)
 
-    #     asyncio.create_task(_bootstrap_predictions())
-    # except Exception as e:
-    #     logger.error(
-    #         f"Startup: failed to schedule prediction bootstrap — {e}", exc_info=True
-    #     )
-    logger.info("Startup: Prediction bootstrap disabled - will be handled by scheduler")
+            await asyncio.to_thread(_seed)
+            logger.info("Startup: ELO seed verified ✓")
+        except Exception as e:
+            logger.error(f"Startup: ELO seed step failed — {e}", exc_info=True)
 
-    logger.info("Starting background scheduler task...")
-    asyncio.create_task(run_daily_scheduler())
-    asyncio.create_task(run_live_match_sync())
-    asyncio.create_task(run_odds_sync())
+    asyncio.create_task(_async_db_init())
+
+    # ── Start background workers if enabled ──────────────────────────────────
+    enable_bg = os.getenv("ENABLE_BACKGROUND_TASKS", "true").lower() == "true"
+    if enable_bg:
+        logger.info("Starting background scheduler and sync tasks...")
+        asyncio.create_task(run_daily_scheduler())
+        asyncio.create_task(run_live_match_sync())
+        asyncio.create_task(run_odds_sync())
+    else:
+        logger.info("Background tasks disabled (ENABLE_BACKGROUND_TASKS=false)")

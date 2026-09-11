@@ -28,8 +28,26 @@ except ImportError as e:
     logger.warning(f"Kaggle features module not available: {e}")
 
 
+# In-memory ELO cache: (team_name_lower -> (elo_int, timestamp))
+_elo_cache: dict[str, tuple[int, float]] = {}
+_ELO_CACHE_TTL = 1800.0  # 30 minutes
+
+# Cached competition IDs
+_cached_comp_ids: dict[str, tuple[set[int], float]] = {}
+_COMP_CACHE_TTL = 3600.0  # 1 hour
+
+
 def get_team_elo(db, team_name: str) -> int:
     """Retrieves the ELO rating for a team, falling back to 1500 if not found."""
+    import time
+    now = time.time()
+    key = team_name.strip().lower()
+
+    if key in _elo_cache:
+        val, expiry = _elo_cache[key]
+        if now <= expiry:
+            return val
+
     elo = db.query(TeamElo).filter_by(team_name=team_name).first()
     if not elo:
         # Flexible match (e.g. "Arsenal FC" matching "Arsenal")
@@ -43,11 +61,13 @@ def get_team_elo(db, team_name: str) -> int:
             )
             .first()
         )
+    val = elo.elo_rating if elo else 1500
+    _elo_cache[key] = (val, now + _ELO_CACHE_TTL)
     if elo:
-        logger.debug(f"Found Elo for team '{team_name}': {elo.elo_rating}")
+        logger.debug(f"Found Elo for team '{team_name}': {val}")
     else:
         logger.debug(f"Elo not found for team '{team_name}'. Using default 1500.")
-    return elo.elo_rating if elo else 1500
+    return val
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +103,11 @@ def get_elo_momentum(
 
     team_elo = get_team_elo(db, team_name)
     total_delta = 0.0
+
+    # Batch query opponent teams to avoid N+1 queries
+    opp_ids = [m.away_team_id if m.home_team_id == team_id else m.home_team_id for m in matches]
+    opp_teams = {t.id: t for t in db.query(Team).filter(Team.id.in_(opp_ids)).all()} if opp_ids else {}
+
     for m in matches:
         if m.home_team_id == team_id:
             opp_id = m.away_team_id
@@ -95,7 +120,7 @@ def get_elo_momentum(
                 1.0 if m.winner == "AWAY_TEAM" else (0.5 if m.winner == "DRAW" else 0.0)
             )
 
-        opp = db.query(Team).filter_by(id=opp_id).first()
+        opp = opp_teams.get(opp_id)
         if not opp:
             continue
         opp_elo = get_team_elo(db, opp.name)
@@ -127,11 +152,14 @@ def get_strength_of_schedule(db, team_id: int, match_date, n_matches: int = 5) -
     if not matches:
         return 1500.0
 
+    opp_ids = [m.away_team_id if m.home_team_id == team_id else m.home_team_id for m in matches]
+    opp_teams = {t.id: t for t in db.query(Team).filter(Team.id.in_(opp_ids)).all()} if opp_ids else {}
+
     elo_sum = 0.0
     count = 0
     for m in matches:
         opp_id = m.away_team_id if m.home_team_id == team_id else m.home_team_id
-        opp = db.query(Team).filter_by(id=opp_id).first()
+        opp = opp_teams.get(opp_id)
         if opp:
             elo_sum += get_team_elo(db, opp.name)
             count += 1
@@ -160,15 +188,27 @@ def get_tournament_experience(db, team_id: int, match_date) -> dict:
       - major_tournament_matches : WC/Euro/AFCON/Asian Cup/Nations Leagues
       - knockout_matches   : any match in a knockout stage
     """
+    import time
+    now = time.time()
+
     # Cache competition id sets per code group
-    wc_ids = {
-        c.id
-        for c in db.query(Competition).filter(Competition.code.in_(_WC_CODES)).all()
-    }
-    major_ids = {
-        c.id
-        for c in db.query(Competition).filter(Competition.code.in_(_MAJOR_CODES)).all()
-    }
+    if "wc" not in _cached_comp_ids or now > _cached_comp_ids["wc"][1]:
+        wc_ids = {
+            c.id
+            for c in db.query(Competition).filter(Competition.code.in_(_WC_CODES)).all()
+        }
+        _cached_comp_ids["wc"] = (wc_ids, now + _COMP_CACHE_TTL)
+    else:
+        wc_ids = _cached_comp_ids["wc"][0]
+
+    if "major" not in _cached_comp_ids or now > _cached_comp_ids["major"][1]:
+        major_ids = {
+            c.id
+            for c in db.query(Competition).filter(Competition.code.in_(_MAJOR_CODES)).all()
+        }
+        _cached_comp_ids["major"] = (major_ids, now + _COMP_CACHE_TTL)
+    else:
+        major_ids = _cached_comp_ids["major"][0]
 
     base = and_(
         or_(Match.home_team_id == team_id, Match.away_team_id == team_id),

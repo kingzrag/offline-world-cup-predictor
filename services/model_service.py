@@ -225,28 +225,17 @@ class ModelService:
     # ── 1X2 Prediction ────────────────────────────────────────────────────────
     def predict_1x2(self, db, home_team_id: int, away_team_id: int,
                     match_date=None, competition_code: str = "WC", match=None,
-                    prediction_mode: str = "PRE_KICKOFF") -> Dict[str, Any]:
+                    prediction_mode: str = "PRE_KICKOFF",
+                    features: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
         """
         Returns Home Win / Draw / Away Win probabilities using world_cup_predictor.pkl.
         
         Process:
-        1. Extract ML features from database
+        1. Extract ML features from database (or use pre-extracted features)
         2. Run XGBoost classifier to get raw probabilities
         3. Normalize probabilities to ensure they sum exactly to 1.0
         4. Determine predicted outcome (highest probability)
         5. Return structured response with probabilities and metadata
-        
-        Args:
-            db: Database session
-            home_team_id: ID of home team
-            away_team_id: ID of away team
-            match_date: Match date (defaults to now)
-            competition_code: Competition code (defaults to WC)
-            match: Optional match record for feature extraction
-        
-        Returns:
-            Dictionary with home_win_probability, draw_probability, away_win_probability,
-            predicted_outcome, confidence, and model_version
         """
         if not self._initialized:
             raise RuntimeError("ModelService not initialised – call load_models() first.")
@@ -261,13 +250,14 @@ class ModelService:
         _away_name = _away.name if _away else str(away_team_id)
         logger.info(f"[predict_1x2] {_home_name} vs {_away_name} [{competition_code}]")
 
-        # Extract ML features from database
-        features = self._get_features(
-            db, home_team_id, away_team_id, match_date,
-            competition_code=competition_code,
-            match=match,
-            prediction_mode=prediction_mode,
-        )
+        # Extract ML features from database if not provided
+        if features is None:
+            features = self._get_features(
+                db, home_team_id, away_team_id, match_date,
+                competition_code=competition_code,
+                match=match,
+                prediction_mode=prediction_mode,
+            )
 
         # Load model and feature names from bundle
         wc_features: list = self._wc_bundle.get("features", [])
@@ -322,7 +312,8 @@ class ModelService:
     # ── Goal Prediction ───────────────────────────────────────────────────────
     def predict_goals(self, db, home_team_id: int, away_team_id: int,
                       match_date=None, competition_code: str = "WC", match=None,
-                      prediction_mode: str = "PRE_KICKOFF") -> Dict[str, Any]:
+                      prediction_mode: str = "PRE_KICKOFF",
+                      features: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
         """
         Returns Poisson-based goal and betting-market predictions using world_cup_goal_model.pkl.
         """
@@ -339,8 +330,9 @@ class ModelService:
         _away_name = _away.name if _away else str(away_team_id)
         logger.info(f"[predict_goals] {_home_name} vs {_away_name} [{competition_code}]")
 
-        # Extract ML features from database
-        features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
+        # Extract ML features from database if not provided
+        if features is None:
+            features = self._get_features(db, home_team_id, away_team_id, match_date, competition_code, match=match)
 
         # Load goal prediction models and feature names
         goal_features: list = self._goal_bundle.get("features", [])
@@ -676,8 +668,21 @@ class ModelService:
                 ),
             }
 
+        # Pre-extract features ONCE to avoid multiple redundant round-trips to DB
+        features = self._get_features(
+            db, home.id, away.id, now,
+            competition_code=competition_code,
+            match=match_record,
+            prediction_mode="PRE_KICKOFF",
+        )
+
         # 1. Model B & C: XGBoost Goal Regressors -> Expected Goals -> Dixon-Coles & Poisson
-        result_goals = self.predict_goals(db, home.id, away.id, now, competition_code, match_record)
+        result_goals = self.predict_goals(
+            db, home.id, away.id, now,
+            competition_code=competition_code,
+            match=match_record,
+            features=features,
+        )
         h_xg = result_goals["expected_home_goals"]
         a_xg = result_goals["expected_away_goals"]
 
@@ -724,7 +729,12 @@ class ModelService:
 
         # 2. Model A: XGBoost 1X2 Classifier (world_cup_predictor.pkl)
         try:
-            res_1x2 = self.predict_1x2(db, home.id, away.id, now, competition_code, match_record)
+            res_1x2 = self.predict_1x2(
+                db, home.id, away.id, now,
+                competition_code=competition_code,
+                match=match_record,
+                features=features,
+            )
             pred_xgb_1x2 = ModelPrediction(
                 model_id="xgb_1x2",
                 model_name="XGBoost 1X2 Classifier",
@@ -799,7 +809,7 @@ class ModelService:
             "goal_engine": result_goals.get("model_version", "v1.0"),
             "market_engine": "Dixon-Coles Market Engine",
             "betting_markets": self._predict_betting_markets(
-                db, home.id, away.id, now, competition_code, match_record, result_goals
+                db, home.id, away.id, now, competition_code, match_record, result_goals, features=features
             ),
         }
 
@@ -807,19 +817,21 @@ class ModelService:
     # ── Betting market predictions with fallback ─────────────────────────────────
     def _predict_betting_markets(
         self, db, home_team_id: int, away_team_id: int, match_date,
-        competition_code: str, match, goal_result: Dict[str, Any]
+        competition_code: str, match, goal_result: Dict[str, Any],
+        features: Optional[Dict[str, float]] = None
     ) -> Dict[str, Any]:
         """
         Predict betting markets using dedicated models if available,
         otherwise fall back to Poisson-based predictions from goal model.
         """
         goal_result = goal_result or {}
-        features = self._get_features(
-            db, home_team_id, away_team_id, match_date,
-            competition_code=competition_code,
-            match=match,
-            prediction_mode="PRE_KICKOFF",
-        )
+        if features is None:
+            features = self._get_features(
+                db, home_team_id, away_team_id, match_date,
+                competition_code=competition_code,
+                match=match,
+                prediction_mode="PRE_KICKOFF",
+            )
         
         result = {
             "asian_handicap": None,
