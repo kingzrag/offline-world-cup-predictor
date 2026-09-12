@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState, memo, type RefObject } from "
 import { motion, useScroll, useTransform, type PanInfo } from "motion/react";
 import { AlertCircle, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import type { MatchPrediction } from "../types";
-import { getFlag } from "../flagUtils";
 import { formatSmartKickoffLocal } from "../dateTimeUtils";
+import { TeamBadge } from "../teamAssetUtils";
 
 const TRANSITION = { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const };
 const DRAG_THRESHOLD = 48;
@@ -97,9 +97,6 @@ interface PredictionCardProps {
 }
 
 const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAnalysis }: PredictionCardProps) {
-  const flagA = getFlag(match.teamA);
-  const flagB = getFlag(match.teamB);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -135,12 +132,12 @@ const PredictionCard = memo(function PredictionCard({ match, isActive, onViewAna
       <div className="flex-1 flex flex-col justify-center my-2 min-h-0">
         <div className="text-lg font-bold text-white uppercase tracking-normal space-y-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-xl leading-none select-none shrink-0">{flagA}</span>
+            <TeamBadge name={match.teamA} crestUrl={match.teamACrest} size="md" />
             <span className="truncate leading-tight">{match.teamA}</span>
           </div>
-          <div className="text-zinc-500 text-[9px] font-mono uppercase pl-9 font-medium">vs</div>
+          <div className="text-zinc-500 text-[9px] font-mono uppercase pl-8 font-medium">vs</div>
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-xl leading-none select-none shrink-0">{flagB}</span>
+            <TeamBadge name={match.teamB} crestUrl={match.teamBCrest} size="md" />
             <span className="truncate leading-tight">{match.teamB}</span>
           </div>
         </div>

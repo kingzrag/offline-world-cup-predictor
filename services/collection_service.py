@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from collectors import FootballDataCollector

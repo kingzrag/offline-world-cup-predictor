@@ -28,6 +28,37 @@ from utils.logger import logger
 
 router = APIRouter(tags=["Predictions API"])
 
+COMPETITION_CODE_MAP = {
+    "UCL": "CL",
+    "CL": "CL",
+    "UEL": "EL",
+    "EL": "EL",
+    "EPL": "PL",
+    "PL": "PL",
+    "LALIGA": "PD",
+    "PD": "PD",
+    "SERIEA": "SA",
+    "SA": "SA",
+    "BUNDESLIGA": "BL1",
+    "BL1": "BL1",
+    "LIGUE1": "FL1",
+    "FL1": "FL1",
+    "EREDIVISIE": "DED",
+    "DED": "DED",
+    "BRASILEIRAO": "BSA",
+    "BSA": "BSA",
+    "MLS": "MLS",
+    "WC": "WC",
+    "WORLD_CUP": "WC",
+    "EC": "EC",
+    "EURO": "EC",
+    "CA": "CA",
+    "COPA_AMERICA": "CA",
+    "UNL": "UNL",
+    "CNL": "CNL",
+    "PPL": "PPL",
+}
+
 
 def _compile_team_injuries_and_suspensions(db, team_id: int, team_obj=None) -> tuple[list[str], list[str]]:
     """Load injury/suspension records for a team.
@@ -907,18 +938,24 @@ def get_fixtures(
     logger.info(f"GET /api/fixtures  →  competition_code={competition_code}")
 
     try:
-        comp_code_str = competition_code if isinstance(competition_code, str) else "ALL"
-        is_all = comp_code_str.upper() == "ALL"
+        raw_code = competition_code.strip() if isinstance(competition_code, str) else "ALL"
+        canon_code = COMPETITION_CODE_MAP.get(raw_code.upper(), raw_code.upper())
+        is_all = canon_code == "ALL" or raw_code.upper() == "ALL"
         comp = None
 
         if not is_all:
-            logger.info(f"GET /api/fixtures  →  Querying competition: {comp_code_str.upper()}")
-            comp = db.query(Competition).filter_by(code=comp_code_str.upper()).first()
+            logger.info(f"GET /api/fixtures  →  Querying competition: {raw_code.upper()} (canon={canon_code})")
+            comp = (
+                db.query(Competition).filter(
+                    or_(Competition.code == canon_code, Competition.code == raw_code.upper())
+                ).first()
+                or db.query(Competition).filter(Competition.name.ilike(f"%{raw_code}%")).first()
+            )
             if not comp:
-                logger.info(f"GET /api/fixtures  →  Competition '{comp_code_str}' has no records in database")
+                logger.info(f"GET /api/fixtures  →  Competition '{raw_code}' has no records in database")
                 return {
                     "status":      "success",
-                    "competition": comp_code_str.upper(),
+                    "competition": raw_code.upper(),
                     "count":       0,
                     "fixtures":    [],
                 }
@@ -935,11 +972,19 @@ def get_fixtures(
         if not is_all:
             query = query.filter(Match.competition_id == comp.id)
         else:
-            # For ALL current feed, exclude World Cup if finished and show_historical is False
             if not show_hist_bool:
-                wc_comp = db.query(Competition).filter_by(code="WC").first()
-                if wc_comp:
-                    query = query.filter(Match.competition_id != wc_comp.id)
+                ACTIVE_COMPETITION_CODES = {
+                    "PL", "PD", "SA", "BL1", "FL1", "DED", "BSA", "CL", "EL", "MLS",
+                    "WC", "EC", "CA", "UNL", "CNL", "PPL"
+                }
+                active_comps = (
+                    db.query(Competition.id)
+                    .filter(Competition.code.in_(ACTIVE_COMPETITION_CODES))
+                    .all()
+                )
+                active_comp_ids = [row[0] for row in active_comps]
+                if active_comp_ids:
+                    query = query.filter(Match.competition_id.in_(active_comp_ids))
 
         if isinstance(status, str) and status:
             query = query.filter(Match.status == status.upper())
@@ -959,13 +1004,15 @@ def get_fixtures(
         if isinstance(year, int):
             query = query.filter(extract('year', Match.utc_date) == year)
         elif not show_hist_bool:
-            # Current feed: prioritize IN_PLAY, PAUSED, SCHEDULED, TIMED, or recent matches
+            # Current feed: prioritize IN_PLAY, PAUSED, SCHEDULED, TIMED, or recent/upcoming matches
             now_utc = datetime.utcnow()
-            yesterday = now_utc - timedelta(hours=24)
+            seven_days_ago = now_utc - timedelta(days=7)
+            seven_days_future = now_utc + timedelta(days=7)
             query = query.filter(
                 or_(
                     Match.status.in_(["IN_PLAY", "PAUSED", "SCHEDULED", "TIMED"]),
-                    Match.utc_date >= yesterday
+                    Match.utc_date >= seven_days_ago,
+                    Match.utc_date <= seven_days_future
                 )
             )
 
@@ -1410,16 +1457,22 @@ def get_fixtures_enriched(
     t_start = time.perf_counter()
 
     try:
-        comp_code_str = competition_code if isinstance(competition_code, str) else "ALL"
-        is_all = comp_code_str.upper() == "ALL"
+        raw_code = competition_code.strip() if isinstance(competition_code, str) else "ALL"
+        canon_code = COMPETITION_CODE_MAP.get(raw_code.upper(), raw_code.upper())
+        is_all = canon_code == "ALL" or raw_code.upper() == "ALL"
         comp = None
 
         if not is_all:
-            comp = db.query(Competition).filter_by(code=comp_code_str.upper()).first()
+            comp = (
+                db.query(Competition).filter(
+                    or_(Competition.code == canon_code, Competition.code == raw_code.upper())
+                ).first()
+                or db.query(Competition).filter(Competition.name.ilike(f"%{raw_code}%")).first()
+            )
             if not comp:
                 return {
                     "status":      "success",
-                    "competition": comp_code_str.upper(),
+                    "competition": raw_code.upper(),
                     "count":       0,
                     "elapsed_ms":  0,
                     "fixtures":    [],
@@ -1429,14 +1482,14 @@ def get_fixtures_enriched(
         status_str = status.upper() if status else None
 
         # ── Response-level cache check ────────────────────────────────────────────
-        _cache_key = f"{comp_code_str.upper()}|{limit}|{status_str}|{year}|{show_hist_bool}"
+        _cache_key = f"{canon_code if not is_all else 'ALL'}|{limit}|{status_str}|{year}|{show_hist_bool}"
         _now_ts = time.time()
         if _cache_key in _fixtures_enriched_cache:
             _cached_resp, _expiry = _fixtures_enriched_cache[_cache_key]
             if _now_ts < _expiry:
                 _cache_ms = round((time.perf_counter() - t_start) * 1000, 2)
                 logger.info(
-                    f"GET /fixtures-enriched CACHE HIT {comp_code_str.upper()} "
+                    f"GET /fixtures-enriched CACHE HIT {raw_code.upper()} "
                     f"{_cached_resp.get('count', '?')} fixtures in {_cache_ms}ms"
                 )
                 return _cached_resp
@@ -1453,7 +1506,7 @@ def get_fixtures_enriched(
 
         t_cache_done = time.perf_counter()
         logger.info(
-            f"[fixtures-enriched] START comp={comp_code_str.upper()} limit={limit} "
+            f"[fixtures-enriched] START comp={raw_code.upper()} (canon={canon_code}) limit={limit} "
             f"show_historical={show_hist_bool} cache_check_ms={round((t_cache_done - t_start)*1000,1)}"
         )
 
@@ -1477,8 +1530,8 @@ def get_fixtures_enriched(
         else:
             if not show_hist_bool:
                 ACTIVE_COMPETITION_CODES = {
-                    "PL", "PD", "SA", "BL1", "FL1", "DED", "BSA", "CL",
-                    "WC", "EC", "CA", "UNL", "CNL"
+                    "PL", "PD", "SA", "BL1", "FL1", "DED", "BSA", "CL", "EL", "MLS",
+                    "WC", "EC", "CA", "UNL", "CNL", "PPL"
                 }
                 active_comps = (
                     db.query(Competition.id)
@@ -1529,6 +1582,19 @@ def get_fixtures_enriched(
         logger.info(f"[fixtures-enriched] STAGE query_start elapsed_ms={round((t_query_start - t_start)*1000,1)}")
 
         matches = query.limit(limit).all()
+        if not matches and not is_all and not status and not show_hist_bool and not year:
+            logger.info(f"[fixtures-enriched] 0 active matches for {comp.code}; falling back to recent matches")
+            fallback_query = (
+                db.query(Match)
+                .options(
+                    joinedload(Match.competition),
+                    joinedload(Match.home_team),
+                    joinedload(Match.away_team),
+                )
+                .filter(Match.competition_id == comp.id)
+                .order_by(Match.utc_date.desc())
+            )
+            matches = fallback_query.limit(limit).all()
 
         t_query_end = time.perf_counter()
         query_time_ms = round((t_query_end - t_query_start) * 1000, 2)
@@ -1733,7 +1799,7 @@ def get_fixtures_enriched(
         has_live = enrichment_source_counts["live_prediction"] > 0
 
         logger.info(
-            f"[fixtures-enriched] DONE comp={comp_code_str.upper()} count={len(fixtures_out)} "
+            f"[fixtures-enriched] DONE comp={raw_code.upper()} count={len(fixtures_out)} "
             f"errors={errors} total_ms={total_time_ms} query_ms={query_time_ms} "
             f"enrich_ms={enrichment_time_ms} sources={enrichment_source_counts}"
         )

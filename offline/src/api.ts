@@ -830,6 +830,8 @@ export function mapFixtureToPrediction(f: BackendFixture | BackendFixtureEnriche
     teamB,
     teamACode,
     teamBCode,
+    teamACrest: f.home_team?.crest_url || null,
+    teamBCrest: f.away_team?.crest_url || null,
     date: formatKickoffDateLocal(f.kickoff_time),
     kickoffTime: f.kickoff_time,
     stage: stageLabel,

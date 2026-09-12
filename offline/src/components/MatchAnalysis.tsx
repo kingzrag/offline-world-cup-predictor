@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Star, TrendingUp, Shield, Target, Zap, Award, Trophy, Goal, ChartColumn, Clock3, Users, Scale, BarChart3, ChevronDown, ChevronUp, AlertCircle, Ban, HelpCircle } from 'lucide-react';
 import { MatchPrediction } from '../types';
+import { TeamBadge } from '../teamAssetUtils';
 
 interface MatchAnalysisProps {
   match: MatchPrediction;
@@ -305,11 +306,11 @@ const formatLine = (n: number): string => (n > 0 ? `+${n}` : `${n}`);
 // restart all bar animations from 0.
 const TeamHandicapCard = React.memo(function TeamHandicapCard({
   teamName,
-  flag,
+  crestUrl,
   rows,
 }: {
   teamName: string;
-  flag: string;
+  crestUrl?: string;
   rows: { line: number; prob: number }[];
 }) {
   return (
@@ -319,7 +320,7 @@ const TeamHandicapCard = React.memo(function TeamHandicapCard({
         className="flex items-center gap-2.5 px-4 py-3 border-b border-[rgba(237,232,222,0.10)]"
         style={{ borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: getTeamColor(teamName) }}
       >
-        <span className="text-lg leading-none">{flag}</span>
+        <TeamBadge name={teamName} crestUrl={crestUrl} size="sm" />
         <span className="text-xs font-sans font-bold uppercase tracking-wider text-[#ece7da]">{teamName}</span>
       </div>
       {/* Column headers */}
@@ -499,59 +500,12 @@ export default function MatchAnalysis({
     };
   }, []);
 
-  const getFlag = (teamName: string) => {
-    const flagMap: { [key: string]: string } = {
-      Argentina: '🇦🇷', Australia: '🇦🇺', Belgium: '🇧🇪', Brazil: '🇧🇷',
-      England: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', France: '🇫🇷', Germany: '🇩🇪', Italy: '🇮🇹',
-      Netherlands: '🇳🇱', Portugal: '🇵🇹', Spain: '🇪🇸', USA: '🇺🇸',
-      Uruguay: '🇺🇾', Croatia: '🇭🇷', Denmark: '🇩🇰', Mexico: '🇲🇽',
-      Japan: '🇯🇵', 'South Korea': '🇰🇷', Morocco: '🇲🇦', Switzerland: '🇨🇭',
-      Poland: '🇵🇱', Senegal: '🇸🇳', Ecuador: '🇪🇨', Wales: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
-      Iran: '🇮🇷', 'Saudi Arabia': '🇸🇦', Tunisia: '🇹🇳', Canada: '🇨🇦',
-      Ghana: '🇬🇭', Cameroon: '🇨🇲', Serbia: '🇷🇸', Qatar: '🇶🇦',
-      Egypt: '🇪🇬', China: '🇨🇳', 'South Africa': '🇿🇦', Nigeria: '🇳🇬',
-      'Ivory Coast': '🇨🇮', Algeria: '🇩🇿', Russia: '🇷🇺', Turkey: '🇹🇷',
-      Greece: '🇬🇷', Sweden: '🇸🇪', Norway: '🇳🇴', Colombia: '🇨🇴',
-      Chile: '🇨🇱', Peru: '🇵🇪', Paraguay: '🇵🇾', Bolivia: '🇧🇴',
-      Venezuela: '🇻🇪', Jamaica: '🇯🇲', 'Costa Rica': '🇨🇷', Panama: '🇵🇦',
-      Honduras: '🇭🇳', 'El Salvador': '🇸🇻', Guatemala: '🇬🇹', 'New Zealand': '🇳🇿',
-      Iceland: '🇮🇸', Finland: '🇫🇮', 'Republic of Ireland': '🇮🇪', Scotland: '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
-      Ukraine: '🇺🇦', 'Czech Republic': '🇨🇿', Slovakia: '🇸🇰', Austria: '🇦🇹',
-      Hungary: '🇭🇺', Romania: '🇷🇴', Bulgaria: '🇧🇬', Belarus: '🇧🇾',
-      Slovenia: '🇸🇮', 'North Macedonia': '🇲🇰', Albania: '🇦🇱', Bosnia: '🇧🇦',
-      Montenegro: '🇲🇪', Kosovo: '🇽🇰', Lithuania: '🇱🇹', Latvia: '🇱🇻',
-      Estonia: '🇪🇪', Luxembourg: '🇱🇺', Cyprus: '🇨🇾', Malta: '🇲🇹',
-      Armenia: '🇦🇲', Azerbaijan: '🇦🇿', Georgia: '🇬🇪', Kazakhstan: '🇰🇿',
-      Uzbekistan: '🇺🇿', Kyrgyzstan: '🇰🇬', Tajikistan: '🇹🇯', Turkmenistan: '🇹🇲',
-      Afghanistan: '🇦🇫', Pakistan: '🇵🇰', India: '🇮🇳', Bangladesh: '🇧🇩',
-      'Sri Lanka': '🇱🇰', Nepal: '🇳🇵', Bhutan: '🇧🇹', Maldives: '🇲🇻',
-      Thailand: '🇹🇭', Vietnam: '🇻🇳', Cambodia: '🇰🇭', Laos: '🇱🇦',
-      Myanmar: '🇲🇲', Malaysia: '🇲🇾', Singapore: '🇸🇬', Indonesia: '🇮🇩',
-      Philippines: '🇵🇭', Brunei: '🇧🇳', 'East Timor': '🇹🇱', 'North Korea': '🇰🇵',
-      'South Sudan': '🇸🇸', Ethiopia: '🇪🇹', Kenya: '🇰🇪', Tanzania: '🇹🇿',
-      Uganda: '🇺🇬', Rwanda: '🇷🇼', Burundi: '🇧🇮', 'DR Congo': '🇨🇩',
-      Congo: '🇨🇬', Gabon: '🇬🇦', Angola: '🇦🇴',
-      Mozambique: '🇲🇿', Zambia: '🇿🇲', Zimbabwe: '🇿🇼', Botswana: '🇧🇼',
-      Namibia: '🇳🇦', Lesotho: '🇱🇸', Eswatini: '🇸🇿',
-      Madagascar: '🇲🇬', Mauritius: '🇲🇺', Seychelles: '🇸🇨', Comoros: '🇰🇲',
-      Libya: '🇱🇾', Mauritania: '🇲🇷', 'Western Sahara': '🇪🇭', Mali: '🇲🇱', Niger: '🇳🇪',
-      Chad: '🇹🇩', Sudan: '🇸🇩', Eritrea: '🇪🇷', Djibouti: '🇩🇯',
-      Somalia: '🇸🇴', 'Central African Republic': '🇨🇫', 'Equatorial Guinea': '🇬🇶',
-      'Sao Tome and Principe': '🇸🇹', Gambia: '🇬🇲', 'Guinea-Bissau': '🇬🇼',
-      Guinea: '🇬🇳', 'Sierra Leone': '🇸🇱', Liberia: '🇱🇷',
-    };
-    return flagMap[teamName] || '🏳️';
-  };
-
   const probA = match.probA ?? 0;
   const probD = match.probD ?? 0;
   const probB = match.probB ?? 0;
   const xGA = match.xGA;
   const xGB = match.xGB;
   const totalXG = match.totalExpectedGoals;
-
-  const flagA = getFlag(match.teamA);
-  const flagB = getFlag(match.teamB);
 
   const topProbability = Math.max(probA, probB, probD);
   const isKnockout = match.stage?.toLowerCase().includes('knockout') ||
@@ -687,7 +641,7 @@ export default function MatchAnalysis({
                 className="flex-1 flex items-center gap-4 py-2 px-3 border-l-4 bg-[#232219]/30 rounded-r-[4px]"
                 style={{ borderLeftColor: getTeamColor(match.teamA) }}
               >
-                <span className="text-3xl">{flagA}</span>
+                <TeamBadge name={match.teamA} crestUrl={match.teamACrest} size="lg" />
                 <div>
                   <h1 className="text-xl font-sans font-bold uppercase tracking-wide text-[#ece7da]">{match.teamA}</h1>
                   <p className="text-[10px] font-mono text-[#6b6656] mt-0.5">HOME TEAM · {match.teamACode}</p>
@@ -719,7 +673,7 @@ export default function MatchAnalysis({
                   <h1 className="text-xl font-sans font-bold uppercase tracking-wide text-[#ece7da]">{match.teamB}</h1>
                   <p className="text-[10px] font-mono text-[#6b6656] mt-0.5">AWAY TEAM · {match.teamBCode}</p>
                 </div>
-                <span className="text-3xl">{flagB}</span>
+                <TeamBadge name={match.teamB} crestUrl={match.teamBCrest} size="lg" />
               </div>
             </div>
 
@@ -1026,9 +980,9 @@ export default function MatchAnalysis({
                 ah.favored_team.toLowerCase() === 'home' ||
                 ah.favored_team === match.teamA;
               const favoredTeam = favoredIsHome ? match.teamA : match.teamB;
-              const favoredFlag = favoredIsHome ? flagA : flagB;
+              const favoredCrest = favoredIsHome ? match.teamACrest : match.teamBCrest;
               const otherTeam   = favoredIsHome ? match.teamB : match.teamA;
-              const otherFlag   = favoredIsHome ? flagB : flagA;
+              const otherCrest   = favoredIsHome ? match.teamBCrest : match.teamACrest;
 
               // Build a lookup map: handicap number → probability
               // Keys from the backend look like "Home -1.5"; we strip the prefix.
@@ -1053,8 +1007,8 @@ export default function MatchAnalysis({
 
               return (
                 <div className="flex flex-col md:flex-row gap-4 p-4">
-                  <TeamHandicapCard teamName={favoredTeam} flag={favoredFlag} rows={favoredRows} />
-                  <TeamHandicapCard teamName={otherTeam}   flag={otherFlag}   rows={otherRows} />
+                  <TeamHandicapCard teamName={favoredTeam} crestUrl={favoredCrest} rows={favoredRows} />
+                  <TeamHandicapCard teamName={otherTeam}   crestUrl={otherCrest}   rows={otherRows} />
                 </div>
               );
             })() : (
@@ -1160,7 +1114,7 @@ export default function MatchAnalysis({
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">{flagA}</span>
+                  <TeamBadge name={match.teamA} crestUrl={match.teamACrest} size="sm" />
                   <span className="text-sm font-sans font-bold uppercase tracking-wider text-[#ece7da]">{match.teamA}</span>
                 </div>
                 <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-[3px] ${
@@ -1210,7 +1164,7 @@ export default function MatchAnalysis({
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">{flagB}</span>
+                  <TeamBadge name={match.teamB} crestUrl={match.teamBCrest} size="sm" />
                   <span className="text-sm font-sans font-bold uppercase tracking-wider text-[#ece7da]">{match.teamB}</span>
                 </div>
                 <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-[3px] ${

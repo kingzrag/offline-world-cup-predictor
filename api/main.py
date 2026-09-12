@@ -346,15 +346,18 @@ ACTIVE_LEAGUE_COMPETITIONS = [
     "FL1",  # Ligue 1
     "DED",  # Eredivisie
     "BSA",  # Brasileirão
+    "MLS",  # Major League Soccer (uses API-Football provider)
 ]
 
-# International competitions for daily data sync (CL excluded: 2024-25 season complete, 2025-26 not yet published)
+# International competitions for daily data sync
 SCHEDULED_INTERNATIONAL_COMPETITIONS = [
     "WC",
     "EC",
     "CA",
     "UNL",
     "WCQ",
+    "CL",   # UEFA Champions League (uses Football-Data.org)
+    "EL",   # UEFA Europa League (uses API-Football provider)
 ]
 
 # Combined list for the daily full-pipeline scheduler

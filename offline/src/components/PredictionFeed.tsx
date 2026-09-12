@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Heart, Star, Clock, TrendingUp, Activity, Zap, Lock, CalendarOff, Archive } from 'lucide-react';
+import { Heart, Star, Clock, TrendingUp, Activity, Zap } from 'lucide-react';
 import { MatchPrediction } from '../types';
 import { COMPETITION_FILTERS, PRIMARY_COMPETITIONS, getCompetitionById } from '../config/competitions';
 import {
@@ -8,6 +8,7 @@ import {
   isKickoffTomorrow,
 } from '../dateTimeUtils';
 import { loadFixturesProgressive } from '../api';
+import { TeamBadge } from '../teamAssetUtils';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface PredictionFeedProps {
@@ -73,8 +74,6 @@ const MatchCard = ({
   onToggleFavorite: (id: string) => void;
   onViewAnalysis: (m: MatchPrediction) => void;
 }) => {
-  const highestProb = Math.max(match.probA, match.probD, match.probB);
-
   return (
     <div className="bg-[#F7F4EE] border border-[#D4D4D4] rounded p-4 hover:border-[#1C1B17] transition-all duration-200 flex flex-col justify-between group">
       {/* Top bar */}
@@ -101,15 +100,21 @@ const MatchCard = ({
       </div>
 
       {/* Teams & Scores */}
-      <div className="space-y-2 mb-4">
+      <div className="space-y-2.5 mb-4">
         <div className="flex items-center justify-between font-serif text-base text-[#1C1B17]">
-          <span className="truncate">{match.teamA}</span>
+          <div className="flex items-center gap-2 min-w-0 pr-2">
+            <TeamBadge name={match.teamA} crestUrl={match.teamACrest} size="sm" />
+            <span className="truncate">{match.teamA}</span>
+          </div>
           {match.liveScore && match.status !== 'UPCOMING' && (
             <span className="font-mono text-sm font-bold ml-2 shrink-0">{match.liveScore.home}</span>
           )}
         </div>
         <div className="flex items-center justify-between font-serif text-base text-[#1C1B17]">
-          <span className="truncate">{match.teamB}</span>
+          <div className="flex items-center gap-2 min-w-0 pr-2">
+            <TeamBadge name={match.teamB} crestUrl={match.teamBCrest} size="sm" />
+            <span className="truncate">{match.teamB}</span>
+          </div>
           {match.liveScore && match.status !== 'UPCOMING' && (
             <span className="font-mono text-sm font-bold ml-2 shrink-0">{match.liveScore.away}</span>
           )}
@@ -385,15 +390,25 @@ const PredictionFeed = ({
   initialFilter = 'all',
 }: PredictionFeedProps) => {
   const [activeFilter, setActiveFilter] = useState(initialFilter);
+  const [leagueMatches, setLeagueMatches] = useState<Record<string, MatchPrediction[]>>({});
 
   const handleFilterChange = (id: string) => {
     setActiveFilter(id);
     const isSpecialFilter = ['all', 'live', 'today', 'tomorrow', 'favorites'].includes(id);
     if (!isSpecialFilter) {
       console.log(`[PredictionFeed] League-specific tab selected: ${id}`);
-      loadFixturesProgressive(id).catch(err =>
-        console.warn(`[PredictionFeed] Failed loading league ${id}:`, err)
-      );
+      loadFixturesProgressive(id)
+        .then(newMatches => {
+          if (newMatches && newMatches.length > 0) {
+            setLeagueMatches(prev => ({
+              ...prev,
+              [id.toUpperCase()]: newMatches,
+            }));
+          }
+        })
+        .catch(err =>
+          console.warn(`[PredictionFeed] Failed loading league ${id}:`, err)
+        );
     }
   };
 
@@ -403,9 +418,19 @@ const PredictionFeed = ({
     }
   }, [initialFilter]);
 
+  // Merge primary feed matches with any loaded league-specific fixtures
+  const allCombinedMatches = useMemo(() => {
+    const map = new Map<string, MatchPrediction>();
+    for (const m of matches) map.set(m.id, m);
+    for (const list of Object.values(leagueMatches)) {
+      for (const m of list) map.set(m.id, m);
+    }
+    return Array.from(map.values());
+  }, [matches, leagueMatches]);
+
   // Filter matches by active filter
   const displayMatches = useMemo(() => {
-    let list = [...matches].filter(m => {
+    let list = [...allCombinedMatches].filter(m => {
       // Always hide very old completed matches
       if (m.status === 'COMPLETED' && m.finished_at) {
         const age = Date.now() - new Date(m.finished_at).getTime();
@@ -426,7 +451,12 @@ const PredictionFeed = ({
       list = list.filter(m => favoriteMatchIds.includes(m.id));
     } else {
       // Competition code
-      list = list.filter(m => (m.competitionId ?? '').toUpperCase() === activeFilter.toUpperCase());
+      const upper = activeFilter.toUpperCase();
+      list = list.filter(m => {
+        const cid = (m.competitionId ?? '').toUpperCase();
+        return cid === upper || (upper === 'CL' && cid === 'UCL') || (upper === 'UCL' && cid === 'CL') ||
+               (upper === 'EL' && cid === 'UEL') || (upper === 'UEL' && cid === 'EL');
+      });
     }
 
     // Sort: Live → Upcoming (chronological) → Completed (newest first)
@@ -439,7 +469,7 @@ const PredictionFeed = ({
       const tb = new Date(b.kickoffTime ?? b.date ?? 0).getTime();
       return pa === 2 ? tb - ta : ta - tb; // completed: newest first
     });
-  }, [matches, activeFilter, favoriteMatchIds]);
+  }, [allCombinedMatches, activeFilter, favoriteMatchIds]);
 
   // Group by competition for section headers
   const grouped = useMemo(() => {
@@ -473,7 +503,7 @@ const PredictionFeed = ({
           </h1>
         </div>
         <FilterBar
-          matches={matches}
+          matches={allCombinedMatches}
           activeFilter={activeFilter}
           onFilterChange={handleFilterChange}
         />
@@ -482,7 +512,7 @@ const PredictionFeed = ({
       {/* Main layout: Sidebar + Feed + Right Panel */}
       <div className="max-w-7xl mx-auto flex gap-6 pb-20">
         <Sidebar
-          matches={matches}
+          matches={allCombinedMatches}
           activeFilter={activeFilter}
           onFilterChange={handleFilterChange}
           favoriteCount={favoriteMatchIds.length}
@@ -508,46 +538,11 @@ const PredictionFeed = ({
             </div>
           ) : displayMatches.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 px-6 text-center bg-[#F7F4EE] border border-[#D4D4D4] rounded-lg">
-              {currentCompConfig?.status === 'NO_CURRENT_FIXTURES' ? (
-                <>
-                  <div className="p-3 bg-amber-500/10 text-amber-700 rounded-full mb-3">
-                    <CalendarOff className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-serif text-[#1C1B17] mb-1">Season fixtures not available yet</h3>
-                  <p className="text-xs text-[#6B6B6B] font-mono max-w-md mb-6 leading-relaxed">
-                    <strong>{currentCompConfig.name}</strong> fixtures for the upcoming season have not been published by the data provider yet.
-                  </p>
-                </>
-              ) : currentCompConfig?.status === 'API_RESTRICTED' ? (
-                <>
-                  <div className="p-3 bg-blue-500/10 text-blue-700 rounded-full mb-3">
-                    <Lock className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-serif text-[#1C1B17] mb-1">Data provider access required</h3>
-                  <p className="text-xs text-[#6B6B6B] font-mono max-w-md mb-6 leading-relaxed">
-                    Live fixture ingestion for <strong>{currentCompConfig.name}</strong> requires an upgraded data provider tier.
-                  </p>
-                </>
-              ) : currentCompConfig?.status === 'HISTORICAL' ? (
-                <>
-                  <div className="p-3 bg-zinc-500/10 text-zinc-700 rounded-full mb-3">
-                    <Archive className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-serif text-[#1C1B17] mb-1">Historical Tournament</h3>
-                  <p className="text-xs text-[#6B6B6B] font-mono max-w-md mb-6 leading-relaxed">
-                    <strong>{currentCompConfig.name}</strong> match data is archived.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="text-3xl mb-3">🔍</div>
-                  <h3 className="text-lg font-serif text-[#1C1B17] mb-1">No matches found</h3>
-                  <p className="text-xs text-[#6B6B6B] font-mono max-w-sm mb-6">
-                    No active predictions available for <strong>{filterLabel}</strong> right now.
-                  </p>
-                </>
-              )}
-
+              <div className="text-3xl mb-3">🔍</div>
+              <h3 className="text-lg font-serif text-[#1C1B17] mb-1">No matches found</h3>
+              <p className="text-xs text-[#6B6B6B] font-mono max-w-sm mb-6">
+                No active predictions available for <strong>{filterLabel}</strong> right now.
+              </p>
               <button
                 onClick={() => handleFilterChange('all')}
                 className="px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.2em] bg-[#1C1B17] text-[#F7F4EE] rounded hover:bg-[#3a3a3a] transition-colors"

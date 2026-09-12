@@ -78,6 +78,8 @@ export interface MatchPrediction {
   teamB: string;
   teamACode: string; // ISO 3-letter code
   teamBCode: string; // ISO 3-letter code
+  teamACrest?: string | null;
+  teamBCrest?: string | null;
   date: string;
   stage: string;
   status: 'LIVE' | 'UPCOMING' | 'COMPLETED';

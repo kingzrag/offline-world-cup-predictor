@@ -104,8 +104,7 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     country: 'United States',
     type: 'League',
     category: 'Domestic',
-    status: 'API_RESTRICTED',
-    statusText: 'Data provider access required',
+    status: 'SUPPORTED',
     season: '2026',
   },
 
@@ -118,9 +117,8 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     country: 'Europe',
     type: 'Cup',
     category: 'European',
-    status: 'NO_CURRENT_FIXTURES',
-    statusText: 'Season fixtures not available yet',
-    season: '2025-26',
+    status: 'SUPPORTED',
+    season: '2026-27',
   },
   {
     id: 'EL',
@@ -130,9 +128,8 @@ export const SUPPORTED_COMPETITIONS: CompetitionConfig[] = [
     country: 'Europe',
     type: 'Cup',
     category: 'European',
-    status: 'API_RESTRICTED',
-    statusText: 'Data provider access required',
-    season: '2025-26',
+    status: 'SUPPORTED',
+    season: '2026-27',
   },
 
   // ── Historical / International Competitions (Hidden from main current sections) ──
@@ -210,10 +207,22 @@ export const EUROPEAN_COMPETITIONS = PRIMARY_COMPETITIONS.filter(c => c.category
 // Helper: Get historical competitions
 export const HISTORICAL_COMPETITIONS = SUPPORTED_COMPETITIONS.filter(c => c.status === 'HISTORICAL');
 
+const ID_ALIASES: Record<string, string> = {
+  'UCL': 'CL',
+  'UEL': 'EL',
+  'EPL': 'PL',
+  'LALIGA': 'PD',
+  'SERIEA': 'SA',
+  'BUNDESLIGA': 'BL1',
+  'LIGUE1': 'FL1',
+};
+
 // Helper function to get competition by ID
 export function getCompetitionById(id: string): CompetitionConfig | undefined {
   if (!id) return undefined;
-  return SUPPORTED_COMPETITIONS.find(comp => comp.id.toUpperCase() === id.toUpperCase());
+  const upper = id.toUpperCase();
+  const canonicalId = ID_ALIASES[upper] || upper;
+  return SUPPORTED_COMPETITIONS.find(comp => comp.id.toUpperCase() === canonicalId);
 }
 
 // Helper function to get competition by name
